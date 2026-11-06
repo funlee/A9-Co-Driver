@@ -3,27 +3,26 @@ android {
     namespace 'dev.funlee.a9'
     compileSdk 36
     buildToolsVersion '36.0.0'
-    buildFeatures { buildConfig true }
     defaultConfig {
         applicationId 'dev.funlee.a9local'
-        buildConfigField 'boolean', 'PRIVATE_ASSETS_ENABLED', rootProject.ext.withPrivateAssets.toString()
-        if (!rootProject.ext.withPrivateAssets) applicationIdSuffix '.source'
         minSdk 26
         targetSdk 35
-        versionCode 25
-        versionName '0.1.24-local'
+        versionCode 26
+        versionName '0.1.25'
         testInstrumentationRunner 'dev.funlee.a9.RecoveryDeviceCheck'
     }
-    if (rootProject.ext.withPrivateAssets) {
-        sourceSets.main.assets.srcDir rootProject.file('private/assets')
+    // Optional local screenshots only. All runtime resources are in the repository.
+    if (rootProject.ext.withLocalTestFixtures) {
         sourceSets.androidTest.assets.srcDir rootProject.file('private/test-fixtures/android')
-        def required = ['data/routes.txt','data/map-rules.tsv','data/progress.lib','data/forms.json',
-                        'lua/shared.lua','lua/utilities.lua','lua/workflows.lua','lua/multiplayer_up.lua',
-                        'lua/multiplayer_down.lua','lua/cup.lua','lua/special.lua','lua/club.lua','lua/career.lua','lua/daily.lua']
-        required.each { path ->
-            if (!rootProject.file("private/assets/${path}").isFile())
-                throw new GradleException("Missing local private asset: ${path}. See docs/private-assets.md")
-        }
+    }
+    def required = ['data/routes.txt','data/map-rules.tsv','data/progress.lib','data/forms.json',
+                    'data/provenance.json','lua/bootstrap.lua','lua/shared.lua','lua/utilities.lua',
+                    'lua/workflows.lua','lua/multiplayer_up.lua','lua/multiplayer_down.lua',
+                    'lua/multiplayer_current.lua','lua/cup.lua','lua/special.lua','lua/club.lua',
+                    'lua/career.lua','lua/daily.lua']
+    required.each { path ->
+        if (!file("src/main/assets/${path}").isFile())
+            throw new GradleException("Missing bundled runtime asset: ${path}. Restore the complete repository checkout.")
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_11; targetCompatibility JavaVersion.VERSION_11; coreLibraryDesugaringEnabled true }
 }

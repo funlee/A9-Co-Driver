@@ -24,13 +24,6 @@ public final class MainActivity extends Activity {
     private boolean pendingResume;
     @Override public void onCreate(Bundle saved){
         super.onCreate(saved);
-        if(!BuildConfig.PRIVATE_ASSETS_ENABLED){
-            LinearLayout intro=column();intro.setPadding(dp(24),dp(24),dp(24),dp(24));
-            intro.addView(label("A9 Copilot",25));
-            intro.addView(label("公开源码版",18));
-            intro.addView(label("此构建不包含从其他 APK 提取的脚本、地图路线和识别字库，因此不能启动自动比赛。完整本地功能需要你自行提供获授权的私有资源，并按项目文档启用本地构建。",16));
-            setContentView(intro);return;
-        }
         try{store=new LocalStore(this);show();}catch(Exception e){TextView error=new TextView(this);error.setText(getString(R.string.init_error,e.toString()));setContentView(error);}
     }
     private int dp(int n){return (int)(getResources().getDisplayMetrics().density*n+.5f);}

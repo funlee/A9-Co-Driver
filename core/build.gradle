@@ -8,9 +8,6 @@ dependencies {
     runtimeOnly 'com.badlogicgames.jnigen:jnigen-commons:3.1.1'
     testRuntimeOnly 'party.iroiro.luajava:lua53-platform:4.1.0:natives-desktop'
 }
-if (rootProject.ext.withPrivateAssets) {
-    sourceSets.test.java.srcDir rootProject.file('private/test-code')
-}
 tasks.register('checkPublic', JavaExec) {
     dependsOn testClasses
     classpath = sourceSets.test.runtimeClasspath
@@ -18,19 +15,23 @@ tasks.register('checkPublic', JavaExec) {
     jvmArgs '-ea'
     args rootProject.file('app/src/main/assets').absolutePath
 }
-if (rootProject.ext.withPrivateAssets) {
-    def merged = layout.buildDirectory.dir('private-check-assets')
-    def prepare = tasks.register('preparePrivateCheckAssets', Sync) {
-        from rootProject.file('app/src/main/assets')
-        from rootProject.file('private/assets')
-        into merged
-        duplicatesStrategy = DuplicatesStrategy.FAIL
-    }
-    tasks.register('checkPrivate', JavaExec) {
-        dependsOn testClasses, prepare
-        classpath = sourceSets.test.runtimeClasspath
-        mainClass = 'dev.funlee.a9.core.CoreChecks'
-        jvmArgs '-ea'
-        args merged.get().asFile.absolutePath, rootProject.file('private/test-fixtures/core').absolutePath
+tasks.register('checkCore', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.funlee.a9.core.CoreChecks'
+    jvmArgs '-ea'
+    args rootProject.file('app/src/main/assets').absolutePath
+}
+tasks.register('checkLocalScreenshots', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.funlee.a9.core.CoreChecks'
+    jvmArgs '-ea'
+    args rootProject.file('app/src/main/assets').absolutePath,
+         rootProject.file('private/test-fixtures/core').absolutePath
+    doFirst {
+        if (!rootProject.file('private/test-fixtures/core').isDirectory())
+            throw new GradleException('Optional local screenshots are unavailable; run :core:checkCore instead.')
     }
 }
+tasks.named('check') { dependsOn 'checkPublic', 'checkCore' }

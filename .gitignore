@@ -19,3 +19,7 @@ local.properties
 .env
 .env.*
 !.env.example
+
+# Python tool caches
+__pycache__/
+*.pyc

@@ -17,7 +17,6 @@ public final class LocalStore {
     public JSONObject config;
     public LocalStore(Context context) throws Exception {
         this.context=context.getApplicationContext();
-        if(!BuildConfig.PRIVATE_ASSETS_ENABLED)throw new IllegalStateException("此公开构建未包含本地私有运行资源");
         matcher=new MapMatcher(new StringReader(asset("data/map-rules.tsv")));
         digits=new DigitOcr(new StringReader(asset("data/progress.lib")));
         String[] lines=asset("data/routes.txt").split("\\r?\\n");

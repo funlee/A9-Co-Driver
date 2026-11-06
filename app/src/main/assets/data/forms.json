@@ -1,0 +1,827 @@
+{
+  "多人上": [
+    {
+      "key": "项目名称",
+      "type": "EditText",
+      "value": "多人上",
+      "options": []
+    },
+    {
+      "key": "次数",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "使用车组",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "使用车组"
+      ]
+    },
+    {
+      "key": "车组青铜用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "车组白银用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "车组黄金用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "车组铂金用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "车组钻石用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "车组传奇用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "青铜用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "白银用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "黄金用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "铂金用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "钻石用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "传奇用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "用车模式",
+      "type": "RadioGroup",
+      "value": "0",
+      "options": [
+        "每次用一辆",
+        "每辆用一次"
+      ]
+    },
+    {
+      "key": "广告修车",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "看车辆广告回油"
+      ]
+    },
+    {
+      "key": "多人上漂流",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "多人上氮气漂流模式"
+      ]
+    },
+    {
+      "key": "传奇停跑",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "到达传奇"
+      ]
+    },
+    {
+      "key": "传奇分数",
+      "type": "EditText",
+      "value": "1850",
+      "options": []
+    },
+    {
+      "key": "多人上掉分",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "多人上到达"
+      ]
+    },
+    {
+      "key": "掉分段位",
+      "type": "ComboBox",
+      "value": "1",
+      "options": [
+        "白银",
+        "黄金",
+        "白金",
+        "钻石",
+        "传奇"
+      ]
+    },
+    {
+      "key": "掉分段位结束",
+      "type": "ComboBox",
+      "value": "0",
+      "options": [
+        "青铜",
+        "白银",
+        "黄金",
+        "白金",
+        "钻石"
+      ]
+    },
+    {
+      "key": "多人选路",
+      "type": "ComboBox",
+      "value": "3",
+      "options": [
+        "不选路",
+        "左划",
+        "右划",
+        "智能选路"
+      ]
+    }
+  ],
+  "多人下": [
+    {
+      "key": "项目名称",
+      "type": "EditText",
+      "value": "多人下",
+      "options": []
+    },
+    {
+      "key": "次数",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "多人下用车",
+      "type": "EditText",
+      "value": "1,2,3,4",
+      "options": []
+    },
+    {
+      "key": "选车模式",
+      "type": "RadioGroup",
+      "value": "1",
+      "options": [
+        "滑动选车",
+        "点击选车"
+      ]
+    },
+    {
+      "key": "用车模式",
+      "type": "RadioGroup",
+      "value": "0",
+      "options": [
+        "每次用一辆",
+        "每辆用一次"
+      ]
+    },
+    {
+      "key": "选车筛选",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "已拥有",
+        "性能分",
+        "降序"
+      ]
+    },
+    {
+      "key": "广告修车",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "看车辆广告回油"
+      ]
+    },
+    {
+      "key": "多人下漂流",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "多人下氮气漂流模式"
+      ]
+    },
+    {
+      "key": "传奇停跑",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "到达传奇"
+      ]
+    },
+    {
+      "key": "传奇分数",
+      "type": "EditText",
+      "value": "1850",
+      "options": []
+    },
+    {
+      "key": "多人选路",
+      "type": "ComboBox",
+      "value": "3",
+      "options": [
+        "不选路",
+        "左划",
+        "右划",
+        "智能选路"
+      ]
+    }
+  ],
+  "杯赛": [
+    {
+      "key": "项目名称",
+      "type": "EditText",
+      "value": "杯赛",
+      "options": []
+    },
+    {
+      "key": "次数",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "杯赛位置",
+      "type": "EditText",
+      "value": "4",
+      "options": []
+    },
+    {
+      "key": "杯赛选路",
+      "type": "ComboBox",
+      "value": "3",
+      "options": [
+        "不选路",
+        "左划",
+        "右划",
+        "百分比选路",
+        "自定义选图"
+      ]
+    },
+    {
+      "key": "杯赛线路",
+      "type": "EditText",
+      "value": "",
+      "options": []
+    },
+    {
+      "key": "杯赛用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "每日战利品",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "每日战利品自动识别奖励完成情况"
+      ]
+    },
+    {
+      "key": "用车模式",
+      "type": "RadioGroup",
+      "value": "0",
+      "options": [
+        "每次用一辆",
+        "每辆用一次"
+      ]
+    },
+    {
+      "key": "选车方式",
+      "type": "RadioGroup",
+      "value": "0",
+      "options": [
+        "滑动选车",
+        "点击选车"
+      ]
+    },
+    {
+      "key": "选车筛选",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "已拥有",
+        "性能分",
+        "降序"
+      ]
+    },
+    {
+      "key": "广告修车",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "看车辆广告回油"
+      ]
+    },
+    {
+      "key": "代币买票",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "代币买票，次数："
+      ]
+    },
+    {
+      "key": "买票次数",
+      "type": "EditText",
+      "value": "30",
+      "options": []
+    },
+    {
+      "key": "杯赛漂流",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "杯赛氮气漂流模式"
+      ]
+    },
+    {
+      "key": "杯赛两圈赛制",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "杯赛两圈赛制"
+      ]
+    }
+  ],
+  "特殊赛事": [
+    {
+      "key": "项目名称",
+      "type": "EditText",
+      "value": "特殊赛事",
+      "options": []
+    },
+    {
+      "key": "次数",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "特殊赛事位置",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "称霸模式",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "称霸模式，章节:"
+      ]
+    },
+    {
+      "key": "称霸位置",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "特殊赛事阶段",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "特殊赛事选路",
+      "type": "ComboBox",
+      "value": "3",
+      "options": [
+        "不选路",
+        "左划",
+        "右划",
+        "百分比选路",
+        "自定义选图"
+      ]
+    },
+    {
+      "key": "特殊赛事线路",
+      "type": "EditText",
+      "value": "",
+      "options": []
+    },
+    {
+      "key": "特殊赛事用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "用车模式",
+      "type": "RadioGroup",
+      "value": "0",
+      "options": [
+        "每次用一辆",
+        "每辆用一次"
+      ]
+    },
+    {
+      "key": "选车方式",
+      "type": "RadioGroup",
+      "value": "0",
+      "options": [
+        "滑动选车",
+        "点击选车"
+      ]
+    },
+    {
+      "key": "选车筛选",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "已拥有",
+        "性能分",
+        "降序"
+      ]
+    },
+    {
+      "key": "广告修车",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "看车辆广告回油"
+      ]
+    },
+    {
+      "key": "代币买票",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "代币买票，次数："
+      ]
+    },
+    {
+      "key": "买票次数",
+      "type": "EditText",
+      "value": "30",
+      "options": []
+    },
+    {
+      "key": "特殊赛事漂流",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "特殊赛事氮气漂流模式"
+      ]
+    },
+    {
+      "key": "特殊赛事两圈赛制",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "特殊赛事两圈赛制"
+      ]
+    }
+  ],
+  "车联": [
+    {
+      "key": "项目名称",
+      "type": "EditText",
+      "value": "车联",
+      "options": []
+    },
+    {
+      "key": "次数",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "车手联会位置",
+      "type": "EditText",
+      "value": "",
+      "options": []
+    },
+    {
+      "key": "分支选择",
+      "type": "ComboBox",
+      "value": "0",
+      "options": [
+        "单刷支线",
+        "单刷主线",
+        "先支线后主线"
+      ]
+    },
+    {
+      "key": "危险等级",
+      "type": "ComboBox",
+      "value": "0",
+      "options": [
+        "难度1",
+        "难度2",
+        "难度3"
+      ]
+    },
+    {
+      "key": "难度不足",
+      "type": "ComboBox",
+      "value": "0",
+      "options": [
+        "最低难度",
+        "最高难度"
+      ]
+    },
+    {
+      "key": "车手联会选路",
+      "type": "ComboBox",
+      "value": "3",
+      "options": [
+        "不选路",
+        "左划",
+        "右划",
+        "百分比选路",
+        "自定义选图"
+      ]
+    },
+    {
+      "key": "杯赛线路5",
+      "type": "EditText",
+      "value": "",
+      "options": []
+    },
+    {
+      "key": "车手联会用车",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "广告修车",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "看车辆广告回油"
+      ]
+    }
+  ],
+  "生涯": [
+    {
+      "key": "项目名称",
+      "type": "EditText",
+      "value": "生涯",
+      "options": []
+    },
+    {
+      "key": "次数",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "自定义生涯位置",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "启用自定义生涯位置"
+      ]
+    },
+    {
+      "key": "生涯大章",
+      "type": "ComboBox",
+      "value": "3",
+      "options": [
+        "第一章",
+        "第二章",
+        "第三章",
+        "第四章",
+        "第五章",
+        "第六章"
+      ]
+    },
+    {
+      "key": "生涯行",
+      "type": "EditText",
+      "value": "2",
+      "options": []
+    },
+    {
+      "key": "生涯列",
+      "type": "EditText",
+      "value": "4",
+      "options": []
+    },
+    {
+      "key": "生涯小关",
+      "type": "EditText",
+      "value": "12",
+      "options": []
+    },
+    {
+      "key": "生涯选路",
+      "type": "ComboBox",
+      "value": "3",
+      "options": [
+        "不选路",
+        "左划",
+        "右划",
+        "百分比选路",
+        "自定义选图"
+      ]
+    },
+    {
+      "key": "生涯线路",
+      "type": "EditText",
+      "value": "",
+      "options": []
+    },
+    {
+      "key": "生涯用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "用车模式",
+      "type": "RadioGroup",
+      "value": "0",
+      "options": [
+        "每次用一辆",
+        "每辆用一次"
+      ]
+    },
+    {
+      "key": "选车方式",
+      "type": "RadioGroup",
+      "value": "0",
+      "options": [
+        "滑动选车",
+        "点击选车"
+      ]
+    },
+    {
+      "key": "选车筛选",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "已拥有",
+        "性能分",
+        "降序"
+      ]
+    },
+    {
+      "key": "生涯漂流",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "生涯氮气漂流模式"
+      ]
+    },
+    {
+      "key": "广告修车",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "看车辆广告回油"
+      ]
+    }
+  ],
+  "每日战利品": [
+    {
+      "key": "项目名称",
+      "type": "EditText",
+      "value": "每日战利品",
+      "options": []
+    },
+    {
+      "key": "次数",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "杯赛位置",
+      "type": "EditText",
+      "value": "2",
+      "options": []
+    },
+    {
+      "key": "杯赛选路",
+      "type": "ComboBox",
+      "value": "3",
+      "options": [
+        "不选路",
+        "左划",
+        "右划",
+        "百分比选路",
+        "自定义选图"
+      ]
+    },
+    {
+      "key": "杯赛线路",
+      "type": "EditText",
+      "value": "",
+      "options": []
+    },
+    {
+      "key": "杯赛用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "用车模式",
+      "type": "RadioGroup",
+      "value": "0",
+      "options": [
+        "每次用一辆",
+        "每辆用一次"
+      ]
+    },
+    {
+      "key": "选车方式",
+      "type": "RadioGroup",
+      "value": "0",
+      "options": [
+        "滑动选车",
+        "点击选车"
+      ]
+    },
+    {
+      "key": "选车筛选",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "已拥有",
+        "性能分",
+        "降序"
+      ]
+    },
+    {
+      "key": "广告修车",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "看车辆广告回油"
+      ]
+    },
+    {
+      "key": "代币买票",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "代币买票，次数："
+      ]
+    },
+    {
+      "key": "买票次数",
+      "type": "EditText",
+      "value": "30",
+      "options": []
+    },
+    {
+      "key": "杯赛漂流",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "杯赛氮气漂流模式"
+      ]
+    },
+    {
+      "key": "杯赛两圈赛制",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "杯赛两圈赛制"
+      ]
+    }
+  ]
+}

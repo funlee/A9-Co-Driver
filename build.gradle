@@ -2,9 +2,8 @@ plugins {
     id 'com.android.application' version '8.10.1' apply false
 }
 
-// Public builds must never inherit local reference assets or old private build outputs.
-ext.withPrivateAssets = providers.gradleProperty('withPrivateAssets').map { it.toBoolean() }.getOrElse(false)
+// Local screenshot fixtures are optional and never supply application runtime assets.
+ext.withLocalTestFixtures = providers.gradleProperty('withLocalTestFixtures').map { it.toBoolean() }.getOrElse(false)
 allprojects {
-    layout.buildDirectory.set(rootProject.layout.projectDirectory.dir(
-            rootProject.ext.withPrivateAssets ? "private/build/${project.name}" : "build/public/${project.name}"))
+    layout.buildDirectory.set(rootProject.layout.projectDirectory.dir("build/${project.name}"))
 }

@@ -1,6 +1,6 @@
 # Third-party dependencies
 
-The root MIT license covers this project's independently written code, not external dependencies or private reference material.
+The root MIT license covers this project's code and bundled runtime resources. It does not replace external dependencies' licenses. Recovered/adapted runtime resources retain their provenance; the project maintainer confirmed authorization for their public redistribution on 2026-11-07. See `docs/runtime-assets.md`.
 
 Dependencies are resolved from Maven Central / Google Maven rather than committed binary copies:
 
@@ -10,4 +10,4 @@ Dependencies are resolved from Maven Central / Google Maven rather than committe
 - ML Kit Chinese text recognition 16.0.1, provided through Google Maven; use Google's terms for the SDK and bundled models.
 - Android Gradle Plugin, Gradle Wrapper and Android tooling retain their upstream licenses. Wrapper scripts include their original notices.
 
-No license is granted here for extracted reference APK scripts, route libraries, recognition dictionaries, game images, or original APKs. These remain outside version control under `private/` and must not be attached to public releases.
+The bundled Lua modules, routes, map rules, digit dictionary and configuration forms are included in the source distribution. Original APKs, game images, account information, and device logs remain outside version control under `private/`; no license to these excluded materials or to game trademarks is granted here.

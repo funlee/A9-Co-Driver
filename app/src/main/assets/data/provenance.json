@@ -1,0 +1,31 @@
+{
+  "source_apk_sha256": "cde38b50d47e6f8ddfd53cd4fdeff061b3e3214d38ca6ca02cfd719447e5edf2",
+  "recovered_data": true,
+  "runtime_validation": "partial: cumulative 78 multiplayer races on MuMu (world 40, master 38), interrupted by updates; latest empty-fuel task skip covered offline only; not a continuous 200-race acceptance",
+  "assets": {
+    "data/forms.json": "70d9a842d8abef8360820ad7b99bcfe6803c474968f82289924bc1c4a675ac90",
+    "data/map-rules.tsv": "40b496d1bc04f5259ccd10503e0ddd97e127ab647b1ed9f90ea3565b417d564d",
+    "data/progress.lib": "1a15ef4e6e5bda467aec8b453e448b5e95a166b29529d7a186fbde4192e2c2d1",
+    "data/routes.txt": "b9e5f647d249d662ab354f7f8813908dc89fe6f30902b929655365e54c33dc01",
+    "licenses/jnigen.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
+    "licenses/luajava.txt": "dd002f5df5455ed5c1c320b6600d4c702637456681bfa14240365f586d11b80d",
+    "lua/bootstrap.lua": "f977667fb9c357109f4e8a29d71afb73a0c74d1bea089e0488deb8f99344aa09",
+    "lua/career.lua": "ba9ca4f6a7d4ea1d6a3c5fe6a5bed69b13e6f937b49ca5a9b962dcc73b4c8b46",
+    "lua/club.lua": "ac83e25a29c8b7b8522389b3c64700485b1dc3244571ad91404aba3f3392257a",
+    "lua/cup.lua": "856930022237ebe0d6a8f557eb086c412f40331c11656de9098b856c44c094a6",
+    "lua/daily.lua": "7b5b1b59d6dc7e975b8634275993e8f26baaf7c99dd429c9e16111f9ca46110f",
+    "lua/multiplayer_current.lua": "005cdb07bb9270b0153d10dcc86909d044d4e629590c7dee62c1dbc4a4c17691",
+    "lua/multiplayer_down.lua": "c0ab24fbee29c20497e4b6b0c525f93d5a0a780fd13451f46616bfccece334d4",
+    "lua/multiplayer_up.lua": "e7ffe6fc697cff2dd5dc7def55d1c4d517efdbfbe51071a43b547c1396e34a43",
+    "lua/shared.lua": "d136ff46fcb980b375ca78e56147ccab40457bcf230f3c7d873e7df4ccfa704c",
+    "lua/special.lua": "3bb8763e99900970c864cc20f6080392818183f0d89a6eb3f3878dd796f61642",
+    "lua/utilities.lua": "fe7b74fe62907d09ce875168ee321147d219309ae205d06fe9b4b906eb0c6d20",
+    "lua/workflows.lua": "172469ee0b8ce5612473584a4c3acfac6b30aae84d62f470dd301262d2b369fa"
+  },
+  "publication": {
+    "date": "2026-11-07",
+    "authorization": "Project maintainer confirmed authorization to publicly redistribute the recovered runtime resources.",
+    "license": "MIT",
+    "scope": "Bundled runtime scripts, route data, map rules, digit dictionary and configuration forms; excludes original APKs, game images and account data."
+  }
+}
