@@ -98,7 +98,7 @@ public final class RouteEngine {
         }
         touch.tap(3,590,y);
     }
-    private void releaseDrift() { if(drifting) { touch.up(2); drifting=false; } }
+    private void releaseDrift() { if(drifting) { try{touch.up(2);}finally{drifting=false;} } }
     public void clear() { jobs.clear(); releaseDrift(); }
     public boolean drifting(){return drifting;}
     public void nitroPulse(long now){add(now,1,1,236,1000,null);add(now+100,1,1,236,1000,null);}

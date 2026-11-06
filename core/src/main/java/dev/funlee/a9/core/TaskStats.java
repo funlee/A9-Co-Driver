@@ -5,7 +5,8 @@ import java.util.*;
 /** Per-start counters. Unknown ranks never silently enter the top-three denominator. */
 public final class TaskStats {
     private int target,started,finished,returned,fallbacks,progress,actions,eventCount,totalActions;
-    private int cycle,projectTarget,projectBase,rank,ranked,topThree;
+    private int cycle,projectTarget,projectBase,rank,ranked,topThree,restarts;
+    private long matchingSeconds=-1;
     private long elapsed;
     private boolean active,resultRecorded,returnRecorded,rankConflict;
     private String mode="任务",modeKey="",map="等待识别",operation="等待比赛";
@@ -14,6 +15,36 @@ public final class TaskStats {
     public synchronized void project(String value){map="等待识别";operation="等待比赛";progress=0;actions=0;eventCount=0;rank=0;modeKey=value;mode=MultiplayerUi.displayMode(value).replace("（原多人上）","").replace("（原多人下）","");}
     public synchronized void cycle(int n){cycle=n;}
     public synchronized void projectTarget(int n){projectTarget=n;projectBase=finished;}
+    public synchronized void resumeProject(int n,int completed){projectTarget=n;projectBase=finished-completed;}
+    public synchronized void matching(long ms){matchingSeconds=ms<0?-1:ms/1000;}
+    public synchronized void recovered(){restarts++;active=false;resultRecorded=false;returnRecorded=false;matchingSeconds=-1;operation="重启后继续剩余任务";}
+    public synchronized int restartCount(){return restarts;}
+    public synchronized long elapsedMillis(){return elapsed;}
+    public synchronized Map<String,Object> snapshot(){
+        Map<String,Object> m=new LinkedHashMap<>();
+        m.put("target",target);m.put("started",started);m.put("finished",finished);m.put("returned",returned);
+        m.put("fallbacks",fallbacks);m.put("progress",progress);m.put("actions",actions);m.put("eventCount",eventCount);m.put("totalActions",totalActions);
+        m.put("cycle",cycle);m.put("projectTarget",projectTarget);m.put("projectBase",projectBase);m.put("rank",rank);m.put("ranked",ranked);m.put("topThree",topThree);m.put("restarts",restarts);m.put("elapsed",elapsed);
+        m.put("mode",mode);m.put("modeKey",modeKey);m.put("map",map);m.put("operation",operation);m.put("counts",new LinkedHashMap<>(counts));
+        return m;
+    }
+    private static int number(Map<?,?> m,String key){Object v=m.get(key);if(!(v instanceof Number)||((Number)v).longValue()<0||((Number)v).longValue()>Integer.MAX_VALUE)throw new IllegalArgumentException("Invalid saved counter: "+key);return ((Number)v).intValue();}
+    public static TaskStats restore(Map<String,Object> m){
+        TaskStats s=new TaskStats();
+        s.target=number(m,"target");s.started=number(m,"started");s.finished=number(m,"finished");s.returned=number(m,"returned");
+        s.fallbacks=number(m,"fallbacks");s.progress=number(m,"progress");s.actions=number(m,"actions");s.eventCount=number(m,"eventCount");s.totalActions=number(m,"totalActions");
+        s.cycle=number(m,"cycle");s.projectTarget=number(m,"projectTarget");s.projectBase=number(m,"projectBase");s.rank=number(m,"rank");s.ranked=number(m,"ranked");s.topThree=number(m,"topThree");s.restarts=number(m,"restarts");
+        Object elapsed=m.get("elapsed");if(!(elapsed instanceof Number)||((Number)elapsed).longValue()<0)throw new IllegalArgumentException("Invalid elapsed time");s.elapsed=((Number)elapsed).longValue();
+        for(String key:List.of("mode","modeKey","map","operation"))if(!(m.get(key) instanceof String))throw new IllegalArgumentException("Invalid saved label: "+key);
+        s.mode=(String)m.get("mode");s.modeKey=(String)m.get("modeKey");s.map=(String)m.get("map");s.operation="等待恢复任务";
+        if(!(m.get("counts") instanceof Map))throw new IllegalArgumentException("Invalid mode counters");
+        Map<?,?> counts=(Map<?,?>)m.get("counts");long sum=0;
+        for(Object key:counts.keySet()){if(!(key instanceof String))throw new IllegalArgumentException("Invalid mode");int n=number(counts,(String)key);sum+=n;s.counts.put((String)key,n);}
+        if(sum!=s.finished||s.returned>s.finished||s.count("多人上")+s.count("多人下")>s.started||s.topThree>s.ranked||s.ranked>s.count("多人上")+s.count("多人下")||s.rank>8||s.projectBase>s.finished||s.progress>100)
+            throw new IllegalArgumentException("Saved task counters are inconsistent");
+        // The previous race no longer owns callbacks after a VM/service restart.
+        return s;
+    }
     public synchronized void elapsed(long ms){elapsed=Math.max(elapsed,ms);}
     public synchronized void operation(String value){operation=value;}
     public synchronized void begin(String displayMap,boolean fallback){
@@ -62,6 +93,7 @@ public final class TaskStats {
                 "\n杯赛 "+count("杯赛")+" · 生涯 "+count("生涯")+" · 其他 "+(finished-multi-count("杯赛")-count("生涯"))+
                 "\n地图："+map+"\n进度 "+progress+"% · 指令 "+actions+"/"+eventCount+
                 "\n当前操作："+operation+"\n累计指令 "+totalActions+" · 兜底 "+fallbacks+" 局"+
-                "\n运行 "+time+" · 自动重启未启用";
+                (matchingSeconds>=0?"\n匹配等待 "+matchingSeconds+" 秒 / 90 秒":"")+
+                "\n运行 "+time+" · 自动重启 "+restarts+" 次";
     }
 }

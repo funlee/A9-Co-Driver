@@ -86,6 +86,7 @@ end
 function main()
   localInit()
   beginThread(monitor)
+  if _sessionLimitReached and _sessionLimitReached() then _finished();return end
   if UIconfig.routeOnly~='' then
     data['项目']='手动跑图';data['多人地图']=UIconfig.routeOnly;data['线路']=assert(ROUTES[UIconfig.routeOnly],'路线不存在')
     data['心跳时间']=os.time();data['信息']='请手动进入比赛，等待比赛画面'
@@ -94,7 +95,8 @@ function main()
     if not ready then error('等待比赛超时') end
     utils.newAutoDriver();_finished();return
   end
-  local cycle=0
+  local resume=_queueResume and _queueResume() or {cycle=1,index=1,completed=0}
+  local cycle=resume.cycle-1
   repeat
     cycle=cycle+1;_sessionCycle(cycle);print('开始第 '..cycle..' 轮项目队列')
     local enabled=0
@@ -102,17 +104,28 @@ function main()
       local cfg=UIconfig.projects[i]
       if UIconfig.ActiveProj[i] then
         enabled=enabled+1
+        if cycle>resume.cycle or i>=resume.index then
+        local completed=_queueEnter and _queueEnter(cycle,i,tonumber(cfg.data['次数']) or 1) or 0
         print('第 '..cycle..' 轮，开始项目 '..i..'：'..cfg['项目']..'，目标 '..tostring(cfg.data['次数'])..' 局')
         run.index=i;run.data=cfg.data;data['项目']=cfg['项目'];data['心跳时间']=os.time()
         _hud('项目 '..i..'：'..data['项目'])
+        local outcome=nil
         if data['项目']=='多人上' or data['项目']=='多人下' then
-          currentMultiplayer.run()
+          outcome=currentMultiplayer.run()
         else
           _sessionProject(data['项目'],tonumber(run.data['次数']) or 1)
-          utils.backToMain();utils.checkAuto();utils.initCar();run.project()
+          local original=run.data['次数']
+          run.data['次数']=tostring(math.max(0,(tonumber(original) or 1)-completed))
+          if tonumber(run.data['次数'])>0 then utils.backToMain();utils.checkAuto();utils.initCar();run.project() end
+          run.data['次数']=original
         end
-        print('第 '..cycle..' 轮，项目 '..i..' 已完成：'..data['项目'])
+        if _queueDone then _queueDone() end
+        if _sessionLimitReached and _sessionLimitReached() then print('已达到本次总完赛上限，任务结束');_finished();return end
+        if outcome=='fuelEmpty' then
+          print('第 '..cycle..' 轮，项目 '..i..' 因车辆全部无油已跳过：'..data['项目'])
+        else print('第 '..cycle..' 轮，项目 '..i..' 已完成：'..data['项目']) end
         run.data={}
+        end
       end
     end
     if enabled==0 then error('没有启用的项目，无法循环执行') end

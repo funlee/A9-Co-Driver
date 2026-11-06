@@ -10,8 +10,12 @@ public final class PopupCloseDetector {
         return ink(frame.pixel(719-y,x),pink);
     }
     public static int[] find(PixelFrame frame) {
+        return find(frame,65,220);
+    }
+    public static int[] findDialog(PixelFrame frame){return find(frame,100,350);}
+    private static int[] find(PixelFrame frame,int top,int bottom) {
         if(frame.width!=720||frame.height!=1280)return null;
-        for(boolean pink:new boolean[]{true,false})for(int radius:new int[]{11,8})for(int y=65;y<220;y++)for(int x=950;x<1190;x++) {
+        for(boolean pink:new boolean[]{true,false})for(int radius:new int[]{11,8})for(int y=top;y<bottom;y++)for(int x=950;x<1190;x++) {
             if(!at(frame,x,y,pink))continue;
             boolean cross=true;
             for(int d:new int[]{4,radius})for(int dx:new int[]{-1,1})for(int dy:new int[]{-1,1})

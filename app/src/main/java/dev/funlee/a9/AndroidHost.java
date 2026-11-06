@@ -21,7 +21,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             "cmpColorEx","cmpColor","getPixelColor","findColor","findMultiColor","findPic","snapShot","rotateImage",
             "getDisplaySize","getDisplayRotate","getWorkPath","getSdPath","getPackageName","getInstalledApk","frontAppName","runApp","stopApp","keyPress",
             "setScreenScale","setControlBarPos","rnd","toast","print","colorToRGB","_jsonEncode","_jsonDecode","_textOcr","_digit","_mapMatch",
-            "_validateRoute","_driverBegin","_driverStep","_driverEnd","_hud","_finished","_multiplayerUi","_fallbackBegin","_fallbackStep","_sessionCycle","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_sessionLegacyCompleted","_sessionOperation","_routeDisplay");
+            "_validateRoute","_driverBegin","_driverStep","_driverEnd","_hud","_finished","_multiplayerUi","_fallbackBegin","_fallbackStep","_sessionCycle","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_sessionLegacyCompleted","_sessionOperation","_routeDisplay","_queueResume","_queueEnter","_queueDone","_sessionLimitReached");
     private final Context context;
     private final LocalStore store;
     private final CaptureSession capture;
@@ -39,6 +39,19 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     private final File root;
     public volatile boolean finished;
     public long clock;
+    private final TaskCheckpoint checkpoint=new TaskCheckpoint();
+    private final MatchmakingWatchdog matching=new MatchmakingWatchdog();
+    private long lastSavedClock;
+    public GameRecovery.Reason recoveryReason;
+    public void recovered() throws InterruptedException{
+        driver=null;frame=null;progress.reset();matching.reset();lastUiScene="";finished=false;recoveryReason=null;
+        SessionState.resultOverlay(false);SessionState.stats.recovered();
+    }
+    public void restoreQueue(JSONObject saved)throws Exception{
+        JSONObject q=saved.getJSONObject("queue");checkpoint.restore(q.getInt("cycle"),q.getInt("index"),q.getInt("completed"));
+    }
+    public void persist(boolean complete)throws Exception{SessionRecord.write(context,store.config,checkpoint,SessionState.stats,complete);lastSavedClock=clock;}
+    public void periodicSave()throws Exception{if(clock-lastSavedClock>=5000)persist(finished);}
     public AndroidHost(Context context,LocalStore store,CaptureSession capture,TouchService touch) {
         this.context=context;this.store=store;this.capture=capture;this.touch=touch;
         root=new File(context.getFilesDir(),"runtime");root.mkdirs();
@@ -59,6 +72,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         capture();
         Map<String,Object> out=new LinkedHashMap<>();
         if((touch==null||!touch.unlockGuard.active())&&ColorPattern.matches(frame,"680|50|FFFFFF-101010,660|70|FFFFFF-101010",1)) {
+            matching.reset();SessionState.stats.matching(-1);
             SessionState.resultOverlay(false);out.put("scene","race");out.put("text","");out.put("words",List.of());return out;
         }
         Bitmap sideways=Bitmap.createBitmap(frame.copyPixels(),720,1280,Bitmap.Config.ARGB_8888);
@@ -91,6 +105,13 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             SessionState.log("界面文字为空，已保存当前截屏用于排查");
         }
         String scene=MultiplayerUi.classify(text);
+        boolean isMatching=scene.equals("matching");
+        boolean covered=excluded!=null&&Rect.intersects(excluded,new Rect(0,0,205,55));
+        MatchmakingWatchdog.Back back=MatchmakingWatchdog.backButton(frame,covered);
+        boolean restart=matching.observe(isMatching,back,clock,capture.frameId());
+        SessionState.stats.matching(isMatching?matching.elapsed(clock):-1);
+        if(isMatching){out.put("matchingSeconds",matching.elapsed(clock)/1000);out.put("backButton",back.name());}
+        if(restart){recoveryReason=GameRecovery.Reason.MATCH_TIMEOUT;throw new IllegalStateException("匹配超过 90 秒且连续确认返回按钮消失");}
         if(touch!=null){
             touch.unlockGuard.observe(VehicleUnlockGuard.prompt(text),laterBounds,!scene.equals("unknown")&&!scene.equals("vehicleUnlock"));
             if(touch.unlockGuard.active()){
@@ -100,6 +121,17 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             }
         }
         out.put("scene",scene);
+        if(scene.equals("loginHistory")&&touch!=null){
+            int[] recent=touch.recentLogin();if(recent!=null)out.put("recentAccount",Map.of("x",recent[0],"y",recent[1]));
+        }
+        if(scene.equals("rewardChoice")){
+            List<Object> cards=new ArrayList<>();
+            for(int[] card:DynamicRewards.cards(frame)){
+                if(excluded!=null&&Rect.intersects(excluded,new Rect(card[2],210,card[3]+1,491)))continue;
+                cards.add(Map.of("x",card[0],"y",card[1]));
+            }
+            out.put("rewardChoices",cards);
+        }
         if(scene.equals("result")&&!SessionState.resultOverlay){
             SessionState.resultOverlay(true);
             capture.awaitFrameAfter(SystemClock.elapsedRealtime()+180);
@@ -119,7 +151,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         if(scene.equals("unknown")&&!text.isEmpty()&&!text.equals(lastUnknownText)&&clock-lastUnknownLog>=5000){
             lastUnknownLog=clock;lastUnknownText=text;SessionState.log("待识别界面文字："+text);
         }
-        int[] cross=PopupCloseDetector.find(frame);
+        int[] cross=(scene.equals("serverError")||scene.equals("noOpponents"))?PopupCloseDetector.findDialog(frame):PopupCloseDetector.find(frame);
         if(cross!=null)out.put("closeX",Map.of("x",cross[0],"y",cross[1]));
         if(!scene.equals(lastUiScene)) {
             lastUiScene=scene;
@@ -128,7 +160,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         String title=mapTitle.toString();
         // A dedicated crop keeps small Chinese map labels from being merged with the roster.
         if(scene.equals("unknown"))title=text(529,80,684,550,2);
-        if(scene.equals("cars"))out.put("rankText",text(250,90,335,200,3));
+        if(scene.equals("cars")){out.put("rankText",text(250,90,335,200,3));out.put("emptyFuelSlots",FuelAvailability.emptySlots(frame));}
         out.put("mapText",title);
         // The loading title includes the lap count. Cinematic player names do not.
         MapMatcher.Match match=store.matcher.match(title.contains("圈")?title:"");
@@ -187,19 +219,29 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                     List<String> parts=new ArrayList<>();for(int i=1;i<=l.getTop();i++)parts.add(l.toString(i));SessionState.log(String.join(" ",parts));return 0;
                 }
                 case "_hud":SessionState.hud=s(l,1);SessionState.changed();return 0;
-                case "_finished":finished=true;return 0;
+                case "_finished":finished=true;persist(true);return 0;
                 case "_jsonEncode":return result(l,toJson(l.toObject(1)).toString());
                 case "_jsonDecode":return result(l,LocalStore.javaValue(new JSONTokener(s(l,1)).nextValue()));
                 case "_textOcr":return result(l,text(n(l,1),n(l,2),n(l,3),n(l,4)));
                 case "_multiplayerUi":return result(l,multiplayerUi());
                 case "_routeDisplay":return result(l,store.matcher.displayName(s(l,1)));
                 case "_sessionCycle":SessionState.stats.cycle(n(l,1));return 0;
-                case "_sessionProject":SessionState.stats.project(s(l,1));SessionState.stats.projectTarget(l.getTop()>1?n(l,2):0);return 0;
-                case "_sessionRaceBegin":SessionState.stats.begin(store.matcher.displayName(s(l,1)),l.toBoolean(2));return 0;
-                case "_sessionRaceResult":SessionState.stats.result(l.getTop()>0?n(l,1):0);return 0;
-                case "_sessionLegacyCompleted":SessionState.stats.legacyCompleted();return 0;
+                case "_queueResume":return result(l,checkpoint.resume());
+                case "_queueEnter":checkpoint.enter(n(l,1),n(l,2),n(l,3));persist(false);return result(l,checkpoint.completed());
+                case "_queueDone":checkpoint.projectDone();persist(false);return 0;
+                case "_sessionLimitReached":return result(l,store.config.optInt("maxRaces",0)>0&&SessionState.stats.finished()>=store.config.optInt("maxRaces",0));
+                case "_sessionProject":SessionState.stats.project(s(l,1));SessionState.stats.resumeProject(l.getTop()>1?n(l,2):0,checkpoint.completed());return result(l,checkpoint.completed());
+                case "_sessionRaceBegin":SessionState.stats.begin(store.matcher.displayName(s(l,1)),l.toBoolean(2));persist(false);return 0;
+                case "_sessionRaceResult":{
+                    int before=SessionState.stats.finished(),beforeRanked=SessionState.stats.rankedCount();SessionState.stats.result(l.getTop()>0?n(l,1):0);
+                    checkpoint.completed(SessionState.stats.finished()-before);
+                    if(SessionState.stats.finished()>before)SessionState.log("任务累计完赛 "+SessionState.stats.finished()+" / "+store.config.optInt("maxRaces",0)+" · 世界 "+SessionState.stats.count("多人上")+" / 大师 "+SessionState.stats.count("多人下")+" · 自动重启 "+SessionState.stats.restartCount());
+                    if(SessionState.stats.finished()!=before||SessionState.stats.rankedCount()!=beforeRanked)persist(false);
+                    return 0;
+                }
+                case "_sessionLegacyCompleted":SessionState.stats.legacyCompleted();checkpoint.completed(1);persist(false);return 0;
                 case "_sessionOperation":SessionState.stats.operation(s(l,1));return 0;
-                case "_sessionRaceReturned":SessionState.stats.returned();return 0;
+                case "_sessionRaceReturned":SessionState.stats.returned();persist(false);return 0;
                 case "_fallbackBegin":
                     driverStart=clock;lastProgressTime=clock;lastProgress=-1;lastLoggedProgress=-10;progress.reset();return 0;
                 case "_fallbackStep": {
@@ -229,7 +271,10 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 case "_driverEnd":if(driver!=null)driver.stop();return 0;
                 default:throw new UnsupportedOperationException("尚未实现的运行接口："+name);
             }
-        } catch(Exception e) {throw new IllegalStateException(name+"："+e.getMessage(),e);}
+        } catch(Exception e) {
+            if(e instanceof TouchService.ForegroundLost)recoveryReason=GameRecovery.Reason.FOREGROUND_LOST;
+            throw new IllegalStateException(name+"："+e.getMessage(),e);
+        }
     }
     private int step(Lua l) {
         if(driver==null)throw new IllegalStateException("跑图尚未初始化");capture();
@@ -249,7 +294,10 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             driver.nitroPulse(clock);lastPulse=clock;
         }
         try{driver.update(p,clock,icon);SessionState.stats.progress(p,driver.nextEvent(),driver.eventCount());SessionState.stats.operation(driver.currentOperation());}
-        catch(RuntimeException e){throw failure("进度 "+p+"%，动作 "+driver.nextEvent()+"/"+driver.eventCount()+"："+e.getMessage());}
+        catch(RuntimeException e){
+            if(e instanceof TouchService.ForegroundLost)throw e;
+            throw failure("进度 "+p+"%，动作 "+driver.nextEvent()+"/"+driver.eventCount()+"："+e.getMessage());
+        }
         if(p>=0&&(p>=lastLoggedProgress+10||driver.stopped())) {
             lastLoggedProgress=p;SessionState.log("跑图进度 "+p+"% · 已执行动作 "+driver.nextEvent()+"/"+driver.eventCount());
         }
@@ -338,6 +386,9 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         try(FileOutputStream out=new FileOutputStream(exported)){image.compress(Bitmap.CompressFormat.PNG,100,out);}finally{image.recycle();}
         SessionState.log("可导出的诊断截图："+exported);
     }
-    public void pause(){if(driver!=null)driver.clear();touch.releaseAll();}
+    public void pause(){
+        try{if(driver!=null)driver.clear();}catch(TouchService.ForegroundLost ignored){}
+        finally{touch.releaseAll();}
+    }
     @Override public void close(){try{if(driver!=null)driver.stop();}catch(Exception ignored){}finally{recognizer.close();if(touch!=null)touch.releaseAll();}}
 }

@@ -11,6 +11,8 @@ public final class PublicChecks {
     private static boolean rejected(Runnable action){try{action.run();return false;}catch(IllegalStateException expected){return true;}}
     public static void main(String[] args)throws Exception{
         Path assets=Path.of(args[0]);
+        checks+=RecoveryChecks.run(assets);
+        checks+=StabilityChecks.run(assets);
         Route sample=Route.parse("synthetic","0,N:0:1:10,10,D:20,20,21,30,360");
         check(sample.valid()&&sample.events.size()==4,"Synthetic route syntax");
         for(String bad:List.of("10,21,1,22","101,21","0,unknown","0,N:0:999999:0"))check(!Route.parse("bad",bad).valid(),"Reject malformed route");

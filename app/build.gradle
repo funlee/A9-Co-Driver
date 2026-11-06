@@ -10,8 +10,9 @@ android {
         if (!rootProject.ext.withPrivateAssets) applicationIdSuffix '.source'
         minSdk 26
         targetSdk 35
-        versionCode 14
-        versionName '0.1.13-local'
+        versionCode 25
+        versionName '0.1.24-local'
+        testInstrumentationRunner 'dev.funlee.a9.RecoveryDeviceCheck'
     }
     if (rootProject.ext.withPrivateAssets) {
         sourceSets.main.assets.srcDir rootProject.file('private/assets')

@@ -17,7 +17,7 @@ public final class CaptureSession implements AutoCloseable {
     private VirtualDisplay display;
     private final HandlerThread thread=new HandlerThread("a9-capture");
     private Bitmap latest;
-    private long frameTime;
+    private long frameTime,lastReadFrame;
     public volatile int width,height;
     private final int density;
     private final DisplayManager displays;
@@ -94,6 +94,7 @@ public final class CaptureSession implements AutoCloseable {
             catch(InterruptedException e){Thread.currentThread().interrupt();throw new IllegalStateException("截屏已停止");}
         }
         if(latest==null) throw new IllegalStateException("未收到截屏画面，请停止后重新授权截屏");
+        lastReadFrame=frameTime;
         Matrix m=new Matrix();m.postRotate(clockwise);
         Bitmap rotated=Bitmap.createBitmap(latest,0,0,latest.getWidth(),latest.getHeight(),m,false);
         if(Math.abs(rotated.getWidth()/(double)rotated.getHeight()-720.0/1280)>.08) {
@@ -104,6 +105,7 @@ public final class CaptureSession implements AutoCloseable {
         if(rotated!=latest && rotated!=scaled)rotated.recycle();
         return scaled==latest?scaled.copy(Bitmap.Config.ARGB_8888,false):scaled;
     }
+    public synchronized long frameId(){return lastReadFrame;}
     @Override public synchronized void close() {
         displays.unregisterDisplayListener(displayListener);
         if(display!=null) {display.release();display=null;}

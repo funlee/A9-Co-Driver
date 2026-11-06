@@ -28,7 +28,7 @@ local function status(message)
 end
 function currentMultiplayer.run()
   local count=tonumber(run.data['次数']) or 1
-  _sessionProject(data['项目'],count)
+  local completed=_sessionProject(data['项目'],count) or 0
   for _,key in ipairs({'使用车组','广告修车','传奇停跑','多人上掉分','选车筛选'}) do
     if utils.defultCfg(run.data[key],'')~='' then error('新版多人菜单尚未适配“'..key..'”，请关闭此选项后运行') end
   end
@@ -37,17 +37,20 @@ function currentMultiplayer.run()
   local series=data['项目']=='多人上' and '世界系列赛' or '大师系列赛'
   local other=data['项目']=='多人上' and '大师系列赛' or '世界系列赛'
   status('目标赛事：'..series..'（'..data['项目']..'）')
-  local total=0;local unlockMisses=0
+  local total=completed;local unlockMisses=0;local loginAttempts=0;local loginMissing=0;local serverErrors=0;local noOpponents=0
   while total<count do
     local route=nil;local candidate=nil;local candidateFrames=0;local lastMapText=''
     local raceMode=mode;local fallback=false;local fallbackReason=''
     local raced=false;local resultSeen=false;local eventSince=nil
     local lastScene='';local changed=tickCount();local started=false;local seriesSelected=false
-    local lastPulse=0;local carRetries=0
+    local lastPulse=0;local carRetries=0;local carListAligned=false
+    local rewardChoice=nil;local rewardAt=0;local rewardTries=0;local dialogMisses=0
     while true do
       local screen=_multiplayerUi()
       local scene=screen.scene
+      if scene~='rewardChoice' then rewardChoice=nil;rewardTries=0 end
       if scene~='event' then eventSince=nil end
+      if scene~='noOpponents' and scene~='serverError' then dialogMisses=0 end
       if raced and scene=='result' then
         _sessionRaceResult(screen.finalRank or 0)
         if not resultSeen then resultSeen=true;status('已识别比赛结算：'..screen.text) end
@@ -66,7 +69,8 @@ function currentMultiplayer.run()
         print('界面文字：'..screen.text)
         lastScene=scene;changed=tickCount()
       end
-      if tickCount()-changed>120000 then error('多人界面等待超时：'..scene..'，请查看诊断截图') end
+      -- Matching has its own host watchdog: elapsed >90s AND confirmed missing Back.
+      if scene~='matching' and tickCount()-changed>120000 then error('多人界面等待超时：'..scene..'，请查看诊断截图') end
       if scene=='vehicleUnlock' then
         -- Highest priority: never dispatch a close-X, Back, Continue or unlock action here.
         if screen.unlockLater and screen.unlockLater.x<640 and screen.unlockLater.y>=500 then
@@ -76,6 +80,66 @@ function currentMultiplayer.run()
           unlockMisses=unlockMisses+1;status('新车解锁保护：等待确认稍后查看')
           if unlockMisses>=3 then error('新车提示未能确认稍后查看；已停止，请由玩家处理，绝不自动解锁车辆') end
         end
+      elseif scene=='raceCancelled' then
+        local nextButton=word(screen,'继续',530)
+        if nextButton then
+          noOpponents=noOpponents+1
+          if noOpponents>5 then error('连续未找到对手，已停止并保存进度，请在玩家较多时继续任务') end
+          status('比赛尚未开始且未找到车手，等待后重新匹配，不计入完赛')
+          click(nextButton.x,nextButton.y);sleep(30000)
+          break -- Reset started/route state after a cancelled loading sequence.
+        end
+      elseif scene=='noOpponents' or scene=='serverError' then
+        if not screen.closeX then
+          dialogMisses=dialogMisses+1
+          if dialogMisses>=6 then error('错误提示弹窗多次无法确认关闭按钮，已停止并保留任务') end
+          data['信息']='等待错误提示弹窗动画结束';sleep(500)
+        else
+          dialogMisses=0
+          if scene=='noOpponents' then
+            noOpponents=noOpponents+1
+            if noOpponents>5 then error('连续未找到对手，已停止并保存进度，请在玩家较多时继续任务') end
+            status('未找到对手，关闭提示并等待 30 秒后重新匹配')
+          else
+            serverErrors=serverErrors+1
+            if serverErrors>3 then error('服务器连续返回错误，已停止并保留已完成局数，请稍后继续任务') end
+            status('关闭服务器错误，等待后重试未完成的比赛')
+          end
+          click(screen.closeX.x,screen.closeX.y);sleep(scene=='noOpponents' and 30000 or 5000)
+          if resultSeen then total=total+1 end
+          break -- Restart navigation; an unconfirmed race never consumes quota.
+        end
+      elseif scene=='matching' then
+        local backLabels={PRESENT='存在',ABSENT='消失',UNKNOWN='待确认'}
+        data['信息']='匹配 '..tostring(screen.matchingSeconds or 0)..' 秒 · 返回按钮 '..(backLabels[screen.backButton] or '待确认')
+        data['心跳时间']=os.time();data['超时状态']=false
+      elseif scene=='loginHistory' then
+        local recent=screen.recentAccount
+        if not recent then
+          loginMissing=loginMissing+1
+          if loginMissing>30 then error('登录历史无法唯一确认最近登录账号，已停止，请由玩家选择') end
+          data['信息']='等待登录历史加载';sleep(500)
+        else
+          loginMissing=0;loginAttempts=loginAttempts+1
+          if loginAttempts>3 then error('最近登录账号未能进入游戏，请由玩家检查登录状态') end
+          status('恢复最近登录的游戏账号');click(recent.x,recent.y);sleep(5000);changed=tickCount()
+        end
+      elseif scene=='rewardChoice' then
+        -- Handle the free choice before the popup-close fallback. Never close an unclaimed reward.
+        if rewardChoice and word(screen,'确认',530) then
+          status('确认领取动态奖励');press(screen,'确认',530);changed=tickCount()
+        elseif not rewardChoice or tickCount()-rewardAt>=3000 then
+          local cards=screen.rewardChoices or {}
+          if #cards>0 then
+            if not rewardChoice then rewardChoice=cards[rnd(1,#cards)];status('动态奖励：随机选择一张可见奖励') end
+            rewardTries=rewardTries+1
+            if rewardTries>5 then error('动态奖励选择后未进入领取流程，请检查画面') end
+            click(rewardChoice.x,rewardChoice.y);rewardAt=tickCount();changed=tickCount();sleep(700)
+          else
+            rewardTries=rewardTries+1
+            if rewardTries>5 then error('已识别动态奖励，但无法确认完整奖励卡片；已停止避免误点') end
+          end
+        end
       elseif word(screen,'稍后查看',530) then
         status('关闭广告：稍后查看');press(screen,'稍后查看',530);changed=tickCount()
       elseif screen.closeX and (not started or raced) then
@@ -84,10 +148,6 @@ function currentMultiplayer.run()
         status('关闭寻宝广告：稍后查看');press(screen,'查看',530);changed=tickCount()
       elseif scene=='rewardClaim' then
         status('领取联赛晋级奖励');if press(screen,'领取',530) then changed=tickCount() end
-      elseif scene=='rewardChoice' then
-        -- Free post-race blueprint selection: the first visible card, then the labelled confirmation.
-        status('领取动态奖励：选择首张图纸');click(130,400);sleep(500)
-        if press(screen,'确认',530) then changed=tickCount() end
       elseif scene=='promo' then
         local closed=false
         for _,w in ipairs(screen.words or {}) do
@@ -118,7 +178,9 @@ function currentMultiplayer.run()
         -- Milestone/Hall-of-Fame rewards may open just after the event page reappears.
         if tickCount()-eventSince>=3000 then
           total=total+1;data['多人']=data['多人']+1;_sessionRaceReturned()
-          status('多人比赛已完成 '..total..'/'..count..'，已返回赛事页');break
+          status('多人比赛已完成 '..total..'/'..count..'，已返回赛事页')
+          if _sessionLimitReached and _sessionLimitReached() then return end
+          break
         end
       elseif not seriesSelected and (scene=='event' or scene=='cars' or scene=='car') then
         click(1250,30);sleep(1500)
@@ -132,6 +194,12 @@ function currentMultiplayer.run()
           status('已确认赛事：'..series);press(screen,'开始',550)
         end
       elseif scene=='cars' then
+        if not carListAligned then
+          status('选车列表回到起点，重新确认燃油')
+          swipe(419,300,419,1100,400);sleep(700)
+          swipe(419,300,419,1100,400);sleep(1200)
+          carListAligned=true
+        else
         -- Select an owned, fuelled car in configured order. Unlockable cards have no fuel label.
         local list
         if data['项目']=='多人下' then list=run.data['多人下用车'] or {'1'}
@@ -149,30 +217,41 @@ function currentMultiplayer.run()
           end
           if rank then list=run.data[rank..'用车'] or {'1'} end
         end
-        local chosen=false
+        local chosen=false;local configured=0;local exhausted=0
+        local empty={}
+        for _,index in ipairs(screen.emptyFuelSlots or {}) do empty[index]=true end
         for _,raw in ipairs(list or {}) do
+          configured=configured+1
           local index=tonumber(raw)
-          if index and index>=1 and index<=4 then
+          if index and index>=1 and index<=6 then
+            local noFuel=empty[index] or false
             local col=math.floor((index-1)/2);local row=(index-1)%2
             local x=210+col*464;local y=195+row*237
             for _,w in ipairs(screen.words or {}) do
               local fuel,capacity=string.match(w.text,'(%d+)%s*/%s*(%d+)')
               if fuel and tonumber(capacity)>=1 and tonumber(capacity)<=9 and tonumber(fuel)<=tonumber(capacity) and w.x>x and w.x<x+120 and w.y>y+170 and w.y<y+225 then
-                if tonumber(fuel)==0 then print('跳过无油车辆序号 '..index..'，燃油 '..fuel..'/'..capacity)
+                if tonumber(fuel)==0 then noFuel=true;print('跳过无油车辆序号 '..index..'，燃油 '..fuel..'/'..capacity)
                 else
                 status('选择车辆序号 '..index..'，燃油 '..fuel..'/'..capacity)
-                click(x+200,y+110);sleep(1800);chosen=true;break
+                click(math.min(x+200,1240),y+110);sleep(1800);chosen=true;break
                 end
               end
             end
+            if noFuel then exhausted=exhausted+1 end
           end
           if chosen then break end
         end
         if chosen then carRetries=0
         else
           carRetries=carRetries+1
-          if carRetries>=6 then error(list and '当前可见车辆中没有已配置且有燃油的车辆；请核对车辆序号' or '多次未识别联赛段位，请查看诊断截图') end
+          if carRetries>=6 then
+            if configured>0 and exhausted==configured then
+              status('已配置车辆全部无油，跳过本轮'..series..'，执行下一个任务；保留已完成局数')
+              return 'fuelEmpty'
+            else error(list and '当前可见车辆中没有已配置且有燃油的车辆；请核对车辆序号' or '多次未识别联赛段位，请查看诊断截图') end
+          end
           sleep(400)
+        end
         end
       elseif scene=='car' and not started then
         -- The whole TD switch toggles, even when tapping its already-selected half.
@@ -181,6 +260,7 @@ function currentMultiplayer.run()
         elseif press(screen,'开始',550) then started=true;changed=tickCount();status('等待匹配与地图识别') end
       elseif scene=='race' then
         if not raced then
+          serverErrors=0;noOpponents=0
           raced=true
           local forcedLeft=route and leftSwipeMaps[route]
           fallback=forcedLeft or (mode=='3' and not route)

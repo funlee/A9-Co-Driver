@@ -21,6 +21,7 @@ public final class MainActivity extends Activity {
     private TextView status,log;
     private int tab;
     private boolean pendingInspect;
+    private boolean pendingResume;
     @Override public void onCreate(Bundle saved){
         super.onCreate(saved);
         if(!BuildConfig.PRIVATE_ASSETS_ENABLED){
@@ -49,9 +50,19 @@ public final class MainActivity extends Activity {
     private void projects(){
         body.addView(label("项目队列",20));body.addView(label("按顺序执行启用的项目；设置会保存在本机。首次验收建议先用单条路线手动跑图。",13));
         LinearLayout actions=row();actions.addView(button("开始任务",()->requestStart("",false)));actions.addView(button("暂停 / 继续",()->control(AutomationService.PAUSE)));actions.addView(button("停止",()->control(AutomationService.STOP)));body.addView(actions);
+        if(SessionRecord.available(this))body.addView(button("继续上次未完成任务（保留局数）",()->requestStart("",false,true)));
         String recent=store.config.optString("lastRoute",store.config.optString("routeOnly",""));
         if(store.routes.containsKey(recent))body.addView(button("手动跑图 · "+store.matcher.displayName(recent),()->requestStart(recent,false)));
         CheckBox repeat=new CheckBox(this);repeat.setText("循环执行项目队列");repeat.setChecked(store.config.optBoolean("repeat",false));repeat.setOnCheckedChangeListener((v,b)->{try{store.config.put("repeat",b);store.save();}catch(Exception e){message(e.toString());}});body.addView(repeat);
+        int limit=store.config.optInt("maxRaces",0);
+        body.addView(button("总完赛上限："+(limit>0?limit+" 局":"不限")+"（点击修改）",()->{
+            EditText value=edit(String.valueOf(store.config.optInt("maxRaces",0)));value.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+            AlertDialog dialog=new AlertDialog.Builder(this).setTitle("本次任务总完赛上限，0 表示不限").setView(value).setNegativeButton("取消",null).setPositiveButton("保存",null).create();
+            dialog.setOnShowListener(v->dialog.getButton(-1).setOnClickListener(b->{try{
+                int n=Integer.parseInt(value.getText().toString().trim());if(n<0||n>100000)throw new IllegalArgumentException("请输入 0–100000");
+                store.config.put("maxRaces",n);store.save();dialog.dismiss();render();
+            }catch(Exception e){message(e.getMessage());}}));dialog.show();
+        }));
         JSONArray all=store.config.optJSONArray("projects");
         for(int i=0;i<all.length();i++){
             final int index=i;JSONObject p=all.optJSONObject(i);LinearLayout line=row();CheckBox enabled=new CheckBox(this);enabled.setChecked(p.optBoolean("enabled"));
@@ -73,7 +84,7 @@ public final class MainActivity extends Activity {
     }
     private void form(int index,String mode,JSONObject data) throws Exception {
         LinearLayout fields=column();fields.setPadding(dp(16),0,dp(16),0);JSONArray spec=store.forms.getJSONArray(mode);Map<String,View> views=new LinkedHashMap<>();
-        if(mode.equals("多人上")||mode.equals("多人下"))fields.addView(label("多人上对应世界系列赛，多人下对应大师系列赛。新版菜单目前只选首屏序号 1–4 中有油的车辆，支持每次用一辆；车组、广告修车、自动掉分和到段位停跑尚未适配。",13));
+        if(mode.equals("多人上")||mode.equals("多人下"))fields.addView(label("多人上对应世界系列赛，多人下对应大师系列赛。新版菜单目前只选首屏序号 1–6 中有油的车辆，支持每次用一辆；车组、广告修车、自动掉分和到段位停跑尚未适配。",13));
         for(int i=0;i<spec.length();i++){
             JSONObject f=spec.getJSONObject(i);String key=f.getString("key"),type=f.getString("type");JSONArray options=f.getJSONArray("options");
             if(type.equals("EditText")){fields.addView(label(key,13));EditText e=edit(data.optString(key));fields.addView(e);views.put(key,e);}
@@ -171,14 +182,17 @@ public final class MainActivity extends Activity {
         }catch(Exception e){message(e.getMessage());}}));dialog.show();
     }
     private void requestStart(String route,boolean inspect){
+        requestStart(route,inspect,false);
+    }
+    private void requestStart(String route,boolean inspect,boolean resume){
         if(SessionState.running){message("请先停止当前任务");return;}
         if(inspect&&!Settings.canDrawOverlays(this)&&!getSystemService(NotificationManager.class).areNotificationsEnabled()){tab=3;render();message("请先开启悬浮窗或通知，以便在游戏中点击取样");return;}
         if(!inspect&&TouchService.instance==null){tab=3;render();message("请先在设置中开启无障碍服务");return;}
         try{
-            if(!inspect&&route.isEmpty()){
+            if(!inspect&&route.isEmpty()&&!resume){
                 boolean enabled=false;JSONArray p=store.config.getJSONArray("projects");for(int i=0;i<p.length();i++)enabled|=p.getJSONObject(i).optBoolean("enabled");if(!enabled)throw new IllegalArgumentException("请至少启用一个项目，或从路线页选择手动跑图");
             }
-            store.config.put("routeOnly",route);if(!route.isEmpty())store.config.put("lastRoute",route);store.save();pendingInspect=inspect;
+            store.config.put("routeOnly",route);if(!route.isEmpty())store.config.put("lastRoute",route);store.save();pendingInspect=inspect;pendingResume=resume;
             MediaProjectionManager manager=getSystemService(MediaProjectionManager.class);Intent consent;
             if(Build.VERSION.SDK_INT>=34)consent=manager.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay());else consent=manager.createScreenCaptureIntent();
             startActivityForResult(consent,101);
@@ -189,7 +203,7 @@ public final class MainActivity extends Activity {
         if(result!=RESULT_OK||data==null){message("未授权截屏，任务没有启动");return;}
         Intent launch=getPackageManager().getLaunchIntentForPackage(store.config.optString("gamePkg"));
         if(launch==null){message("未找到游戏，请核对包名和安装状态");return;}
-        Intent service=new Intent(this,AutomationService.class).setAction(AutomationService.START).putExtra("result",result).putExtra("consent",data).putExtra("inspect",pendingInspect);
+        Intent service=new Intent(this,AutomationService.class).setAction(AutomationService.START).putExtra("result",result).putExtra("consent",data).putExtra("inspect",pendingInspect).putExtra("resume",pendingResume);
         startForegroundService(service);
         // Match an explicit activity resume, keeping launcher-specific reinitialization out of this transition.
         startActivity(new Intent().setComponent(launch.getComponent()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));

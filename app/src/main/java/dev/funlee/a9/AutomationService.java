@@ -19,6 +19,7 @@ public final class AutomationService extends Service {
     private CaptureSession capture;
     private Intent captureConsent;
     private int captureResult;
+    private org.json.JSONObject resumeState;
     private volatile LuaRuntime runtime;
     private volatile boolean stopping,paused;
     private volatile boolean inspecting,sampleRequested;
@@ -51,8 +52,11 @@ public final class AutomationService extends Service {
             Intent consent=intent.getParcelableExtra("consent");
             if(consent==null)throw new IllegalStateException("缺少截屏授权，请重新启动");
             captureConsent=consent;captureResult=intent.getIntExtra("result",Activity.RESULT_CANCELED);
-            stopping=false;SessionState.running=true;SessionState.paused=false;SessionState.hud="";
-            SessionState.stats=new TaskStats();SessionState.dashboardEnabled=!inspecting;SessionState.status("正在准备本地任务");
+            stopping=false;paused=false;SessionState.running=true;SessionState.paused=false;SessionState.hud="";
+            resumeState=intent.getBooleanExtra("resume",false)?SessionRecord.read(this):null;
+            if(intent.getBooleanExtra("resume",false)&&(resumeState==null||resumeState.optBoolean("complete")))throw new IllegalStateException("没有可继续的未完成任务");
+            SessionState.stats=resumeState==null?new TaskStats():TaskStats.restore((Map<String,Object>)LocalStore.javaValue(resumeState.getJSONObject("stats")));
+            SessionState.dashboardEnabled=!inspecting;SessionState.status(resumeState==null?"正在准备本地任务":"正在恢复上次任务，已完赛 "+SessionState.stats.finished()+" 局");
             worker=new Thread(()->execute(inspecting),"a9-automation");worker.start();
         }catch(Exception e){SessionState.status("启动失败："+e.getMessage());stopRun();}
         return START_NOT_STICKY;
@@ -70,10 +74,12 @@ public final class AutomationService extends Service {
     private void execute(boolean inspect) {
         try {
             LocalStore store=new LocalStore(this);TouchService touch=TouchService.instance;
+            if(resumeState!=null)store.config=new org.json.JSONObject(resumeState.getJSONObject("config").toString());
             int target=0;
             org.json.JSONArray projects=store.config.getJSONArray("projects");
             for(int i=0;i<projects.length();i++){org.json.JSONObject p=projects.getJSONObject(i);if(p.optBoolean("enabled")&&(p.optString("项目").equals("多人上")||p.optString("项目").equals("多人下")))target+=p.getJSONObject("data").optInt("次数",1);}
-            SessionState.stats.target(store.config.optBoolean("repeat",false)?0:target);
+            int limit=store.config.optInt("maxRaces",0);
+            SessionState.stats.target(limit>0?limit:store.config.optBoolean("repeat",false)?0:target);
             if(touch==null&&!inspect)throw new IllegalStateException("请先开启 A9 本地助手的无障碍服务");
             // The activity launches the game immediately after consent. Let its display rotate first.
             Thread.sleep(3000);
@@ -93,24 +99,46 @@ public final class AutomationService extends Service {
                     return;
                 }
                 touch.arm(store.config.getString("gamePkg"));
-                try(LuaRuntime lua=new LuaRuntime(host,AndroidHost.FUNCTIONS)) {
-                    runtime=lua;lua.set("LOCAL_ROOT",host.workPath());lua.set("UIconfig",store.luaConfig());
-                    Map<String,Object> routes=new LinkedHashMap<>();for(Route route:store.routes.values())routes.put(route.name,route.raw);lua.set("ROUTES",routes);
-                    for(String name:List.of("bootstrap","shared","utilities","workflows","multiplayer_up","multiplayer_down","multiplayer_current","cup","special","club","career","daily"))
-                        lua.load(name,store.asset("lua/"+name+".lua"));
-                    lua.start("main");long origin=SystemClock.elapsedRealtime(),pauseAt=0,pausedTotal=0;
-                    SessionState.status("任务已启动");
-                    while(!stopping&&!host.finished) {
-                        long now=SystemClock.elapsedRealtime();
-                        if(paused){if(pauseAt==0){pauseAt=now;host.pause();SessionState.log("已暂停，触点与待执行动作已释放");}Thread.sleep(50);continue;}
-                        if(pauseAt>0){pausedTotal+=now-pauseAt;pauseAt=0;lua.load("resume","data['心跳时间']=os.time()");}
-                        host.clock=now-origin-pausedTotal;
-                        SessionState.stats.elapsed(host.clock);
-                        if(!lua.step(host.clock))break;
-                        Thread.sleep(10);
-                    }
-                    if(!stopping)SessionState.status("本轮任务已完成");
-                }finally{runtime=null;}
+                if(resumeState!=null)host.restoreQueue(resumeState);
+                GameRecovery recovery=new GameRecovery(this,touch,store.config.getString("gamePkg"),()->stopping,()->paused);
+                long origin=SystemClock.elapsedRealtime()-SessionState.stats.elapsedMillis(),pauseAt=0,pausedTotal=0;
+                while(!stopping&&!host.finished){
+                    boolean restarted=false;
+                    try(LuaRuntime lua=new LuaRuntime(host,AndroidHost.FUNCTIONS)) {
+                        runtime=lua;lua.set("LOCAL_ROOT",host.workPath());lua.set("UIconfig",store.luaConfig());
+                        Map<String,Object> routes=new LinkedHashMap<>();for(Route route:store.routes.values())routes.put(route.name,route.raw);lua.set("ROUTES",routes);
+                        for(String name:List.of("bootstrap","shared","utilities","workflows","multiplayer_up","multiplayer_down","multiplayer_current","cup","special","club","career","daily"))
+                            lua.load(name,store.asset("lua/"+name+".lua"));
+                        lua.start("main");
+                        SessionState.status(SessionState.stats.restartCount()>0?"已恢复，继续剩余任务":"任务已启动");
+                        while(!stopping&&!host.finished) {
+                            long now=SystemClock.elapsedRealtime();
+                            if(paused){if(pauseAt==0){pauseAt=now;host.pause();SessionState.log("已暂停，触点与待执行动作已释放");}Thread.sleep(50);continue;}
+                            if(pauseAt>0){pausedTotal+=now-pauseAt;pauseAt=0;lua.load("resume","data['心跳时间']=os.time()");}
+                            if(!touch.gameInForeground()){
+                                long recoveryAt=SystemClock.elapsedRealtime();
+                                restarted=recovery.recover(GameRecovery.Reason.FOREGROUND_LOST);
+                                pausedTotal+=SystemClock.elapsedRealtime()-recoveryAt;
+                                if(restarted)break;
+                                host.pause();continue;
+                            }
+                            host.clock=now-origin-pausedTotal;
+                            SessionState.stats.elapsed(host.clock);
+                            host.periodicSave();
+                            if(!lua.step(host.clock))break;
+                            Thread.sleep(10);
+                        }
+                    }catch(RuntimeException e){
+                        if(stopping||host.recoveryReason==null)throw e;
+                        long recoveryAt=SystemClock.elapsedRealtime();
+                        restarted=recovery.recover(host.recoveryReason);
+                        pausedTotal+=SystemClock.elapsedRealtime()-recoveryAt;
+                        if(!restarted)throw e; // A failed Lua input cannot be replayed after a mere window flicker.
+                    }finally{runtime=null;}
+                    if(restarted){host.recovered();continue;}
+                    break;
+                }
+                if(!stopping)SessionState.status("本轮任务已完成");
             }
         }catch(InterruptedException e){Thread.currentThread().interrupt();}
         catch(Throwable e){if(!stopping){

@@ -28,7 +28,7 @@ public final class TouchService extends AccessibilityService implements RouteEng
     @Override public void onDestroy() { instance=null;super.onDestroy(); }
     public void configure(int w,int h,int degrees) {width=w;height=h;rotation=degrees;}
     public void arm(String gamePackage){allowedPackage=gamePackage;armed=true;}
-    private boolean gameInForeground() {
+    public boolean gameInForeground() {
         android.view.accessibility.AccessibilityNodeInfo root=getRootInActiveWindow();
         if(root==null){
             // Surface-rendered games can expose a focused window without an accessible root.
@@ -44,7 +44,35 @@ public final class TouchService extends AccessibilityService implements RouteEng
         finally{root.recycle();}
     }
     public void requireGameForeground(){
-        if(armed&&!gameInForeground())throw new IllegalStateException("游戏已离开前台或窗口不可用，已停止触控；请回到游戏后重新开始");
+        if(armed&&!gameInForeground())throw new ForegroundLost();
+    }
+    public static final class ForegroundLost extends IllegalStateException {
+        public ForegroundLost(){super("游戏已离开前台，正在确认是否需要恢复");}
+    }
+    public String foregroundPackage(){
+        android.view.accessibility.AccessibilityNodeInfo root=getRootInActiveWindow();
+        if(root!=null){try{return String.valueOf(root.getPackageName());}finally{root.recycle();}}
+        for(android.view.accessibility.AccessibilityWindowInfo window:getWindows()){
+            try{if(window.isFocused()&&window.getType()==android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION&&window.getId()==foregroundWindowId)return foreground;}
+            finally{window.recycle();}
+        }
+        return "";
+    }
+    /** Native SDK picker: only an exact, unique recent-account badge on a login-history page. */
+    public int[] recentLogin(){
+        android.view.accessibility.AccessibilityNodeInfo root=getRootInActiveWindow();if(root==null)return null;
+        try{
+            if(!allowedPackage.contentEquals(root.getPackageName()==null?"":root.getPackageName()))return null;
+            boolean history=false;int count=0;android.graphics.Rect bounds=new android.graphics.Rect();
+            for(android.view.accessibility.AccessibilityNodeInfo n:root.findAccessibilityNodeInfosByText("登录历史")){
+                try{if(n.isVisibleToUser()&&"登录历史".contentEquals(n.getText()==null?"":n.getText()))history=true;}finally{n.recycle();}
+            }
+            if(!history)return null;
+            for(android.view.accessibility.AccessibilityNodeInfo n:root.findAccessibilityNodeInfosByText("最近登录")){
+                try{if(n.isVisibleToUser()&&"最近登录".contentEquals(n.getText()==null?"":n.getText())){count++;n.getBoundsInScreen(bounds);}}finally{n.recycle();}
+            }
+            return count==1&&!bounds.isEmpty()?new int[]{bounds.centerX()*1280/width,bounds.centerY()*720/height}:null;
+        }finally{root.recycle();}
     }
     public void disarm(){armed=false;releaseAll();}
     private float[] transform(int x,int y) {
