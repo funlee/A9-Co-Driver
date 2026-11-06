@@ -1,0 +1,21 @@
+# Local-only inputs, results and artifacts. Never force-add these paths.
+/private/
+.gradle/
+.tooling/
+**/build/
+**/build-private/
+**/bin/
+/build/
+/dist/
+/device-tests/
+/vendor/
+local.properties
+*.apk
+*.aab
+*.jks
+*.keystore
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
