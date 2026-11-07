@@ -81,6 +81,7 @@ public final class LocalStore {
         c.put("coinADNum",global.optInt("coinADNum",1)); c.put("delay",config.optInt("delay",0)); c.put("accuracy",config.optInt("accuracy",80));
         c.put("ocrMode",1); c.put("driverMode",config.optInt("driverMode",1)); c.put("conflictTime",30); c.put("spPos",Arrays.asList(global.optString("spPos","1").split(",")));
         c.put("repeatProjects",config.optBoolean("repeat",false)); c.put("routeOnly",config.optString("routeOnly",""));
+        c.put("maxCycles",Math.max(0,config.optInt("maxCycles",0)));
         List<Object> projects=new ArrayList<>(), active=new ArrayList<>();
         JSONArray a=config.getJSONArray("projects");
         for(int i=0;i<a.length();i++) {

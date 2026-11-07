@@ -63,6 +63,7 @@ final class StabilityChecks {
         carAlignment(assets);
         fuelSkip(assets);
         skippedQueue(assets);
+        for(boolean skip:List.of(false,true))for(boolean crash:List.of(false,true))boundedCycles(assets,skip,crash);
         for(int failAt:List.of(0,119,200))boundedQueue(assets,failAt);
         return checks;
     }
@@ -151,6 +152,32 @@ final class StabilityChecks {
             for(int i=0;i<20&&taps.isEmpty();i++)lua.step(i*2000L);
         }
         check(swipes[0]==2&&taps.equals(List.of("414,874")),"Re-read after recenter selects configured car 3, not stale shifted car 1");
+    }
+    private static void boundedCycles(Path assets,boolean skip,boolean crash)throws Exception{
+        TaskCheckpoint checkpoint=new TaskCheckpoint();int[] cycle={0},project={0},races={0},entries={0};boolean[] finished={false},failed={false};
+        for(int attempt=0;attempt<2&&!finished[0];attempt++){
+            try(LuaRuntime lua=new LuaRuntime((name,l)->{
+                switch(name){
+                    case "_queueResume":LuaRuntime.push(l,checkpoint.resume());return 1;
+                    case "_queueEnter":project[0]=(int)l.toInteger(2);checkpoint.enter((int)l.toInteger(1),project[0],(int)l.toInteger(3));entries[0]++;l.push(checkpoint.completed());return 1;
+                    case "_queueDone":checkpoint.projectDone();if(crash&&cycle[0]==5&&project[0]==2&&!failed[0]){failed[0]=true;throw new IllegalStateException("injected final cycle recovery");}break;
+                    case "_sessionProject":l.push(checkpoint.completed());return 1;
+                    case "_sessionLimitReached":l.push(false);return 1;
+                    case "_sessionCycle":cycle[0]=(int)l.toInteger(1);break;
+                    case "empty":l.push(skip&&project[0]==2&&checkpoint.completed()>=8);return 1;
+                    case "race":races[0]++;checkpoint.completed(1);break;
+                    case "_finished":finished[0]=true;break;
+                    default:break;
+                }return 0;
+            },List.of("_queueResume","_queueEnter","_queueDone","_sessionProject","_sessionLimitReached","_sessionCycle","_finished","_hud","print","race","empty"))){
+                lua.set("UIconfig",Map.of("routeOnly","","repeatProjects",true,"maxCycles",5,"projects",List.of(Map.of("项目","多人上","data",Map.of("次数",30)),Map.of("项目","多人下","data",Map.of("次数",20))),"ActiveProj",List.of(true,true)));
+                lua.load("bootstrap",Files.readString(assets.resolve("lua/bootstrap.lua")));
+                lua.load("helpers","data={};run={};function localInit() end;function monitor() sleep(99999999) end;currentMultiplayer={run=function() local done=_sessionProject(data['项目'],run.data['次数']);for i=done+1,run.data['次数'] do if empty() then return 'fuelEmpty' end;race();sleep(1) end end}");
+                lua.start("main");try{for(int n=0;n<600&&!finished[0];n++)lua.step(n*2000L);}catch(RuntimeException e){if(!e.getMessage().contains("injected final cycle recovery"))throw e;}
+            }
+        }
+        check(finished[0]&&cycle[0]==5&&entries[0]==10,"Exactly five cycles with no sixth task entry, skip="+skip+", recovery="+crash);
+        check(races[0]==(skip?190:250),"Cycle limit counts skipped tasks without invented finishes");
     }
     private static void boundedQueue(Path assets,int failAt)throws Exception{
         TaskCheckpoint checkpoint=new TaskCheckpoint();List<String> races=new ArrayList<>();boolean[] finished={false},failed={false};int[] cycle={0};

@@ -47,6 +47,15 @@ public final class MainActivity extends Activity {
         String recent=store.config.optString("lastRoute",store.config.optString("routeOnly",""));
         if(store.routes.containsKey(recent))body.addView(button("手动跑图 · "+store.matcher.displayName(recent),()->requestStart(recent,false)));
         CheckBox repeat=new CheckBox(this);repeat.setText("循环执行项目队列");repeat.setChecked(store.config.optBoolean("repeat",false));repeat.setOnCheckedChangeListener((v,b)->{try{store.config.put("repeat",b);store.save();}catch(Exception e){message(e.toString());}});body.addView(repeat);
+        int cycles=store.config.optInt("maxCycles",0);
+        body.addView(button("循环轮数上限："+(cycles>0?cycles+" 轮":"不限")+"（点击修改）",()->{
+            EditText value=edit(String.valueOf(store.config.optInt("maxCycles",0)));value.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+            AlertDialog dialog=new AlertDialog.Builder(this).setTitle("循环开启时生效，0 表示不限；无油跳过也计入本轮").setView(value).setNegativeButton("取消",null).setPositiveButton("保存",null).create();
+            dialog.setOnShowListener(v->dialog.getButton(-1).setOnClickListener(b->{try{
+                int n=Integer.parseInt(value.getText().toString().trim());if(n<0||n>100000)throw new IllegalArgumentException("请输入 0–100000");
+                store.config.put("maxCycles",n);store.save();dialog.dismiss();render();
+            }catch(Exception e){message(e.getMessage());}}));dialog.show();
+        }));
         int limit=store.config.optInt("maxRaces",0);
         body.addView(button("总完赛上限："+(limit>0?limit+" 局":"不限")+"（点击修改）",()->{
             EditText value=edit(String.valueOf(store.config.optInt("maxRaces",0)));value.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);

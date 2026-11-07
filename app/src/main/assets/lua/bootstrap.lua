@@ -96,6 +96,8 @@ function main()
     utils.newAutoDriver();_finished();return
   end
   local resume=_queueResume and _queueResume() or {cycle=1,index=1,completed=0}
+  local maxCycles=math.max(0,tonumber(UIconfig.maxCycles) or 0)
+  if maxCycles>0 and resume.cycle>maxCycles then _finished();return end
   local cycle=resume.cycle-1
   repeat
     cycle=cycle+1;_sessionCycle(cycle);print('开始第 '..cycle..' 轮项目队列')
@@ -130,6 +132,9 @@ function main()
     end
     if enabled==0 then error('没有启用的项目，无法循环执行') end
     print('第 '..cycle..' 轮项目队列已完成')
+    if maxCycles>0 and cycle>=maxCycles then
+      print('已达到本次循环上限 '..maxCycles..' 轮，任务结束');_finished();return
+    end
     if UIconfig.repeatProjects then sleep(1000) end
   until not UIconfig.repeatProjects
   _finished()
