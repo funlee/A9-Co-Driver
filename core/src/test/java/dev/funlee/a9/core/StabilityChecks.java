@@ -8,6 +8,21 @@ final class StabilityChecks {
     private static void check(boolean ok,String message){checks++;if(!ok)throw new AssertionError(message);}
     static int run(Path assets)throws Exception{
         check(MultiplayerUi.classify("动态奖励 您可以从这组奖励中选一个").equals("rewardChoice"),"Dynamic selection recognized before Confirm appears");
+        check(MultiplayerUi.classify("你的俱乐部达成了该里程碑 万能图纸 稍后领取 前往领奖").equals("milestoneLater"),"Observed club milestone is distinct from claiming rewards");
+        check(!MultiplayerUi.classify("俱乐部里程碑 前往领奖 立即购买").equals("milestoneLater"),"Do not treat other milestone or purchase views as safe Later");
+        List<String> milestoneTaps=new ArrayList<>();
+        try(LuaRuntime lua=new LuaRuntime((name,l)->{
+            if(name.equals("_multiplayerUi")){LuaRuntime.push(l,Map.of("scene","milestoneLater","text","你的俱乐部达成了该里程碑 稍后领取 前往领奖",
+                "words",List.of(Map.of("text","稍后领取","x",450,"y",598),Map.of("text","前往领奖","x",830,"y",598))));return 1;}
+            if(name.equals("tap"))milestoneTaps.add(l.toInteger(1)+","+l.toInteger(2));
+            return 0;
+        },List.of("_multiplayerUi","_sessionProject","_hud","print","tap"))){
+            lua.set("data",Map.of("项目","多人下"));lua.set("run",Map.of("data",Map.of("次数",20)));
+            lua.load("helpers","utils={defultCfg=function(v,d)return v or d end}");
+            lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));lua.start("currentMultiplayer.run");
+            for(int n=0;n<4&&milestoneTaps.isEmpty();n++)lua.step(n*1000L);
+        }
+        check(milestoneTaps.equals(List.of("121,450")),"Club milestone taps only the left Later button");
         check(MultiplayerUi.classify("动态奖励 您可以从这组奖励中选-").equals("rewardChoice"),"Observed OCR truncation of one-card suffix is supported");
         check(!MultiplayerUi.classify("奖励 立即购买 确认").equals("rewardChoice"),"Paid offers excluded");
         check(MultiplayerUi.classify("登录历史 游戏号 最近登录").equals("loginHistory"),"Recognize SDK recent-account picker");

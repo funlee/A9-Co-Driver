@@ -37,7 +37,7 @@ function currentMultiplayer.run()
   local series=data['项目']=='多人上' and '世界系列赛' or '大师系列赛'
   local other=data['项目']=='多人上' and '大师系列赛' or '世界系列赛'
   status('目标赛事：'..series..'（'..data['项目']..'）')
-  local total=completed;local unlockMisses=0;local loginAttempts=0;local loginMissing=0;local serverErrors=0;local noOpponents=0
+  local total=completed;local unlockMisses=0;local milestoneMisses=0;local loginAttempts=0;local loginMissing=0;local serverErrors=0;local noOpponents=0
   while total<count do
     local route=nil;local candidate=nil;local candidateFrames=0;local lastMapText=''
     local raceMode=mode;local fallback=false;local fallbackReason=''
@@ -79,6 +79,16 @@ function currentMultiplayer.run()
         else
           unlockMisses=unlockMisses+1;status('新车解锁保护：等待确认稍后查看')
           if unlockMisses>=3 then error('新车提示未能确认稍后查看；已停止，请由玩家处理，绝不自动解锁车辆') end
+        end
+      elseif scene=='milestoneLater' then
+        local later=word(screen,'稍后领取',530)
+        if later and later.x<640 then
+          milestoneMisses=0;status('俱乐部里程碑：稍后领取')
+          click(later.x,later.y);sleep(1200);changed=tickCount()
+        else
+          milestoneMisses=milestoneMisses+1
+          data['信息']='等待确认里程碑的稍后领取按钮';sleep(500)
+          if milestoneMisses>=6 then error('里程碑页面无法确认稍后领取，已停止避免误点') end
         end
       elseif scene=='raceCancelled' then
         local nextButton=word(screen,'继续',530)

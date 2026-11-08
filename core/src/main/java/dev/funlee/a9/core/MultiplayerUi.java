@@ -14,6 +14,7 @@ public final class MultiplayerUi {
         if((t.contains("未找到对手")||t.contains("末找到对手"))&&t.contains("重试"))return "noOpponents";
         if(t.contains("服务器错误")&&t.contains("执行操作"))return "serverError";
         if(t.contains("登录历史")&&t.contains("游戏号")&&t.contains("最近登录"))return "loginHistory";
+        if(t.contains("里程碑")&&t.contains("稍后领取")&&t.contains("前往领奖"))return "milestoneLater";
         // Live frames sometimes read 搜索 as 搜素; keep the same matching episode in either case.
         if(t.contains("正在搜")&&t.contains("玩家")&&t.contains("地点"))return "matching";
         if(t.contains("晋级奖励")&&t.contains("联赛")&&t.contains("领取"))return "rewardClaim";

@@ -14,7 +14,7 @@
     "lua/club.lua": "ac83e25a29c8b7b8522389b3c64700485b1dc3244571ad91404aba3f3392257a",
     "lua/cup.lua": "856930022237ebe0d6a8f557eb086c412f40331c11656de9098b856c44c094a6",
     "lua/daily.lua": "7b5b1b59d6dc7e975b8634275993e8f26baaf7c99dd429c9e16111f9ca46110f",
-    "lua/multiplayer_current.lua": "005cdb07bb9270b0153d10dcc86909d044d4e629590c7dee62c1dbc4a4c17691",
+    "lua/multiplayer_current.lua": "91ee1a33d2221467c995389a0475a82c376c1c9fddbb8edc5e99a109d9c62471",
     "lua/multiplayer_down.lua": "c0ab24fbee29c20497e4b6b0c525f93d5a0a780fd13451f46616bfccece334d4",
     "lua/multiplayer_up.lua": "e7ffe6fc697cff2dd5dc7def55d1c4d517efdbfbe51071a43b547c1396e34a43",
     "lua/shared.lua": "d136ff46fcb980b375ca78e56147ccab40457bcf230f3c7d873e7df4ccfa704c",
