@@ -76,7 +76,7 @@ final class RecoveryChecks {
                     default:break;
                 }return 0;
             },List.of("_queueResume","_queueEnter","_queueDone","_sessionProject","race","_sessionCycle","_finished","_hud","print"))){
-                lua.set("UIconfig",Map.of("routeOnly","","repeatProjects",true,"projects",List.of(
+                lua.set("UIconfig",Map.of("routeOnly","","projects",List.of(
                         Map.of("项目","多人上","data",Map.of("次数","30")),Map.of("项目","多人下","data",Map.of("次数","20"))),"ActiveProj",List.of(true,true)));
                 lua.load("bootstrap",Files.readString(assets.resolve("lua/bootstrap.lua")));
                 lua.load("stubs","data={};run={};function localInit() end;function monitor() sleep(99999999) end;currentMultiplayer={run=function() local done=_sessionProject(data['项目'],run.data['次数']); for i=done+1,tonumber(run.data['次数']) do race(data['项目']);sleep(1) end end}");

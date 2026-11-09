@@ -24,22 +24,7 @@ local chooseCar = function(carList)
   local carUseOnce = utils.defultCfg(run.data["用车模式"], "")
   local carAd = utils.defultCfg(run.data["广告修车"], "")
   if carFillter ~= "" then
-    tap(580, 1210)
-    sleep(1000)
-    utils.wait("146|71|12FBC3-090909,125|139|12FBC3-090909,192|151|5A2805-090909,499|332|210900-090909")
-    if string.find(carFillter, "0", 1) ~= nil then
-      tap(497, 337)
-      sleep(500)
-    end
-    if string.find(carFillter, "1", 1) ~= nil then
-      tap(277, 334)
-      sleep(500)
-    end
-    if string.find(carFillter, "2", 1) ~= nil then
-      tap(402, 326)
-      sleep(500)
-    end
-    tap(116, 208)
+    utils.configureGarageFilter(carFillter)
   else
     tap(600, 820)
   end

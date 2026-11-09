@@ -138,7 +138,7 @@ final class StabilityChecks {
                     default:break;
                 }return 0;
             },List.of("_queueResume","_queueEnter","_queueDone","_sessionProject","_sessionLimitReached","_sessionCycle","_finished","_hud","print","race","empty"))){
-                lua.set("UIconfig",Map.of("routeOnly","","repeatProjects",true,"projects",List.of(Map.of("项目","多人上","data",Map.of("次数",10)),Map.of("项目","多人下","data",Map.of("次数",10))),"ActiveProj",List.of(true,true)));
+                lua.set("UIconfig",Map.of("routeOnly","","projects",List.of(Map.of("项目","多人上","data",Map.of("次数",10)),Map.of("项目","多人下","data",Map.of("次数",10))),"ActiveProj",List.of(true,true)));
                 lua.load("bootstrap",Files.readString(assets.resolve("lua/bootstrap.lua")));
                 lua.load("helpers","data={};run={};function localInit() end;function monitor() sleep(99999999) end;currentMultiplayer={run=function() local done=_sessionProject(data['项目'],10);if empty() then return 'fuelEmpty' end;for i=done+1,10 do race(data['项目']);if _sessionLimitReached() then return end;sleep(1) end end}");
                 lua.start("main");try{for(int n=0;n<500&&!finished[0];n++)lua.step(n*2000L);}catch(RuntimeException e){if(!e.getMessage().contains("injected after skip"))throw e;}
@@ -185,7 +185,7 @@ final class StabilityChecks {
                     default:break;
                 }return 0;
             },List.of("_queueResume","_queueEnter","_queueDone","_sessionProject","_sessionLimitReached","_sessionCycle","_finished","_hud","print","race","empty"))){
-                lua.set("UIconfig",Map.of("routeOnly","","repeatProjects",true,"maxCycles",5,"projects",List.of(Map.of("项目","多人上","data",Map.of("次数",30)),Map.of("项目","多人下","data",Map.of("次数",20))),"ActiveProj",List.of(true,true)));
+                lua.set("UIconfig",Map.of("routeOnly","","maxCycles",5,"projects",List.of(Map.of("项目","多人上","data",Map.of("次数",30)),Map.of("项目","多人下","data",Map.of("次数",20))),"ActiveProj",List.of(true,true)));
                 lua.load("bootstrap",Files.readString(assets.resolve("lua/bootstrap.lua")));
                 lua.load("helpers","data={};run={};function localInit() end;function monitor() sleep(99999999) end;currentMultiplayer={run=function() local done=_sessionProject(data['项目'],run.data['次数']);for i=done+1,run.data['次数'] do if empty() then return 'fuelEmpty' end;race();sleep(1) end end}");
                 lua.start("main");try{for(int n=0;n<600&&!finished[0];n++)lua.step(n*2000L);}catch(RuntimeException e){if(!e.getMessage().contains("injected final cycle recovery"))throw e;}
@@ -210,7 +210,7 @@ final class StabilityChecks {
                     default:break;
                 }return 0;
             },List.of("_queueResume","_queueEnter","_queueDone","_sessionProject","_sessionLimitReached","_sessionCycle","_finished","_hud","print","race"))){
-                lua.set("UIconfig",Map.of("routeOnly","","repeatProjects",true,"projects",List.of(Map.of("项目","多人上","data",Map.of("次数",10)),Map.of("项目","多人下","data",Map.of("次数",10))),"ActiveProj",List.of(true,true)));
+                lua.set("UIconfig",Map.of("routeOnly","","projects",List.of(Map.of("项目","多人上","data",Map.of("次数",10)),Map.of("项目","多人下","data",Map.of("次数",10))),"ActiveProj",List.of(true,true)));
                 lua.load("bootstrap",Files.readString(assets.resolve("lua/bootstrap.lua")));
                 lua.load("helpers","data={};run={};function localInit() end;function monitor() sleep(99999999) end;currentMultiplayer={run=function() local done=_sessionProject(data['项目'],10);for i=done+1,10 do race(data['项目']);if _sessionLimitReached() then return end;sleep(1) end end}");
                 lua.start("main");try{for(int n=0;n<500&&!finished[0];n++)lua.step(n*2000L);}catch(RuntimeException e){if(!e.getMessage().contains("injected crash"))throw e;}

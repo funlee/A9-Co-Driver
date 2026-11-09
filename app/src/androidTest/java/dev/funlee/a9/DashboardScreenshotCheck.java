@@ -42,9 +42,9 @@ public final class DashboardScreenshotCheck extends Instrumentation {
                     Context context=new ContextThemeWrapper(getTargetContext(),dev.funlee.a9.R.style.AppTheme);
                     TextView label=new TextView(context);label.setText(stats.panel("示例预览 · 未运行比赛"));
                     Button pause=new Button(context);pause.setText("暂停");Button stop=new Button(context);stop.setText("停止");
-                    view[0]=TaskPanelView.create(context,label,pause,stop);wm[0]=(WindowManager)context.getSystemService(Context.WINDOW_SERVICE);
+                    TaskPanelView panel=TaskPanelView.create(context,label,pause,stop);panel.update(stats,"示例预览",false,"",false);view[0]=panel;wm[0]=(WindowManager)context.getSystemService(Context.WINDOW_SERVICE);
                     Point size=new Point();wm[0].getDefaultDisplay().getRealSize(size);
-                    WindowManager.LayoutParams p=new WindowManager.LayoutParams(size.x*200/1280,-2,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                    WindowManager.LayoutParams p=new WindowManager.LayoutParams(size.x*265/1280,-2,WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,PixelFormat.TRANSLUCENT);
                     p.gravity=Gravity.BOTTOM|Gravity.LEFT;p.x=8;p.y=8;wm[0].addView(view[0],p);
                 });

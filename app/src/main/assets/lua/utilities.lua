@@ -1208,6 +1208,51 @@ function utils.startRace()
   end
   return ret
 end
+-- Set requested state, rather than toggling blindly on every visit.
+function utils.configureGarageFilter(selection)
+  if selection == "" then return true end
+  if not _garageFilterState then error("车库筛选识别不可用") end
+  if _garageFilterPrepare then _garageFilterPrepare() end
+  local function read() keepCapture();return _garageFilterState() end
+  local state=read()
+  if not state.present then
+    tap(600,1192)
+    for i=1,20 do
+      sleep(300);state=read()
+      if state.present then break end
+      if data["超时状态"] then error("车库筛选已超时") end
+    end
+  end
+  if not state.present then error("未识别到车库筛选面板，已停止选车") end
+  local options={{"0","owned",509,340,"已拥有"},{"1","rank",304,340,"性能分"},{"2","descending",436,340,"降序"}}
+  for _,option in ipairs(options) do
+    local wanted=string.find(selection,option[1],1,true) and 1 or 0
+    local attempts=0
+    for i=1,16 do
+      state=read()
+      if not state.present then error("车库筛选面板意外关闭") end
+      if state[option[2]]==wanted then break end
+      if state[option[2]]==1-wanted and attempts<3 then
+        data["信息"]="设置车库筛选："..option[5]
+        tap(option[3],option[4]);attempts=attempts+1;sleep(700)
+      else sleep(300) end
+      if data["超时状态"] then error("车库筛选已超时") end
+    end
+    state=read()
+    if not state.present or state[option[2]]~=wanted then error("无法确认车库筛选："..option[5]) end
+  end
+  -- Confirm the complete combination immediately before applying it.
+  for _,option in ipairs(options) do
+    local wanted=string.find(selection,option[1],1,true) and 1 or 0
+    if state[option[2]]~=wanted then error("车库筛选状态发生变化") end
+  end
+  tap(134,240)
+  for i=1,20 do
+    sleep(300);state=read()
+    if not state.present then data["信息"]="车库筛选已应用";return true end
+  end
+  error("车库筛选未关闭，已停止选车")
+end
 function utils.chooseCarCup(carList)
   if #carList == 0 then
     carList = {
@@ -1235,22 +1280,7 @@ function utils.chooseCarCup(carList)
   local carUseOnce = utils.defultCfg(run.data["用车模式"], "")
   local carAd = utils.defultCfg(run.data["广告修车"], "")
   if carFillter ~= "" then
-    tap(580, 1210)
-    sleep(1000)
-    utils.wait("146|71|12FBC3-090909,125|139|12FBC3-090909,192|151|5A2805-090909,499|332|210900-090909")
-    if string.find(carFillter, "0", 1) ~= nil then
-      tap(497, 337)
-      sleep(500)
-    end
-    if string.find(carFillter, "1", 1) ~= nil then
-      tap(277, 334)
-      sleep(500)
-    end
-    if string.find(carFillter, "2", 1) ~= nil then
-      tap(402, 326)
-      sleep(500)
-    end
-    tap(116, 208)
+    utils.configureGarageFilter(carFillter)
     sleep(2000)
     if carUseWay == "1" then
       for i = 1, 6 do
@@ -1285,29 +1315,23 @@ function utils.chooseCarCup(carList)
           return false
         end
         sleep(100)
-        if carUseOnce == "1" and data["用车次数"]["car" .. j] ~= nil then
-          if lenCar <= j then
-            if data["用车次数"]["car" .. j] == 0 then
-              return false
-            else
-              data["用车次数"] = {}
-            end
-          end
-          if data["用车次数"]["car" .. j] == 1 then
-            goto lbl_422
-          end
+        if carUseOnce == "1" and data["用车次数"]["car" .. j] == 1 then
+          goto lbl_422
         end
         if carUseWay == "1" then
           utils.clickChoose(car, lastCar)
           keepCapture()
           if cmpColorEx("368|150|F9EF33-101010,302|142|F9EF33-101010,434|150|F9EF33-10101", 1) == 1 and cmpColor(75, 1030, "FFFFFF-030303", 1) == 0 and (cmpColor(50, 832, "12FBC3-101010", 1) == 1 or cmpColor(50, 832, "210900-101010", 1) == 1) then
+            data["用车次数"]["car" .. j] = 1
             return true
           elseif carAd == "0" then
             if utils.carAd() ~= 1 then
               return false
             end
+            data["用车次数"]["car" .. j] = 1
             return true
           end
+          data["用车次数"]["car" .. j] = 0
         else
           local tempHL = utils.getCarHL(car)
           local h, l = tempHL[1], tempHL[2]
@@ -1354,9 +1378,12 @@ function utils.chooseCarCup(carList)
       end
       ::lbl_422::
     end
-    if carUseOnce == "0" then
-      return false
-    end
+    if carUseOnce == "0" then return false end
+    local used=false
+    for j=1,lenCar do if data["用车次数"]["car" .. j]==1 then used=true end end
+    if not used then return false end
+    data["用车次数"]={}
+
   end
 end
 function utils.adjustCar()
@@ -1465,9 +1492,16 @@ function utils.chooseCup(num)
   data["信息"] = "选择杯赛"
   local cupAddr = LOCAL_ROOT .. "/cup" .. run.index .. ".png"
   local ret, x, y = -1, -1, -1
-  num = tonumber(num) or 2
+  num = tonumber(num)
+  if not num or num == 0 or num ~= math.floor(num) then error("杯赛位置必须为非零整数；3 表示从左起第 3 个赛事") end
+  utils.cupPositions = utils.cupPositions or {}
+  if utils.cupPositions[run.index] ~= num then
+    os.remove(cupAddr)
+    utils.cupPositions[run.index] = num
+    print("本次任务按配置选择杯赛位置：", num)
+  end
   local abs = math.abs(num)
-  local xy = {0, 0}
+  local xy = {100, 150}
   if 0 < num then
     for i = 1, 8 do
       swipe(50, 200, 50, 1000, 100)
@@ -1496,6 +1530,7 @@ function utils.chooseCup(num)
       }
     end
   else
+    xy = {100, 1130}
     for i = 1, 8 do
       swipe(50, 1000, 50, 200, 100)
     end
@@ -1515,7 +1550,7 @@ function utils.chooseCup(num)
         sleep(500)
       end
       xy = {100, 60}
-    elseif num ~= 1 then
+    elseif num ~= -1 then
       xy = {
         100,
         1150 + 180 * (num + 1)
@@ -1524,7 +1559,8 @@ function utils.chooseCup(num)
   end
   tap(xy[1], xy[2])
   sleep(1500)
-  local res = utils.findCup(cupAddr)
+  local res = {-1, -1, -1, -1}
+  if utils.fileExist(cupAddr) then res = utils.findCup(cupAddr) end
   if res[3] ~= -1 then
     for i = 1, 3 do
       tap(res[1] + 100, res[2] + 10)
@@ -1533,7 +1569,9 @@ function utils.chooseCup(num)
     print("旧杯赛")
     return 1
   elseif utils.fileExist(cupAddr) == false then
+    keepCapture()
     snapShot(cupAddr, 350, 212, 520, 330)
+    releaseCapture()
     tap(xy[1], xy[2])
     print("新杯赛")
     return 1
@@ -1559,8 +1597,7 @@ function utils.chooseCup(num)
           sleep(1000)
         end
         os.remove(cupAddr)
-        utils.chooseCup(arr)
-        return 1
+        return utils.chooseCup(num)
       end
       if 6 < i then
         keepCapture()
@@ -1582,7 +1619,8 @@ function utils.chooseCup(num)
         toast("已找到杯赛")
         tap(res[1] + 100, res[2] + 20)
         sleep(200)
-        run.data["杯赛位置"] = i .. ""
+        run.data["杯赛位置"] = (i + 1) .. ""
+        utils.cupPositions[run.index] = i + 1
         return 1
       end
     end

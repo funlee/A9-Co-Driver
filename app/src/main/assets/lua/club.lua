@@ -190,10 +190,11 @@ dsCup.operation = {
       for i = 1, 2 do
         for j = 1, 200 do
           keepCapture()
+          if utils.collectRaceRewards then utils.collectRaceRewards() end
           if cmpColorEx(config.dsCupInfo, 1) == 1 then
             break
           end
-          if cmpColorEx(dsCup.choosePrize, 1) == 1 then
+          if dsCup.choosePrize and cmpColorEx(dsCup.choosePrize, 1) == 1 then
             tap(314, 526)
             sleep(1000)
             tap(115, 563)

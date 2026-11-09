@@ -1,16 +1,10 @@
 -- Current CN series cards and vehicle layout. Coordinates below are upright 1280x720.
 -- OCR guards each menu action; race commands still use the existing route engine.
 currentMultiplayer={}
--- Explicit user-selected left-swipe policy, keyed by the same internal IDs as map OCR.
-local leftSwipeMaps={
-  ['加勒比海环岛赛车']=true, -- 热带天堂·环岛赛车: missing route
-  ['芝加哥极速眩晕']=true, -- 凌空之巅·极速眩晕: invalid progress
-  ['新加坡浪花骑士']=true, -- 狮城·音速狂飙: invalid command
-  ['纽约量子跃迁']=true -- 摩登城市·量子跃迁: backwards progress
-}
 local function click(x,y) tap(719-math.floor(y),math.floor(x)) end
 local function has(text,part)
   local normalized=string.gsub(string.gsub(text,'[ \t\r\n]',''),'賽','赛')
+  normalized=string.gsub(normalized,'错矢机会','错失机会')
   return string.find(normalized,part,1,true)~=nil
 end
 local function word(screen,label,minY)
@@ -39,15 +33,16 @@ function currentMultiplayer.run()
   status('目标赛事：'..series..'（'..data['项目']..'）')
   local total=completed;local unlockMisses=0;local milestoneMisses=0;local loginAttempts=0;local loginMissing=0;local serverErrors=0;local noOpponents=0
   while total<count do
-    local route=nil;local candidate=nil;local candidateFrames=0;local lastMapText=''
+    local route=nil;local routeAvailable=true;local candidate=nil;local candidateFrames=0;local lastMapText=''
     local raceMode=mode;local fallback=false;local fallbackReason=''
-    local raced=false;local resultSeen=false;local eventSince=nil
+    local raced=false;local resultSeen=false;local eventSince=nil;local rewardsSince=nil;local rewardsDone=false
     local lastScene='';local changed=tickCount();local started=false;local seriesSelected=false
     local lastPulse=0;local carRetries=0;local carListAligned=false
     local rewardChoice=nil;local rewardAt=0;local rewardTries=0;local dialogMisses=0
     while true do
       local screen=_multiplayerUi()
       local scene=screen.scene
+      if not screen.rewardPage then rewardsSince=nil end
       if scene~='rewardChoice' then rewardChoice=nil;rewardTries=0 end
       if scene~='event' then eventSince=nil end
       if scene~='noOpponents' and scene~='serverError' then dialogMisses=0 end
@@ -62,7 +57,9 @@ function currentMultiplayer.run()
         end
         if screen.route and screen.route==candidate then candidateFrames=candidateFrames+1
         else candidate=screen.route;candidateFrames=screen.route and 1 or 0 end
-        if candidateFrames>=2 and route~=candidate then route=candidate;print('地图标题连续确认：'..route) end
+        if candidateFrames>=2 and route~=candidate then
+          route=candidate;routeAvailable=screen.routeAvailable~=false;print('地图标题连续确认：'..route)
+        end
       end
       if scene~=lastScene then
         status('多人流程：'..scene..' · '..(total+1)..'/'..count)
@@ -134,6 +131,16 @@ function currentMultiplayer.run()
           if loginAttempts>3 then error('最近登录账号未能进入游戏，请由玩家检查登录状态') end
           status('恢复最近登录的游戏账号');click(recent.x,recent.y);sleep(5000);changed=tickCount()
         end
+      elseif raced and screen.rewardPage then
+        if not rewardsSince then rewardsSince=tickCount() end
+        if screen.rewardCanContinue and (rewardsDone or screen.rewardReady or tickCount()-rewardsSince>=8000) then
+          if not rewardsDone then
+            _sessionRaceRewards(screen.rewardCoins or -1,screen.rewardFame or -1);rewardsDone=true
+          end
+          status('比赛收益已记录，返回赛事');press(screen,screen.rewardExit=='错失机会' and '错失机会' or '继续',590);changed=tickCount()
+        elseif tickCount()-rewardsSince>=20000 then
+          error('比赛奖励页面未完成结算或继续按钮不可用，请检查画面')
+        else status('等待结算完成并识别本局收益');sleep(400) end
       elseif scene=='rewardChoice' then
         -- Handle the free choice before the popup-close fallback. Never close an unclaimed reward.
         if rewardChoice and word(screen,'确认',530) then
@@ -272,12 +279,13 @@ function currentMultiplayer.run()
         if not raced then
           serverErrors=0;noOpponents=0
           raced=true
-          local forcedLeft=route and leftSwipeMaps[route]
-          fallback=forcedLeft or (mode=='3' and not route)
+          local missingRoute=route and not routeAvailable
+          fallback=missingRoute or (mode=='3' and not route)
           _sessionRaceBegin(route or '',fallback)
           if fallback then
             raceMode='1'
-            fallbackReason=forcedLeft and ('已识别地图：'.._routeDisplay(route)..'，固定左划兜底') or '地图识别失败，左划兜底'
+            fallbackReason=missingRoute and ('已识别地图：'.._routeDisplay(route)..'，暂无有效跑法，左划兜底')
+              or '地图识别失败，左划兜底'
             status(fallbackReason);_fallbackBegin()
           elseif mode=='3' then
             status('已识别地图：'.._routeDisplay(route));utils.getMapName(route);run.nitro()

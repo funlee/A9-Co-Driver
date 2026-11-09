@@ -51,13 +51,12 @@ function run.project()
       utils.getSpPrize(UIconfig.spPos[sp])
     end
   end
-  if data["项目"] == "每日战利品" and os.date("%H") == 0 and os.date("%M") < 30 then
-    toast("0:00到0:30不打每日战利品")
-    os.remove(LOCAL_ROOT .. "/cup" .. run.index .. ".png")
-    dailyCup.carList = {}
-    return 0
-  end
   for i = 1, times do
+    if data["项目"] == "每日战利品" then
+      local reason=dailyCup.skipReason()
+      if reason~='' then return reason end
+    end
+    if _sessionLegacyPrepare then _sessionLegacyPrepare() end
     data["心跳时间"] = os.time()
     utils.freePkg(3)
     utils.getToken()
@@ -78,11 +77,12 @@ function run.project()
       sleep(500)
     end
     ::lbl_129::
-    if ret == -1 then
-      return -1
+    if ret == -1 or type(ret) == "string" then
+      return ret
     else
       run.dataList[data["项目"]]()
       _sessionLegacyCompleted()
+      if _sessionLimitReached and _sessionLimitReached() then return 0 end
     end
   end
   return ret

@@ -728,6 +728,14 @@
       "options": []
     },
     {
+      "key": "每日只执行一次",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "完成本任务后，当天后续循环自动跳过"
+      ]
+    },
+    {
       "key": "杯赛位置",
       "type": "EditText",
       "value": "2",

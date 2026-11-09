@@ -3,29 +3,127 @@
   "recovered_data": true,
   "runtime_validation": "partial: cumulative 78 multiplayer races on MuMu (world 40, master 38), interrupted by updates; latest empty-fuel task skip covered offline only; not a continuous 200-race acceptance",
   "assets": {
-    "data/forms.json": "70d9a842d8abef8360820ad7b99bcfe6803c474968f82289924bc1c4a675ac90",
-    "data/map-rules.tsv": "40b496d1bc04f5259ccd10503e0ddd97e127ab647b1ed9f90ea3565b417d564d",
+    "data/forms.json": "98206936dc7ecabade1296327c416abe18af58deab3c1117e363e0b5e03c85c9",
+    "data/map-rules.tsv": "96b45f3247babde3abf6e18c48fcfcbdfc04fc1f3d0302e330a73e48cee2db6f",
     "data/progress.lib": "1a15ef4e6e5bda467aec8b453e448b5e95a166b29529d7a186fbde4192e2c2d1",
-    "data/routes.txt": "b9e5f647d249d662ab354f7f8813908dc89fe6f30902b929655365e54c33dc01",
+    "data/routes.txt": "79069add87436880e6731e8fd3350e147672ca5557237202ff1ca55654e6160f",
     "licenses/jnigen.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
     "licenses/luajava.txt": "dd002f5df5455ed5c1c320b6600d4c702637456681bfa14240365f586d11b80d",
-    "lua/bootstrap.lua": "8eda23f98339acdbf0e97796f891e7808312f2bc2500323789b8c38bc424311e",
-    "lua/career.lua": "ba9ca4f6a7d4ea1d6a3c5fe6a5bed69b13e6f937b49ca5a9b962dcc73b4c8b46",
-    "lua/club.lua": "ac83e25a29c8b7b8522389b3c64700485b1dc3244571ad91404aba3f3392257a",
-    "lua/cup.lua": "856930022237ebe0d6a8f557eb086c412f40331c11656de9098b856c44c094a6",
-    "lua/daily.lua": "7b5b1b59d6dc7e975b8634275993e8f26baaf7c99dd429c9e16111f9ca46110f",
-    "lua/multiplayer_current.lua": "91ee1a33d2221467c995389a0475a82c376c1c9fddbb8edc5e99a109d9c62471",
-    "lua/multiplayer_down.lua": "c0ab24fbee29c20497e4b6b0c525f93d5a0a780fd13451f46616bfccece334d4",
+    "lua/bootstrap.lua": "11268fde5fc406778f8ad2acd2f9de5128104e52bd9272ee7586589e7233d04f",
+    "lua/career.lua": "a18bda88e70c34c37d4ee6adf87d312e8e77fec5c789ade81b7715afea408565",
+    "lua/club.lua": "f6911b3e12b3542d6976c6da32a648562b8631bb6c0a86241dd06f59099978d4",
+    "lua/cup.lua": "49676e34c1c4a3d800f1c9cfed5e4f47018f4abee400992bbbcfad16a4acf32e",
+    "lua/daily.lua": "334b21e120f88847929049b9056ab307ce9bb9005e50b789c95dbbb3f0b75f02",
+    "lua/multiplayer_current.lua": "82b544daf226f1971a04f532a07a54c7c5edfb883ac1e2ab3dac9c2cde2077f8",
+    "lua/multiplayer_down.lua": "b51fd534c943e57ba5f32c306e440828978b50576a50deecf7b542c81f6eb054",
     "lua/multiplayer_up.lua": "e7ffe6fc697cff2dd5dc7def55d1c4d517efdbfbe51071a43b547c1396e34a43",
     "lua/shared.lua": "d136ff46fcb980b375ca78e56147ccab40457bcf230f3c7d873e7df4ccfa704c",
-    "lua/special.lua": "3bb8763e99900970c864cc20f6080392818183f0d89a6eb3f3878dd796f61642",
-    "lua/utilities.lua": "fe7b74fe62907d09ce875168ee321147d219309ae205d06fe9b4b906eb0c6d20",
-    "lua/workflows.lua": "172469ee0b8ce5612473584a4c3acfac6b30aae84d62f470dd301262d2b369fa"
+    "lua/special.lua": "9eccbceba9c053dd1e1512f761318f882ed2306e2d3f05bb484e04a922b9c347",
+    "lua/utilities.lua": "22059ca3e45c0d65cd88baf4cd3029ccf8b2d0965dde48ea4bef1a9e0ff47f76",
+    "lua/workflows.lua": "ac0ef1a4b23e59f2e36a470aedeedde1d5091fc8f5c2313a5bb06e42d0472a16"
   },
   "publication": {
     "date": "2026-11-07",
     "authorization": "Project maintainer confirmed authorization to publicly redistribute the recovered runtime resources.",
     "license": "MIT",
     "scope": "Bundled runtime scripts, route data, map rules, digit dictionary and configuration forms; excludes original APKs, game images and account data."
-  }
+  },
+  "map_name_validation": "2026-11-09: 21 maintainer-supplied screenshot catalogs visually verified; 252 screenshot entries resolved to 251 distinct tracks after maintainer removed duplicate 海港博物馆/博物馆竞速 and confirmed 欢迎来到樱花港. 197 current tracks retain original reference scripts (194 parseable, 3 flagged), 54 have explicit empty commands. All 202 original records remain unchanged; missing/empty/invalid routes use left-swipe fallback. Offline validation only; full current-CN live-race acceptance pending.",
+  "catalog": {
+    "regions": 21,
+    "tracks": 251,
+    "reference_scripts": 197,
+    "parseable_reference_scripts": 194,
+    "flagged_reference_scripts": 3,
+    "empty_scripts": 54,
+    "legacy_records_retained": 202,
+    "screenshot_files": [
+      {
+        "name": "季风秘境.jpg",
+        "sha256": "2fb70cb237603a7c00dfb1e6a6f6f489311285f27950528790793542f1bcc36a"
+      },
+      {
+        "name": "海港博物馆.jpg",
+        "sha256": "fd9cf351ee7fac8804a0de49d354138dbff32f8a8a2c5134241555b24d63f0b9"
+      },
+      {
+        "name": "凌空之巅.jpg",
+        "sha256": "27fcb78136ae3e1b14c27f9d17ea06ad176225157636f76b1ae1cff90f0094c3"
+      },
+      {
+        "name": "狮城.jpg",
+        "sha256": "c0a2bd69a457c0adcb9672daf32eb2a31dd3a8a79d5cd43dc14ee2484ced8359"
+      },
+      {
+        "name": "极昼之地.jpg",
+        "sha256": "8727cdfcfdd2a344e5949021bb361b6d99718dd68e4116d33379d09e1070d513"
+      },
+      {
+        "name": "旷野飙车.jpg",
+        "sha256": "c747ab8d6aab5181d42f19bd47478c26a6d9d8e824fce537e466eda06f68ce48"
+      },
+      {
+        "name": "花都疾驰.jpg",
+        "sha256": "e306234a9c92b5ae84a8598976c1c35a7e72b61eeca84eb91009b181791a5bd9"
+      },
+      {
+        "name": "冰火岛.jpg",
+        "sha256": "f7a5f34c9ba7aecfe88b7322c717c5ddf4663f75c67e661bd78247bdbf3ed03c"
+      },
+      {
+        "name": "雄鹰之城.jpg",
+        "sha256": "ae66a9d2ea0e9306f50a94d516868adbd79be25c484677979df6fd0562fd0c12"
+      },
+      {
+        "name": "狂野赛车场.jpg",
+        "sha256": "7df43b710c4d3291931fbabc46acea2c8c7d5d85bc8b3ce9f3303c577c9c7169"
+      },
+      {
+        "name": "沙漠高速.jpg",
+        "sha256": "1276030d391d7f45d517eb9c90ac2c4115b9ecfd1336b7a137eb1fab25bc595f"
+      },
+      {
+        "name": "摩登城市.jpg",
+        "sha256": "014977a830c739ffbf02bd3bceada2ae66384ea5615e14f808dccd93a8f9b35b"
+      },
+      {
+        "name": "樱花港.jpg",
+        "sha256": "e545f7ffb9b4e6553995e3cde46171f0b73355cdf6693360cefa5605a6bb2080"
+      },
+      {
+        "name": "西部牧场.jpg",
+        "sha256": "699c5b7d141da41ed5345a94024d1393494874f1e8050d84dba8d2f4fe5c4f67"
+      },
+      {
+        "name": "热带天堂.jpg",
+        "sha256": "65a5da1e41912e6a040b072d36c296e55f20ab41691ebac0943e3c39086c69a4"
+      },
+      {
+        "name": "沙漠迷雾.jpg",
+        "sha256": "12171d2326b8c01099ca61590a319de3b8361ae01541d30d01b8c060ac9eeee7"
+      },
+      {
+        "name": "明珠港口.jpg",
+        "sha256": "4fadb6bc01f6f00eb79fe4c23cc482bd11d1609a5e4f91a7b95a17e1cb5deee5"
+      },
+      {
+        "name": "古老斗技场.jpg",
+        "sha256": "302f3863819d041708ee73cadc08d88a60199f30ebd6ba13337f73f4b2adbbbf"
+      },
+      {
+        "name": "神山垭口.jpg",
+        "sha256": "60f0f9615381e6fb0c75b34b3b8167681090caced2a8d3d3a555c17d882c5f41"
+      },
+      {
+        "name": "高地穿梭.jpg",
+        "sha256": "db0cc7f53f38019f13a7ea3824558347cc4643f4a1f97613e8d86f768b08cefa"
+      },
+      {
+        "name": "大桥海湾.jpg",
+        "sha256": "7aa17d2410b0376774207188d29669a9610c1c9c997e9fecbe243b93e499e39e"
+      }
+    ]
+  },
+  "cup_selection_validation": "2026-11-09: stale per-project image cache invalidated on new runtime or position change; 9 selector regression checks and MuMu real chooseCup position 3 menu-only check passed. No race started; other positions and full cup loop pending live acceptance.",
+  "reward_validation": "2026-11-09: screenshot replay of current CN standard and paid-account reward pages reads coins/fame 4800/189 and 2880/207, excluding boost percentages, rank reward duplication and future milestone prizes. Stable fresh-frame reads commit per race and persist with task checkpoints; unknown fields remain explicit. Legacy ending collectors share scoped OCR. Screenshot replay and synthetic workflow validation do not constitute full live-race acceptance."
 }

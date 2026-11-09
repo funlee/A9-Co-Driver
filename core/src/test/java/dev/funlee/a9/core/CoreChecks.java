@@ -106,12 +106,57 @@ public final class CoreChecks {
         stats.returned();stats.returned();stats.begin("",true);stats.elapsed(65000);
         check(stats.returnedCount()==1&&stats.fallbackCount()==1&&stats.panel("跑图中").contains("完赛 1/5")&&stats.panel("跑图中").contains("00:01:05"),"Task dashboard preserves totals across races");
         check(new TaskStats().finished()==0&&matcher.displayName("喜马拉雅山冰封路径").equals("神山垭口冰封路径"),"New task clears counters and route key displays CN map name");
-        check(matcher.rules.size()==191,"All original mapping branches retained");
+        check(matcher.rules.size()==251,"Current CN catalog has 251 tracks after the confirmed duplicate removal");
+        List<String[]> monsoon=List.of(new String[]{"幽林飞瀑","印度低语瀑布道"},new String[]{"香辛环道","印度香料环道"},
+            new String[]{"茶乡竞速","印度极速茶道"},new String[]{"乡野狂欢","印度乡村庆典赛"},new String[]{"瀑布飞驰","印度飞跃瀑布"},
+            new String[]{"林间虎道","印度泰格小径"},new String[]{"疾风原野","印度疾速原野"},
+            new String[]{"暗塔幽谷","India:Gloomspire Hollow"},new String[]{"缤纷狂飙","India:Holi Havoc"},
+            new String[]{"炫速时刻","India:Fast and Colorful"},new String[]{"岩石地带","India:Rock Terrain"},new String[]{"碎石山路","India:Gravel Grooves"});
+        Map<String,Route> bundledRoutes=new HashMap<>();List<String> routeLines=Files.readAllLines(assets.resolve("data/routes.txt"));
+        for(int i=1;i+1<routeLines.size();i+=2)bundledRoutes.put(routeLines.get(i),Route.parse(routeLines.get(i),routeLines.get(i+1)));
+        int monsoonScripts=0,monsoonEmpty=0;
+        for(String[] entry:monsoon) {
+            String key=entry[1],display="季风秘境"+entry[0];
+            MapMatcher.Match cn=matcher.match(display),legacy=matcher.match(key);
+            check(matcher.displayName(key).equals(display)&&cn.unique()&&cn.candidates.get(0).internal.equals(key)
+                &&legacy.unique()&&legacy.candidates.get(0).internal.equals(key),"Monsoon CN name selects its own route key: "+entry[0]);
+            check(matcher.match("地图 "+entry[0]+" 1圈").unique(),"Loading title without region is recognized: "+entry[0]);
+            Route monsoonRoute=bundledRoutes.get(key);check(monsoonRoute!=null,"Every Monsoon map has an explicit route entry: "+entry[0]);
+            if(monsoonRoute.valid())monsoonScripts++;else if(monsoonRoute.raw.isEmpty()&&monsoonRoute.events.isEmpty())monsoonEmpty++;
+        }
+        check(monsoonScripts==7&&monsoonEmpty==5,"Seven original Monsoon scripts and five empty entries; no fabricated commands");
+        Map<String,Integer> regions=Map.ofEntries(Map.entry("季风秘境",12),Map.entry("海港博物馆",12),Map.entry("凌空之巅",12),
+            Map.entry("狮城",12),Map.entry("极昼之地",12),Map.entry("旷野飙车",12),Map.entry("花都疾驰",12),Map.entry("冰火岛",14),
+            Map.entry("雄鹰之城",15),Map.entry("狂野赛车场",12),Map.entry("沙漠高速",12),Map.entry("摩登城市",12),Map.entry("樱花港",12),
+            Map.entry("西部牧场",12),Map.entry("热带天堂",10),Map.entry("沙漠迷雾",12),Map.entry("明珠港口",10),
+            Map.entry("古老斗技场",12),Map.entry("神山垭口",12),Map.entry("高地穿梭",10),Map.entry("大桥海湾",12));
+        Map<String,Integer> observedRegions=new HashMap<>();Set<String> displays=new HashSet<>(),catalogKeys=new HashSet<>();
+        Map<String,Integer> trackNames=new HashMap<>();for(MapMatcher.Rule rule:matcher.rules)trackNames.merge(rule.aliases.get(0),1,Integer::sum);
+        int catalogScripts=0,catalogEmpty=0,catalogInvalid=0;
+        for(MapMatcher.Rule rule:matcher.rules){
+            String region=regions.keySet().stream().filter(rule.display::startsWith).findFirst().orElseThrow();
+            observedRegions.merge(region,1,Integer::sum);
+            check(displays.add(rule.display)&&catalogKeys.add(rule.internal),"No duplicate catalog title or route key: "+rule.display);
+            MapMatcher.Match full=matcher.match("比赛地图 "+rule.display+" 1圈 推荐路线");
+            check(full.unique()&&full.candidates.get(0).internal.equals(rule.internal),"Qualified CN title cannot select another region: "+rule.display);
+            if(trackNames.get(rule.aliases.get(0))==1){
+                MapMatcher.Match bare=matcher.match("地图 "+rule.aliases.get(0)+" 1圈");
+                check(bare.unique()&&bare.candidates.get(0).internal.equals(rule.internal),"Unique bare title selects its full name rather than a shorter substring: "+rule.display);
+            }
+            Route catalogRoute=bundledRoutes.get(rule.internal);check(catalogRoute!=null,"Every catalog map has a script or explicit empty entry: "+rule.display);
+            if(catalogRoute.valid())catalogScripts++;else if(catalogRoute.raw.isEmpty())catalogEmpty++;else catalogInvalid++;
+        }
+        check(observedRegions.equals(regions),"All 21 screenshot regions have their confirmed track counts");
+        check(catalogScripts==194&&catalogEmpty==54&&catalogInvalid==3,"Catalog preserves 194 executable scripts, 54 empty entries and 3 flagged originals");
+        check(matcher.match("花都疾驰城市穿梭 1圈").unique()&&matcher.match("樱花港城市穿梭 1圈").unique()
+            &&!matcher.match("城市穿梭 1圈").unique(),"Region-qualified shared titles stay distinct; bare shared title is not guessed");
+        check(matcher.match("西部牧场龙卷风! 1圈").unique()&&matcher.match("西部牧场龙卷风！ 1圈").unique(),"Full/half-width punctuation selects the same screenshot title");
+        check(matcher.match("樱花港欢迎来到樱花港 1圈").unique(),"Confirmed full title replaces the truncated screenshot text");
         check(matcher.match("神山垭口冰封路径").unique(),"Chinese-server name maps");
         check(matcher.match("比赛地图 神山垭口冰封路径 推荐路线").unique(),"Full map title found among surrounding OCR text");
         check(matcher.match("神山垭口冰封路径").candidates.get(0).internal.equals("喜马拉雅山冰封路径"),"Display and internal keys distinct");
-        check(matcher.match("樱花港难波公园").candidates.get(0).internal.equals("大阪难波公园"),"Exact names take priority over broad keywords");
-        check(!matcher.match("沙漠迷雾高塔赛道").unique(),"Conflicting original aliases require explicit selection");
+        check(matcher.match("樱花港工业革命").candidates.get(0).internal.equals("大阪工业革命"),"Exact names take priority over broad keywords");
+        check(matcher.match("沙漠迷雾高塔赛道").unique()&&matcher.match("开罗开罗塔终点").candidates.get(0).internal.equals("开罗高塔赛道"),"Legacy route variants resolve to one catalog track");
         check(!matcher.match("").unique(),"Empty OCR cannot choose a route");
         DigitOcr ocr=new DigitOcr(Files.newBufferedReader(assets.resolve("data/progress.lib")));
         check(ocr.templates.size()==58,"All progress templates loaded");
@@ -149,11 +194,18 @@ public final class CoreChecks {
         }
         int valid=0, invalid=0; List<String> lines=Files.readAllLines(assets.resolve("data/routes.txt"));
         for(int i=1;i+1<lines.size();i+=2) { Route r=Route.parse(lines.get(i),lines.get(i+1)); if(r.valid())valid++;else invalid++; }
-        check(valid+invalid==202,"All 202 resource routes accounted for");
+        check(valid+invalid==256,"All 256 script records accounted for, including retained legacy keys and empty catalog maps");
         workflowSmoke(assets);
         multiplayerSeriesGuard(assets);
         multiplayerCompletionGuard(assets);
         forcedMapFallback(assets);
+        sharedDriverFallback(assets);
+        checks+=CupSelectionChecks.run(assets);
+        checks+=CupCarRotationChecks.run(assets);
+        checks+=GarageFilterChecks.run(assets);
+        checks+=DailyEventChecks.run(assets);
+        checks+=DailyTaskChecks.run(assets);
+        checks+=RewardChecks.run(assets);
         multiplayerFuelSelection(assets);
         unlockProtection(assets);
         queueLoopOrder(assets);
@@ -248,7 +300,10 @@ public final class CoreChecks {
     }
     private static void forcedMapFallback(Path assets) throws Exception {
         MapMatcher matcher=new MapMatcher(Files.newBufferedReader(assets.resolve("data/map-rules.tsv")));
-        List<String> names=List.of("热带天堂环岛赛车","凌空之巅极速眩晕","狮城音速狂飙","摩登城市量子跃迁","神山垭口冰封路径");
+        Map<String,Route> routes=new HashMap<>();List<String> lines=Files.readAllLines(assets.resolve("data/routes.txt"));
+        for(int i=1;i+1<lines.size();i+=2)routes.put(lines.get(i),Route.parse(lines.get(i),lines.get(i+1)));
+        List<String> names=new ArrayList<>();for(MapMatcher.Rule rule:matcher.rules)if(!routes.get(rule.internal).valid())names.add(rule.display);
+        names.add("热带天堂环岛赛车");names.add("神山垭口冰封路径");
         for(String mode:List.of("多人上","多人下")) {
             String series=mode.equals("多人上")?"世界系列赛":"大师系列赛";
             List<Object> screens=new ArrayList<>();List<String> keys=new ArrayList<>();
@@ -259,7 +314,9 @@ public final class CoreChecks {
                 screens.add(Map.of("scene","event","text",series+" 排行榜 里程碑 开始","words",List.of(Map.of("text","开始","x",1100,"y",650))));
                 screens.add(Map.of("scene","cars","text","车辆选择 青铜","words",List.of(Map.of("text","青铜","x",100,"y",300),Map.of("text","6/6","x",240,"y",390))));
                 screens.add(Map.of("scene","car","text","TOUCHDRIVE 升级 开始","words",List.of(Map.of("text","开始","x",1100,"y",650))));
-                Object title=Map.of("scene","unknown","text",name+" 1圈","route",key,"words",List.of());screens.add(title);screens.add(title);
+                Map<String,Object> title=new HashMap<>(Map.of("scene","unknown","text",name+" 1圈","route",key,"words",List.of()));
+                title.put("routeAvailable",routes.get(key).valid());
+                screens.add(title);screens.add(title);
                 screens.add(Map.of("scene","race","text","","words",List.of()));
                 screens.add(Map.of("scene","result","text","你的用时 比赛奖励 继续","words",List.of(Map.of("text","继续","x",1100,"y",650))));
                 for(int n=0;n<5;n++)screens.add(Map.of("scene","event","text",series+" 开始","words",List.of()));
@@ -282,15 +339,35 @@ public final class CoreChecks {
                 if(name.equals("done"))done[0]=true;
                 return 0;
             },List.of("_multiplayerUi","cmpColor","tap","swipe","print","_hud","_sessionOperation","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_routeDisplay","_fallbackBegin","_fallbackStep","validate","done"))){
-                r.set("data",Map.of("项目",mode,"多人",0));r.set("run",Map.of("data",Map.of("次数","5","多人选路","3")));
+                r.set("data",Map.of("项目",mode,"多人",0));r.set("run",Map.of("data",Map.of("次数",String.valueOf(names.size()),"多人选路","3")));
                 r.load("helpers","utils={defultCfg=function(v,d)return v or d end,getMapName=function(key)validate(key)end,newAutoDriver=function()end};run.nitro=function()end");
                 r.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));r.load("test","function test()currentMultiplayer.run();done()end");r.start("test");
-                for(int i=0;i<250&&!done[0];i++)r.step(i*2000L);
+                for(int i=0;i<names.size()*80&&!done[0];i++)r.step(i*2000L);
             }
-            check(done[0]&&stats.finished()==5&&stats.returnedCount()==5,"Four fallback maps and next smart route complete: "+mode);
-            check(left[0]==4&&nitro[0]>=4&&stats.fallbackCount()==4,"Each explicit map runs left+nitro and counts fallback once: "+mode);
-            check(validated.equals(List.of(keys.get(4))),"Bad/missing routes bypass validation; next ordinary map resumes smart route");
-            for(String name:names.subList(0,4))check(hud.stream().anyMatch(h->h.contains(name)&&h.contains("固定左划")),"Fallback retains recognized CN map in status: "+name);
+            int fallbackMaps=names.size()-2;
+            check(done[0]&&stats.finished()==names.size()&&stats.returnedCount()==names.size(),"Fallback maps and next smart route complete: "+mode);
+            check(left[0]==fallbackMaps&&nitro[0]>=fallbackMaps&&stats.fallbackCount()==fallbackMaps,"Each missing/invalid map runs left+nitro and counts fallback once: "+mode);
+            check(validated.equals(keys.subList(keys.size()-2,keys.size())),"Bad/empty routes bypass validation; existing Islet Race and next ordinary map use their recovered scripts");
+            for(String name:names.subList(0,fallbackMaps))check(hud.stream().anyMatch(h->h.contains(name)&&h.contains("左划")),"Fallback retains recognized CN map in status: "+name);
+        }
+    }
+    private static void sharedDriverFallback(Path assets)throws Exception{
+        for(String raw:List.of("","878,21,2,22","0,21")){
+            int[] began={0},ended={0};
+            try(LuaRuntime lua=new LuaRuntime((name,l)->{
+                if(name.equals("_validateRoute")){l.push(Route.parse(l.toString(1),l.toString(2)).valid());return 1;}
+                if(name.equals("_routeDisplay")){l.push("测试地图");return 1;}
+                if(name.equals("_driverBegin")){check(l.toString(1).equals(raw),"Shared driver receives unchanged script, including empty/invalid input for host fallback");began[0]++;}
+                if(name.equals("_driverStep")){l.push(true);l.push(99);l.push("完成");return 3;}
+                if(name.equals("_driverEnd"))ended[0]++;
+                return 0;
+            },List.of("_validateRoute","_routeDisplay","_driverBegin","_driverStep","_driverEnd"))){
+                lua.set("LOCAL_ROOT","/tmp/a9-shared-driver");lua.set("ROUTES",Map.of("sample",raw));lua.set("UIconfig",Map.of("gamePkg","sample.game"));
+                lua.load("bootstrap",Files.readString(assets.resolve("lua/bootstrap.lua")));
+                lua.load("fixture","data={};run={};utils={waitStart=function()return 1 end};multiple1={};multiple2={};cup={};spCup={};dsCup={};career={};dailyCup={};function test()localInit();utils.getMapName('sample');utils.newAutoDriver()end");
+                lua.start("test");lua.step(0);
+            }
+            check(began[0]==1&&ended[0]==1,"Shared manual/legacy Lua driver delegates absent and invalid scripts to host fallback and releases it");
         }
     }
     private static void duplicateCarFrames(List<Object> screens){
@@ -354,7 +431,7 @@ public final class CoreChecks {
         }
     }
     private static void queueLoopOrder(Path assets) throws Exception {
-        for(boolean repeat:List.of(true,false)) {
+        for(String legacyRepeat:List.of("absent","false","true")) {
             List<String> runs=new ArrayList<>();List<Long> cycles=new ArrayList<>();boolean[] finished={false};
             try(LuaRuntime r=new LuaRuntime((name,l)->{
                 if(name.equals("recordProject"))runs.add(l.toString(1)+":"+l.toString(2));
@@ -362,14 +439,16 @@ public final class CoreChecks {
                 if(name.equals("_finished"))finished[0]=true;
                 return 0;
             },List.of("recordProject","_sessionCycle","_finished","_hud","print"))) {
-                r.set("UIconfig",Map.of("routeOnly","","repeatProjects",repeat,"projects",List.of(
+                Map<String,Object> config=new HashMap<>(Map.of("routeOnly","","projects",List.of(
                     Map.of("项目","多人上","data",Map.of("次数","30")),Map.of("项目","多人下","data",Map.of("次数","20")),Map.of("项目","杯赛","data",Map.of("次数","99"))),"ActiveProj",List.of(true,true,false)));
+                if(!legacyRepeat.equals("absent"))config.put("repeatProjects",Boolean.parseBoolean(legacyRepeat));
+                r.set("UIconfig",config);
                 r.load("bootstrap",Files.readString(assets.resolve("lua/bootstrap.lua")));
                 r.load("stubs","data={};run={};function localInit() end;function monitor() sleep(999999) end;currentMultiplayer={run=function() recordProject(data['项目'],run.data['次数']);sleep(5) end}");
                 r.start("main");for(int n=0;n<30&&runs.size()<4&&!finished[0];n++)r.step(n*1000L);
             }
-            check(runs.equals(repeat?List.of("多人上:30","多人下:20","多人上:30","多人下:20"):List.of("多人上:30","多人下:20")),"Queue preserves full 30+20 order and skips disabled project, repeat="+repeat);
-            check(repeat?cycles.equals(List.of(1L,2L))&&!finished[0]:cycles.equals(List.of(1L))&&finished[0],"Cycle restarts only after both projects finish, repeat="+repeat);
+            check(runs.equals(List.of("多人上:30","多人下:20","多人上:30","多人下:20")),"Queue always loops in full 30+20 order and skips disabled project, legacy repeat="+legacyRepeat);
+            check(cycles.equals(List.of(1L,2L))&&!finished[0],"Cycle restarts after both projects finish without an opt-in, legacy repeat="+legacyRepeat);
         }
     }
     private static void workflowSmoke(Path assets) throws Exception {

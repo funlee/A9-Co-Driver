@@ -191,10 +191,11 @@ cup.operation = {
       for i = 1, 2 do
         for j = 1, 200 do
           keepCapture()
+          if utils.collectRaceRewards then utils.collectRaceRewards() end
           if cmpColorEx(config.cupInfo, 1) == 1 then
             break
           end
-          if cmpColorEx(cup.choosePrize, 1) == 1 then
+          if cup.choosePrize and cmpColorEx(cup.choosePrize, 1) == 1 then
             tap(314, 526)
             sleep(1000)
             tap(115, 563)

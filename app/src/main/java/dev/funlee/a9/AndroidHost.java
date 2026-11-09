@@ -21,7 +21,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             "cmpColorEx","cmpColor","getPixelColor","findColor","findMultiColor","findPic","snapShot","rotateImage",
             "getDisplaySize","getDisplayRotate","getWorkPath","getSdPath","getPackageName","getInstalledApk","frontAppName","runApp","stopApp","keyPress",
             "setScreenScale","setControlBarPos","rnd","toast","print","colorToRGB","_jsonEncode","_jsonDecode","_textOcr","_digit","_mapMatch",
-            "_validateRoute","_driverBegin","_driverStep","_driverEnd","_hud","_finished","_multiplayerUi","_fallbackBegin","_fallbackStep","_sessionCycle","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_sessionLegacyCompleted","_sessionOperation","_routeDisplay","_queueResume","_queueEnter","_queueDone","_sessionLimitReached");
+            "_validateRoute","_driverBegin","_driverStep","_driverEnd","_hud","_finished","_multiplayerUi","_fallbackBegin","_fallbackStep","_sessionCycle","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_sessionLegacyCompleted","_sessionRaceRewards","_sessionLegacyPrepare","_sessionLegacyMap","_legacyRewardSample","_sessionLegacyRewards","_sessionOperation","_routeDisplay","_dailyEventUi","_garageFilterState","_garageFilterPrepare","_dailyTaskStatus","_queueResume","_queueEnter","_queueDone","_sessionLimitReached");
     private final Context context;
     private final LocalStore store;
     private final CaptureSession capture;
@@ -32,7 +32,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     private final ProgressFilter progress=new ProgressFilter();
     private long driverStart,lastDigitTime,lastProgressTime,lastPulse;
     private int lastProgress,lastLoggedProgress;
-    private boolean nitroDrift;
+    private boolean nitroDrift,driverFallback;
     private String lastUiScene="";
     private long lastEmptyUiSnapshot,lastUnknownLog;
     private String lastUnknownText="";
@@ -42,10 +42,14 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     private final TaskCheckpoint checkpoint=new TaskCheckpoint();
     private final MatchmakingWatchdog matching=new MatchmakingWatchdog();
     private long lastSavedClock;
+    private final RaceRewards.Stable rewardStable=new RaceRewards.Stable();
+    private boolean legacyPrepared,legacyRaceSeen,legacyRewardDone,legacyInvalid;
+    private String legacyMap="";
+    private long legacyCoins=-1,legacyFame=-1;
     public GameRecovery.Reason recoveryReason;
     public void recovered() throws InterruptedException{
-        driver=null;frame=null;progress.reset();matching.reset();lastUiScene="";finished=false;recoveryReason=null;
-        SessionState.resultOverlay(false);SessionState.stats.recovered();
+        driver=null;driverFallback=false;frame=null;progress.reset();matching.reset();lastUiScene="";finished=false;recoveryReason=null;
+        SessionState.overlayMode(false,false);SessionState.stats.recovered();rewardStable.reset();legacyPrepared=legacyRaceSeen=legacyRewardDone=false;
     }
     public void restoreQueue(JSONObject saved)throws Exception{
         JSONObject q=saved.getJSONObject("queue");checkpoint.restore(q.getInt("cycle"),q.getInt("index"),q.getInt("completed"));
@@ -55,6 +59,23 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     public AndroidHost(Context context,LocalStore store,CaptureSession capture,TouchService touch) {
         this.context=context;this.store=store;this.capture=capture;this.touch=touch;
         root=new File(context.getFilesDir(),"runtime");root.mkdirs();
+    }
+    private JSONObject dailyTask(int index) throws JSONException {
+        JSONObject task=store.config.getJSONArray("projects").getJSONObject(index-1);
+        return "每日战利品".equals(task.optString("项目"))?task:null;
+    }
+    private String dailySkipReason(int index) throws JSONException {
+        JSONObject task=dailyTask(index);
+        return task==null?"":store.dailyTaskPolicy().skipReason(task.optString("taskId","legacy-"+index),
+                "0".equals(task.getJSONObject("data").optString("每日只执行一次")));
+    }
+    private void recordDailyCompletion() throws JSONException {
+        int index=(Integer)checkpoint.resume().get("index");JSONObject task=dailyTask(index);
+        if(task!=null) {
+            JSONObject settings=task.getJSONObject("data");
+            store.dailyTaskPolicy().completed(task.optString("taskId","legacy-"+index),"0".equals(settings.optString("每日只执行一次")),
+                    checkpoint.completed(),settings.optInt("次数",1));
+        }
     }
     public String workPath(){return root.getAbsolutePath();}
     private int n(Lua l,int i) {return (int)l.toInteger(i);}
@@ -66,6 +87,9 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         Bitmap b=capture.frame(store.config.optInt("rotation",90));
         int[] p=new int[720*1280];b.getPixels(p,0,720,0,0,720,1280);b.recycle();frame=new PixelFrame(720,1280,p);
         if(touch!=null)touch.configure(capture.width,capture.height,store.config.optInt("rotation",90));
+        if(legacyPrepared&&!legacyRaceSeen&&ColorPattern.matches(frame,"680|50|FFFFFF-101010,660|70|FFFFFF-101010",1)){
+            legacyRaceSeen=true;SessionState.stats.begin(legacyMap,legacyInvalid);
+        }
     }
     private PixelFrame frame() {if(frame==null)capture();return frame;}
     private Map<String,Object> multiplayerUi() throws Exception {
@@ -73,7 +97,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         Map<String,Object> out=new LinkedHashMap<>();
         if((touch==null||!touch.unlockGuard.active())&&ColorPattern.matches(frame,"680|50|FFFFFF-101010,660|70|FFFFFF-101010",1)) {
             matching.reset();SessionState.stats.matching(-1);
-            SessionState.resultOverlay(false);out.put("scene","race");out.put("text","");out.put("words",List.of());return out;
+            SessionState.overlayMode(false,false);out.put("scene","race");out.put("text","");out.put("words",List.of());return out;
         }
         Bitmap sideways=Bitmap.createBitmap(frame.copyPixels(),720,1280,Bitmap.Config.ARGB_8888);
         Matrix matrix=new Matrix();matrix.postRotate(270);
@@ -132,12 +156,12 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             }
             out.put("rewardChoices",cards);
         }
-        if(scene.equals("result")&&!SessionState.resultOverlay){
-            SessionState.resultOverlay(true);
+        boolean resultScene=scene.equals("result"),menuScene=scene.equals("cars")||scene.equals("car")||scene.equals("rewardChoice");
+        if(resultScene!=SessionState.resultOverlay||menuScene!=SessionState.overlayMenuCompact){
+            SessionState.overlayMode(resultScene,menuScene);
             capture.awaitFrameAfter(SystemClock.elapsedRealtime()+180);
-            return multiplayerUi(); // Re-OCR the newly uncovered player footer before any input.
+            return multiplayerUi(); // Re-read uncovered fields before input.
         }
-        if(!scene.equals("result"))SessionState.resultOverlay(false);
         if(scene.equals("result")){
             Bitmap rankSide=Bitmap.createBitmap(frame.copyPixels(),720,1280,Bitmap.Config.ARGB_8888);
             Matrix rankMatrix=new Matrix();rankMatrix.postRotate(270);
@@ -145,7 +169,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             try {
                 int rank=RankOcr.read(recognizer,rankFrame,result,true);
                 if(rank==0)rank=RankOcr.read(recognizer,rankFrame,result,false);
-                out.put("finalRank",rank);
+                out.put("finalRank",rank);out.putAll(rewardRead(rankFrame,result));
             }finally{rankFrame.recycle();rankSide.recycle();}
         }
         if(scene.equals("unknown")&&!text.isEmpty()&&!text.equals(lastUnknownText)&&clock-lastUnknownLog>=5000){
@@ -164,8 +188,92 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         out.put("mapText",title);
         // The loading title includes the lap count. Cinematic player names do not.
         MapMatcher.Match match=store.matcher.match(title.contains("圈")?title:"");
-        if(match.unique())out.put("route",match.candidates.get(0).internal);
+        if(match.unique()){
+            String key=match.candidates.get(0).internal;Route route=store.routes.get(key);
+            out.put("route",key);out.put("routeAvailable",route!=null&&route.valid());
+        }
         return out;
+    }
+    private Map<String,Object> dailyEventUi()throws Exception {
+        capture();
+        if(ColorPattern.matches(frame,"680|50|FFFFFF-101010,660|70|FFFFFF-101010",1))return Map.of("scene","race","words",List.of());
+        if(!SessionState.resultOverlay||SessionState.overlayMenuCompact){
+            SessionState.overlayMode(true,false);capture.awaitFrameAfter(SystemClock.elapsedRealtime()+180);capture();
+        }
+        Bitmap side=Bitmap.createBitmap(frame.copyPixels(),720,1280,Bitmap.Config.ARGB_8888);Matrix m=new Matrix();m.postRotate(270);
+        Bitmap upright=Bitmap.createBitmap(side,0,0,720,1280,m,false);
+        Task<Text> task=null;Runnable cleanup=()->{upright.recycle();side.recycle();};
+        try {
+            task=recognizer.process(InputImage.fromBitmap(upright,0));Text full=Tasks.await(task,12,TimeUnit.SECONDS);
+            String scene=DailyEventUi.classify(full.getText());
+            if(scene.equals("unknown"))android.util.Log.d("A9DailyOcr",full.getText());
+            Map<String,Object> out=new LinkedHashMap<>();
+            out.put("scene",scene);out.put("text",full.getText());List<Object> words=new ArrayList<>();int[] later=null;
+            for(Text.TextBlock block:full.getTextBlocks())for(Text.Line line:block.getLines()){
+                Rect b=line.getBoundingBox();if(b==null)continue;
+                words.add(Map.of("text",line.getText(),"x",b.centerX(),"y",b.centerY()));
+                if(VehicleUnlockGuard.laterLabel(line.getText(),b.left,b.top,b.right,b.bottom))later=new int[]{b.left,b.top,b.right,b.bottom};
+            }
+            out.put("words",words);
+            if(touch!=null){
+                touch.unlockGuard.observe(VehicleUnlockGuard.prompt(full.getText()),later,!scene.equals("unknown")&&!scene.equals("vehicleUnlock"));
+                if(touch.unlockGuard.active()){
+                    out.put("scene","vehicleUnlock");int[] center=touch.unlockGuard.laterCenter();
+                    if(center!=null)out.put("unlockLater",Map.of("x",center[0],"y",center[1]));return out;
+                }
+            }
+            if(scene.equals("loading")){
+                // Daily loot places the track BELOW the event name, unlike multiplayer's upper-left title.
+                String title=text(379,405,439,850,3);out.put("mapText",title);
+                MapMatcher.Match match=store.matcher.match(title);
+                if(match.unique())out.put("route",match.candidates.get(0).internal);
+            }
+            if(scene.equals("rewards")&&legacyPrepared&&legacyRaceSeen){
+                if(!legacyRewardDone)out.putAll(rewardRead(upright,full,true));
+                // Solo rewards can offer an ad multiplier; only the lower exit is safe to advance.
+                for(Object word:words){Map<?,?> w=(Map<?,?>)word;
+                    if(DailyEventUi.rewardExit((String)w.get("text"),(Integer)w.get("x"),(Integer)w.get("y"))){
+                        int x=(Integer)w.get("x"),y=(Integer)w.get("y");
+                        int color=frame.pixel(719-y+25,x);
+                        if(ColorPattern.color(color,"FFFFFF-202020",1)||ColorPattern.color(color,"12FBC3-303030",1))out.put("rewardCanContinue",true);
+                    }
+                }
+            }
+            if(!("daily-"+scene).equals(lastUiScene)){
+                lastUiScene="daily-"+scene;SessionState.log("每日战利品界面："+scene);
+                snapshot(new File(root,"daily-"+scene+".png").getAbsolutePath(),0,0,719,1279);
+            }
+            return out;
+        }finally{if(task!=null&&!task.isComplete())task.addOnCompleteListener(Runnable::run,done->cleanup.run());else cleanup.run();}
+    }
+    private Map<String,Object> rewardRead(Bitmap upright,Text full)throws Exception{
+        return rewardRead(upright,full,false);
+    }
+    private Map<String,Object> rewardRead(Bitmap upright,Text full,boolean soloLayout)throws Exception{
+        if(!RewardOcr.page(full.getText())){rewardStable.reset();return Map.of("rewardPage",false);}
+        RaceRewards value=RewardOcr.read(recognizer,upright,full,soloLayout);
+        RaceRewards stable=rewardStable.observe(value,capture.frameId(),SystemClock.elapsedRealtime());
+        android.util.Log.d("A9RewardOcr","observed="+value.coins+"/"+value.fame+" stable="+stable.coins+"/"+stable.fame);
+        String exit="";boolean canContinue=false;
+        for(Text.TextBlock block:full.getTextBlocks())for(Text.Line line:block.getLines()){
+            Rect bounds=line.getBoundingBox();if(bounds==null)continue;
+            String label=RaceRewards.exitLabel(line.getText(),bounds.centerX(),bounds.centerY());
+            if(label.isEmpty())continue;
+            int color=frame.pixel(719-bounds.centerY()+25,bounds.centerX());
+            if(ColorPattern.color(color,"FFFFFF-202020",1)||ColorPattern.color(color,"12FBC3-303030",1)){
+                exit=label;canContinue=true;
+            }
+        }
+        return Map.of("rewardPage",true,"rewardCoins",stable.coins,"rewardFame",stable.fame,"rewardCanContinue",canContinue,"rewardExit",exit,"rewardReady",stable.coins>=0&&stable.fame>=0);
+    }
+    private Map<String,Object> legacyRewardSample()throws Exception{
+        if(!legacyPrepared||!legacyRaceSeen||legacyRewardDone)return Map.of("rewardPage",false);
+        if(!SessionState.resultOverlay){SessionState.resultOverlay(true);capture.awaitFrameAfter(SystemClock.elapsedRealtime()+180);}
+        capture();Bitmap side=Bitmap.createBitmap(frame.copyPixels(),720,1280,Bitmap.Config.ARGB_8888);Matrix m=new Matrix();m.postRotate(270);Bitmap upright=Bitmap.createBitmap(side,0,0,720,1280,m,false);
+        Task<Text> task=null;Runnable cleanup=()->{upright.recycle();side.recycle();};
+        try{
+            task=recognizer.process(InputImage.fromBitmap(upright,0));Text full=Tasks.await(task,12,TimeUnit.SECONDS);return rewardRead(upright,full);
+        }finally{if(task!=null&&!task.isComplete())task.addOnCompleteListener(Runnable::run,done->cleanup.run());else cleanup.run();}
     }
     public String text(int x1,int y1,int x2,int y2) throws Exception {
         return text(x1,y1,x2,y2,1);
@@ -186,6 +294,10 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     @Override public int call(String name,Lua l) {
         try {
             switch(name) {
+                case "_dailyEventUi":return result(l,dailyEventUi());
+                case "_garageFilterPrepare":
+                    SessionState.overlayMode(false,true);capture.awaitFrameAfter(SystemClock.elapsedRealtime());return 0;
+                case "_garageFilterState":return result(l,GarageFilter.read(frame()));
                 case "keepCapture": capture();return 0;
                 case "releaseCapture": return 0;
                 case "tap": touch.tap(8,n(l,1),n(l,2));return 0;
@@ -226,12 +338,28 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 case "_multiplayerUi":return result(l,multiplayerUi());
                 case "_routeDisplay":return result(l,store.matcher.displayName(s(l,1)));
                 case "_sessionCycle":SessionState.stats.cycle(n(l,1));return 0;
+                case "_dailyTaskStatus":return result(l,dailySkipReason(n(l,1)));
                 case "_queueResume":return result(l,checkpoint.resume());
                 case "_queueEnter":checkpoint.enter(n(l,1),n(l,2),n(l,3));persist(false);return result(l,checkpoint.completed());
-                case "_queueDone":checkpoint.projectDone();persist(false);return 0;
+                case "_queueDone":
+                    legacyPrepared=legacyRaceSeen=legacyRewardDone=false;legacyCoins=legacyFame=-1;rewardStable.reset();
+                    checkpoint.projectDone();persist(false);return 0;
                 case "_sessionLimitReached":return result(l,store.config.optInt("maxRaces",0)>0&&SessionState.stats.finished()>=store.config.optInt("maxRaces",0));
                 case "_sessionProject":SessionState.stats.project(s(l,1));SessionState.stats.resumeProject(l.getTop()>1?n(l,2):0,checkpoint.completed());return result(l,checkpoint.completed());
-                case "_sessionRaceBegin":SessionState.stats.begin(store.matcher.displayName(s(l,1)),l.toBoolean(2));persist(false);return 0;
+                case "_sessionRaceBegin":{
+                    String key=s(l,1);Route r=store.routes.get(key);SessionState.stats.begin(store.matcher.displayName(key),l.toBoolean(2));
+                    if(l.toBoolean(2))SessionState.stats.routeReason(key.isEmpty()?"地图未识别":r==null||r.raw.isEmpty()?"暂无跑法":"跑法无效");
+                    rewardStable.reset();persist(false);return 0;
+                }
+                case "_sessionRaceRewards":
+                    if(SessionState.stats.rewards(l.toInteger(1),l.toInteger(2))){SessionState.log("本局收益：金币 "+l.toInteger(1)+" · 名人堂 "+l.toInteger(2)+"（-1 为未识别）");persist(false);}return 0;
+                case "_sessionLegacyPrepare":
+                    legacyPrepared=true;legacyRaceSeen=legacyRewardDone=legacyInvalid=false;legacyMap="";legacyCoins=legacyFame=-1;rewardStable.reset();SessionState.overlayMode(false,false);return 0;
+                case "_sessionLegacyMap":
+                    if(legacyPrepared){legacyMap=s(l,1);legacyInvalid=l.toBoolean(2);SessionState.stats.routeMap(legacyMap,legacyInvalid);}return 0;
+                case "_legacyRewardSample":return result(l,legacyRewardSample());
+                case "_sessionLegacyRewards":
+                    if(legacyPrepared&&legacyRaceSeen&&!legacyRewardDone){legacyCoins=l.toInteger(1);legacyFame=l.toInteger(2);legacyRewardDone=true;SessionState.log("本局收益识别：金币 "+(legacyCoins<0?"未识别":legacyCoins)+" / 名人堂 "+(legacyFame<0?"未识别":legacyFame));}return 0;
                 case "_sessionRaceResult":{
                     int before=SessionState.stats.finished(),beforeRanked=SessionState.stats.rankedCount();SessionState.stats.result(l.getTop()>0?n(l,1):0);
                     checkpoint.completed(SessionState.stats.finished()-before);
@@ -239,7 +367,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                     if(SessionState.stats.finished()!=before||SessionState.stats.rankedCount()!=beforeRanked)persist(false);
                     return 0;
                 }
-                case "_sessionLegacyCompleted":SessionState.stats.legacyCompleted();checkpoint.completed(1);persist(false);return 0;
+                case "_sessionLegacyCompleted":SessionState.stats.legacyCompleted(legacyCoins,legacyFame);legacyPrepared=legacyRaceSeen=false;legacyCoins=legacyFame=-1;SessionState.overlayMode(false,false);checkpoint.completed(1);recordDailyCompletion();persist(false);return 0;
                 case "_sessionOperation":SessionState.stats.operation(s(l,1));return 0;
                 case "_sessionRaceReturned":SessionState.stats.returned();persist(false);return 0;
                 case "_fallbackBegin":
@@ -259,16 +387,19 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                     return result(l,m.candidates.get(0).internal,m.candidates.get(0).display);
                 }
                 case "_validateRoute": {
-                    Route r=Route.parse(s(l,1),s(l,2));if(!r.valid())throw new IllegalArgumentException(String.join("；",r.errors));return result(l,true);
+                    return result(l,Route.parse(s(l,1),s(l,2)).valid());
                 }
                 case "_driverBegin": {
+                    SessionState.overlayMode(false,false);
                     if(driver!=null)driver.stop();
                     nitroDrift=l.toBoolean(3);
-                    driver=new RouteEngine(Route.parse("当前路线",s(l,1)),touch,store.config.optInt("delay",0),l.toBoolean(2),store.config.optInt("driverMode",1)==2,nitroDrift);
+                    Route route=Route.parse("当前路线",s(l,1));driverFallback=!route.valid();
+                    driver=driverFallback?null:new RouteEngine(route,touch,store.config.optInt("delay",0),l.toBoolean(2),store.config.optInt("driverMode",1)==2,nitroDrift);
+                    if(driverFallback)SessionState.log("暂无有效跑法，使用左划兜底");
                     driverStart=clock;lastDigitTime=clock;lastProgressTime=clock;lastProgress=-1;lastLoggedProgress=-10;lastPulse=clock-300;progress.reset();return 0;
                 }
                 case "_driverStep":return step(l);
-                case "_driverEnd":if(driver!=null)driver.stop();return 0;
+                case "_driverEnd":if(driver!=null)driver.stop();driverFallback=false;return 0;
                 default:throw new UnsupportedOperationException("尚未实现的运行接口："+name);
             }
         } catch(Exception e) {
@@ -277,17 +408,22 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         }
     }
     private int step(Lua l) {
-        if(driver==null)throw new IllegalStateException("跑图尚未初始化");capture();
+        if(driver==null&&!driverFallback)throw new IllegalStateException("跑图尚未初始化");capture();
         boolean end=ColorPattern.color(frame.pixel(68,812),"5400FF-050505",1)||ColorPattern.color(frame.pixel(708,288),"5400FF",1);
-        if(end){driver.stop();return result(l,true,-1,"比赛结束");}
+        if(end){if(driver!=null)driver.stop();return result(l,true,-1,"比赛结束");}
         int rawProgress=store.digits.progress(frame,store.config.optInt("accuracy",80)/100.0);
         int p=progress.accept(rawProgress);
         // Readable backtracking after a crash is not an OCR outage. Keep route progress monotonic.
         if(rawProgress>=0)lastDigitTime=clock;
         if(p>lastProgress){lastProgress=p;lastProgressTime=clock;}
-        if(clock-lastDigitTime>12_000)throw failure("12 秒未能确认进度，请在诊断页检查截图方向和进度字库");
+        if(!driverFallback&&clock-lastDigitTime>12_000)throw failure("12 秒未能确认进度，请在诊断页检查截图方向和进度字库");
         if(clock-lastProgressTime>90_000)throw failure("比赛进度 90 秒未前进，请检查游戏是否卡住或暂停");
         if(clock-driverStart>1000L*store.config.optInt("raceTimeout",900))throw failure("单局跑图超时，可在设置中调整单局最长运行时间");
+        if(driverFallback){
+            if(p<99&&clock-lastPulse>=700){touch.tap(1,236,1100);touch.swipe(288,840,288,440,50);lastPulse=clock;}
+            SessionState.stats.progress(p,-1,0);SessionState.stats.operation("暂无有效跑法，左划兜底");
+            return result(l,p>=99,p,"暂无有效跑法，左划兜底"+(p>=0?" · "+p+"%":""));
+        }
         boolean icon=false;
         for(int y=450;y<=800;y++) if(ColorPattern.color(frame.pixel(600,y),"E7911F-0F191F",1)||ColorPattern.color(frame.pixel(600,y),"2020CB-1F1F1F",1)){icon=true;break;}
         if(nitroDrift&&!driver.drifting()&&clock-lastPulse>=300&&ColorPattern.matches(frame,"680|50|FFFFFF-050505,678|840|C3C9EE-191919",1)){

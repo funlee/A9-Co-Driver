@@ -167,6 +167,7 @@ career.operation = {
       data["信息"] = "开始结算"
       for j = 1, 200 do
         keepCapture()
+        if utils.collectRaceRewards then utils.collectRaceRewards() end
         if cmpColorEx(config.careerInfo, 1) == 1 then
           break
         end

@@ -55,17 +55,19 @@ public final class CaptureSession implements AutoCloseable {
     private ImageReader newReader(int w,int h,Handler handler) {
         ImageReader next=ImageReader.newInstance(w,h,PixelFormat.RGBA_8888,3);
         next.setOnImageAvailableListener(r->{
-            try(Image image=r.acquireLatestImage()) {
-                if(image==null)return;
-                Image.Plane p=image.getPlanes()[0]; ByteBuffer buffer=p.getBuffer(); int stride=p.getPixelStride();
-                int paddedWidth=p.getRowStride()/stride;
-                Bitmap padded=Bitmap.createBitmap(paddedWidth,image.getHeight(),Bitmap.Config.ARGB_8888); padded.copyPixelsFromBuffer(buffer);
-                Bitmap frame=Bitmap.createBitmap(padded,0,0,image.getWidth(),image.getHeight()); if(frame!=padded)padded.recycle();
-                synchronized(this) {
-                    if(r!=reader){frame.recycle();return;}
+            // Closing an ImageReader invalidates acquired plane buffers. Hold the same lock
+            // as close/resize until the copy is owned by our Bitmap, including image.close().
+            synchronized(this) {
+                if(r!=reader)return;
+                try(Image image=r.acquireLatestImage()) {
+                    if(image==null)return;
+                    Image.Plane p=image.getPlanes()[0]; ByteBuffer buffer=p.getBuffer(); int stride=p.getPixelStride();
+                    int paddedWidth=p.getRowStride()/stride;
+                    Bitmap padded=Bitmap.createBitmap(paddedWidth,image.getHeight(),Bitmap.Config.ARGB_8888); padded.copyPixelsFromBuffer(buffer);
+                    Bitmap frame=Bitmap.createBitmap(padded,0,0,image.getWidth(),image.getHeight()); if(frame!=padded)padded.recycle();
                     if(latest!=null)latest.recycle();latest=frame;frameTime=SystemClock.elapsedRealtime();notifyAll();
-                }
-            } catch(Exception e) { SessionState.log("截屏失败："+e.getMessage()); }
+                } catch(Exception e) { SessionState.log("截屏失败："+e.getMessage()); }
+            }
         },handler);
         return next;
     }

@@ -140,10 +140,11 @@ spCup.operation = {
       for i = 1, 2 do
         for j = 1, 200 do
           keepCapture()
+          if utils.collectRaceRewards then utils.collectRaceRewards() end
           if cmpColorEx(config.spCupInfo, 1) == 1 then
             break
           end
-          if cmpColorEx(spCup.choosePrize, 1) == 1 then
+          if spCup.choosePrize and cmpColorEx(spCup.choosePrize, 1) == 1 then
             tap(314, 526)
             sleep(1000)
             tap(115, 563)

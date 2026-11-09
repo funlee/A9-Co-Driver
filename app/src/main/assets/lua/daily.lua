@@ -13,6 +13,72 @@ local config = {
   tips = "190|808|FFFFFF-101010,190|912|12FBC3-101010"
 }
 dailyCup.carList = {}
+function dailyCup.skipReason()
+  return _dailyTaskStatus and _dailyTaskStatus(run.index) or ''
+end
+-- Loading and settlement differ from multiplayer; neither rank nor XP pages are mandatory.
+function dailyCup.readMap()
+  data["多人地图"]="";data["线路"]=""
+  local candidate=nil;local frames=0;local chosen=nil
+  for i=1,60 do
+    local screen=_dailyEventUi()
+    if screen.scene=="race" then break end
+    if screen.scene=="loading" then
+      if screen.route and screen.route==candidate then frames=frames+1 else candidate=screen.route;frames=screen.route and 1 or 0 end
+      if frames>=2 and chosen~=candidate then
+        chosen=candidate;utils.getMapName(chosen)
+        print("每日战利品地图连续确认："..data["多人地图"])
+      end
+    end
+    keepCapture()
+    if cmpColorEx(config.noTicket,1)==1 or cmpColorEx(config.tips,1)==1 then break end
+    if data["超时状态"] then return -1 end
+    sleep(200)
+  end
+  if not chosen then print("每日战利品地图未确认，使用左划兜底") end
+end
+local function press(screen,label)
+  for _,w in ipairs(screen.words or {}) do
+    local text=string.gsub(w.text,"%s","")
+    if label=="继续" and text=="继绩" then text="继续" end
+    if label=="错失机会" and text=="错矢机会" then text="错失机会" end
+    if text==label and w.x>750 and w.y>540 then
+      tap(719-math.floor(w.y),math.floor(w.x));sleep(800);return true
+    end
+  end
+  return false
+end
+function dailyCup.settle()
+  data["信息"]="每日战利品结算中"
+  local started=tickCount();local rewardSince=nil;local readySince=nil;local rewardDone=false;local seen=false;local eventFrames=0
+  while tickCount()-started<90000 do
+    local screen=_dailyEventUi();local scene=screen.scene
+    if scene=="event" then
+      eventFrames=eventFrames+1
+      if seen and eventFrames>=2 then print("每日战利品结算完成，已返回赛事");return 0 end
+    else eventFrames=0 end
+    if scene=="results" then
+      seen=true;press(screen,"继续")
+    elseif scene=="rewards" then
+      seen=true;rewardSince=rewardSince or tickCount()
+      if screen.rewardCanContinue then readySince=readySince or tickCount() end
+      if screen.rewardCanContinue and (rewardDone or screen.rewardReady or tickCount()-(readySince or tickCount())>=8000) then
+        if not rewardDone then _sessionLegacyRewards(screen.rewardCoins or -1,screen.rewardFame or -1);rewardDone=true end
+        if not press(screen,"错失机会") then press(screen,"继续") end
+      elseif tickCount()-rewardSince>=60000 then error("每日战利品收益结算超时") end
+    elseif scene=="cards" then
+      seen=true;press(screen,"继续")
+    elseif scene=="conversion" then
+      seen=true;press(screen,"确定")
+    elseif scene=="vehicleUnlock" and screen.unlockLater then
+      tap(719-math.floor(screen.unlockLater.y),math.floor(screen.unlockLater.x));sleep(800)
+    end
+    if data["超时状态"] then error("每日战利品结算超时") end
+    sleep(300)
+  end
+  error("每日战利品未确认返回赛事，已停止")
+end
+
 dailyCup.operation = {
   {
     config.main,
@@ -77,6 +143,8 @@ dailyCup.operation = {
   {
     config.carInfo,
     function()
+      local reason=dailyCup.skipReason()
+      if reason~='' then return reason end
       data["信息"] = "即将开始游戏"
       local sRet = utils.startRace()
       if sRet == 0 or sRet == -2 then
@@ -85,26 +153,7 @@ dailyCup.operation = {
         return nil
       end
       if utils.defultCfg(run.data["杯赛选路"], "4") == "4" then
-        local mapAppear = false
-        for i = 1, 100 do
-          keepCapture()
-          if cmpColorEx("664|436|5400FF-101010,664|490|5400FF-101010,624|434|4800FF-101010", 1) == 1 then
-            mapAppear = true
-            break
-          elseif cmpColorEx(config.noTicket, 1) == 1 or cmpColorEx(config.tips, 1) == 1 then
-            break
-          end
-          sleep(100)
-        end
-        releaseCapture()
-        if mapAppear then
-          local cupMap = utils.localOCR(309, 418, 482, 656)
-          utils.getMapName(cupMap)
-          if string.find(data["多人地图"], "识别失败", 1) ~= nil then
-            print("自动识别失败")
-            utils.getMapName(run.data["杯赛线路"])
-          end
-        end
+        dailyCup.readMap()
       end
       for ci = 1, 30 do
         keepCapture()
@@ -145,7 +194,7 @@ dailyCup.operation = {
         keyPress("back")
         toast("没票")
         sleep(2000)
-        return -1
+        return "noTicket"
       end
     end
   },
@@ -182,29 +231,7 @@ dailyCup.operation = {
   {
     config.ending,
     function()
-      data["信息"] = "开始结算"
-      for i = 1, 2 do
-        for j = 1, 200 do
-          keepCapture()
-          if cmpColorEx(config.cupInfo, 1) == 1 then
-            break
-          end
-          if cmpColorEx(cup.choosePrize, 1) == 1 then
-            tap(314, 526)
-            sleep(1000)
-            tap(115, 563)
-            sleep(1000)
-          end
-          utils.tipsHandle()
-          tap(96, 1224)
-          sleep(500)
-        end
-        for j = 1, 10 do
-          tap(96, 1224)
-          sleep(300)
-        end
-      end
-      return 0
+      return dailyCup.settle()
     end
   },
   {
@@ -225,4 +252,4 @@ dailyCup.operation = {
     end
   }
 }
-return cup
+return dailyCup

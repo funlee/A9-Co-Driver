@@ -19,7 +19,7 @@ public final class LocalStore {
         this.context=context.getApplicationContext();
         matcher=new MapMatcher(new StringReader(asset("data/map-rules.tsv")));
         digits=new DigitOcr(new StringReader(asset("data/progress.lib")));
-        String[] lines=asset("data/routes.txt").split("\\r?\\n");
+        String[] lines=asset("data/routes.txt").split("\\r?\\n",-1);
         for(int i=1;i+1<lines.length;i+=2) routes.put(lines[i],Route.parse(lines[i],lines[i+1]));
         JSONObject custom=new JSONObject(context.getSharedPreferences("local",0).getString("routes","{}"));
         for(Iterator<String> i=custom.keys();i.hasNext();) { String k=i.next(); routes.put(k,Route.parse(k,custom.getString(k))); }
@@ -30,12 +30,31 @@ public final class LocalStore {
             for(int i=0;i<20;i++) projects.put(new JSONObject().put("项目",MODES[0]).put("enabled",false).put("data",defaults(MODES[0])));
             config.put("projects",projects);
         }
+        // Persist identity separately from editable task fields and queue position.
+        boolean assignedIds=false;Set<String> ids=new HashSet<>();
+        JSONArray tasks=config.getJSONArray("projects");
+        for(int i=0;i<tasks.length();i++) {
+            JSONObject task=tasks.getJSONObject(i);String id=task.optString("taskId");
+            if(id.isEmpty()||!ids.add(id)) {id=UUID.randomUUID().toString();task.put("taskId",id);ids.add(id);assignedIds=true;}
+        }
+        if(assignedIds && !context.getSharedPreferences("local",0).edit().putString("config",config.toString()).commit())
+            throw new IOException("无法保存任务标识");
         if(!config.has("gamePkg")) config.put("gamePkg","com.aligames.kuang.kybc.aligames");
         if(!config.has("rotation")) config.put("rotation",90);
         if(!config.has("accuracy")) config.put("accuracy",80);
         if(!config.has("delay")) config.put("delay",0);
         if(!config.has("raceTimeout")) config.put("raceTimeout",900);
         if(!config.has("driverMode")) config.put("driverMode",1);
+    }
+    public DailyTaskPolicy dailyTaskPolicy() {
+        android.content.SharedPreferences history=context.getSharedPreferences("daily-task-history",0);
+        return new DailyTaskPolicy(java.time.Clock.systemDefaultZone(),new DailyTaskPolicy.CompletionStore(){
+            public String read(String id){return history.getString(id,"");}
+            public void write(String id,String date){
+                if(!date.equals(read(id))&&!history.edit().putString(id,date).commit())
+                    throw new IllegalStateException("无法保存每日战利品完成日期");
+            }
+        });
     }
     public String asset(String name) throws IOException {
         try(InputStream in=context.getAssets().open(name); ByteArrayOutputStream out=new ByteArrayOutputStream()) {
@@ -56,7 +75,8 @@ public final class LocalStore {
         all.put(key,raw); context.getSharedPreferences("local",0).edit().putString("routes",all.toString()).apply(); routes.put(key,route);
     }
     public List<String> routeKeys() {
-        List<String> keys=new ArrayList<>(routes.keySet()); keys.sort(Comparator.comparing(matcher::displayName)); return keys;
+        Set<String> catalog=new LinkedHashSet<>();for(MapMatcher.Rule rule:matcher.rules)catalog.add(rule.internal);
+        List<String> keys=new ArrayList<>(catalog); keys.sort(Comparator.comparing(matcher::displayName)); return keys;
     }
     public static Object javaValue(Object o) throws JSONException {
         if(o==JSONObject.NULL) return null;
@@ -80,7 +100,7 @@ public final class LocalStore {
         c.put("gamePkg",config.getString("gamePkg")); c.put("picCheck","0"); c.put("AdTime",global.optInt("AdTime",40));
         c.put("coinADNum",global.optInt("coinADNum",1)); c.put("delay",config.optInt("delay",0)); c.put("accuracy",config.optInt("accuracy",80));
         c.put("ocrMode",1); c.put("driverMode",config.optInt("driverMode",1)); c.put("conflictTime",30); c.put("spPos",Arrays.asList(global.optString("spPos","1").split(",")));
-        c.put("repeatProjects",config.optBoolean("repeat",false)); c.put("routeOnly",config.optString("routeOnly",""));
+        c.put("routeOnly",config.optString("routeOnly",""));
         c.put("maxCycles",Math.max(0,config.optInt("maxCycles",0)));
         List<Object> projects=new ArrayList<>(), active=new ArrayList<>();
         JSONArray a=config.getJSONArray("projects");

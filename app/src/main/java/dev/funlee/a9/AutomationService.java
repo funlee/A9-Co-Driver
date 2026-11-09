@@ -24,10 +24,11 @@ public final class AutomationService extends Service {
     private volatile boolean stopping,paused;
     private volatile boolean inspecting,sampleRequested;
     private WindowManager windows;
-    private View overlay;
+    private TaskPanelView overlay;
     private WindowManager.LayoutParams overlayParams;
     private boolean resultDocked;
     private int savedOverlayX,savedOverlayY;
+    private boolean overlayPositioned;
     private DragLabel overlayLabel;
     // The service uses the platform Material theme and native widgets.
     @android.annotation.SuppressLint("AppCompatCustomView")
@@ -75,11 +76,8 @@ public final class AutomationService extends Service {
         try {
             LocalStore store=new LocalStore(this);TouchService touch=TouchService.instance;
             if(resumeState!=null)store.config=new org.json.JSONObject(resumeState.getJSONObject("config").toString());
-            int target=0;
-            org.json.JSONArray projects=store.config.getJSONArray("projects");
-            for(int i=0;i<projects.length();i++){org.json.JSONObject p=projects.getJSONObject(i);if(p.optBoolean("enabled")&&(p.optString("项目").equals("多人上")||p.optString("项目").equals("多人下")))target+=p.getJSONObject("data").optInt("次数",1);}
             int limit=store.config.optInt("maxRaces",0);
-            SessionState.stats.target(limit>0?limit:store.config.optBoolean("repeat",false)?0:target);
+            SessionState.stats.target(Math.max(0,limit));
             if(touch==null&&!inspect)throw new IllegalStateException("请先开启 A9伴侣的无障碍服务");
             // The activity launches the game immediately after consent. Let its display rotate first.
             Thread.sleep(3000);
@@ -168,32 +166,46 @@ public final class AutomationService extends Service {
         overlayLabel=new DragLabel(this);
         pauseButton=new Button(this);pauseButton.setText(inspecting?"取样":"暂停");pauseButton.setOnClickListener(v->onStartCommand(new Intent().setAction(inspecting?SAMPLE:PAUSE),0,0));
         Button stop=new Button(this);stop.setText("停止");stop.setOnClickListener(v->{SessionState.status("已手动停止");stopRun();});
-        LinearLayout box=TaskPanelView.create(this,overlayLabel,pauseButton,stop);
-        android.graphics.Point displaySize=new android.graphics.Point();windows.getDefaultDisplay().getRealSize(displaySize);
-        // Stay left of the first-column fuel labels (upright x=220) even with the full dashboard.
-        WindowManager.LayoutParams params=new WindowManager.LayoutParams(displaySize.x*200/1280,WindowManager.LayoutParams.WRAP_CONTENT,
+        TaskPanelView box=TaskPanelView.create(this,overlayLabel,pauseButton,stop);
+        android.graphics.Point size=overlaySize();
+        WindowManager.LayoutParams params=new WindowManager.LayoutParams(size.x*265/1280,WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,PixelFormat.TRANSLUCENT);
-        // Keep the recovered route-choice coordinates near the top of the race unobstructed.
-        // Keep bottom-centre "Later"/continue buttons visible to OCR and touch dispatch.
-        params.gravity=Gravity.BOTTOM|Gravity.LEFT;params.x=8;params.y=8;
-        overlayLabel.setOnTouchListener(new View.OnTouchListener(){float startX,startY;int x,y;
-            public boolean onTouch(View v,android.view.MotionEvent e){if(e.getAction()==MotionEvent.ACTION_DOWN){startX=e.getRawX();startY=e.getRawY();x=params.x;y=params.y;return true;}
-                if(e.getAction()==MotionEvent.ACTION_MOVE){params.x=x+(int)(e.getRawX()-startX);params.y=y-(int)(e.getRawY()-startY);windows.updateViewLayout(box,params);return true;}
-                if(e.getAction()==MotionEvent.ACTION_UP&&Math.abs(e.getRawX()-startX)<6&&Math.abs(e.getRawY()-startY)<6)v.performClick();return true;}});
-        overlay=box;overlayParams=params;SessionState.resultOverlay=false;resultDocked=false;
+        params.gravity=Gravity.TOP|Gravity.START;params.x=8;params.y=8;
+        overlayLabel.setOnClickListener(v->{box.toggleCollapsed();updateOverlay();});
+        overlayLabel.setOnTouchListener(new View.OnTouchListener(){float startX,startY;int x,y;boolean dragged;
+            public boolean onTouch(View v,android.view.MotionEvent e){
+                if(e.getAction()==MotionEvent.ACTION_DOWN){startX=e.getRawX();startY=e.getRawY();x=params.x;y=params.y;dragged=false;return true;}
+                if(e.getAction()==MotionEvent.ACTION_MOVE){float dx=e.getRawX()-startX,dy=e.getRawY()-startY;if(Math.abs(dx)+Math.abs(dy)>12)dragged=true;
+                    if(dragged&&!resultDocked){params.x=x+(int)dx;params.y=y+(int)dy;clampOverlay();windows.updateViewLayout(box,params);}return true;}
+                if(e.getAction()==MotionEvent.ACTION_UP){if(!dragged)v.performClick();else if(!resultDocked){android.graphics.Point current=overlaySize();params.x=params.x+box.getWidth()/2<current.x/2?8:Math.max(8,current.x-box.getWidth()-8);clampOverlay();windows.updateViewLayout(box,params);getSharedPreferences("overlay",0).edit().putFloat("x",params.x/(float)Math.max(1,current.x-box.getWidth())).putFloat("y",params.y/(float)Math.max(1,current.y-box.getHeight())).apply();}return true;}return true;
+            }});
+        overlay=box;overlayParams=params;SessionState.resultOverlay=false;SessionState.overlayMenuCompact=false;resultDocked=false;overlayPositioned=false;
+        box.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{
+            if(overlay==null)return;
+            if(!overlayPositioned){android.graphics.Point current=overlaySize();android.content.SharedPreferences prefs=getSharedPreferences("overlay",0);params.x=(int)(prefs.getFloat("x",0)*Math.max(1,current.x-box.getWidth()));params.y=(int)(prefs.getFloat("y",1)*Math.max(1,current.y-box.getHeight()-8));overlayPositioned=true;clampOverlay();windows.updateViewLayout(box,params);}
+            else{int x=params.x,y=params.y;clampOverlay();if(x!=params.x||y!=params.y)windows.updateViewLayout(box,params);}
+            overlayBounds();
+        });
         SessionState.overlayRefresh=this::updateOverlay;
         windows.addView(box,params);main.post(overlayTick);
     }
+    private android.graphics.Point overlaySize(){android.graphics.Point p=new android.graphics.Point();windows.getDefaultDisplay().getRealSize(p);return p;}
+    private void clampOverlay(){if(overlay==null||overlayParams==null)return;android.graphics.Point p=overlaySize();overlayParams.x=Math.max(0,Math.min(overlayParams.x,Math.max(0,p.x-overlay.getWidth())));overlayParams.y=Math.max(0,Math.min(overlayParams.y,Math.max(0,p.y-overlay.getHeight())));}
+    private void overlayBounds(){if(overlay==null)return;int[] p=new int[2];overlay.getLocationOnScreen(p);SessionState.overlayBounds=new android.graphics.Rect(p[0],p[1],p[0]+overlay.getWidth(),p[1]+overlay.getHeight());}
     private void updateOverlay(){
-        if(overlay!=null&&overlayParams!=null&&resultDocked!=SessionState.resultOverlay){
-            if(SessionState.resultOverlay){
-                savedOverlayX=overlayParams.x;savedOverlayY=overlayParams.y;
-                android.graphics.Point size=new android.graphics.Point();windows.getDefaultDisplay().getRealSize(size);
-                overlayParams.gravity=Gravity.TOP|Gravity.LEFT;overlayParams.x=8;overlayParams.y=size.y*180/720;
-            }else{overlayParams.gravity=Gravity.BOTTOM|Gravity.LEFT;overlayParams.x=savedOverlayX;overlayParams.y=savedOverlayY;}
-            resultDocked=SessionState.resultOverlay;windows.updateViewLayout(overlay,overlayParams);
+        if(overlay==null||overlayParams==null)return;
+        boolean dock=SessionState.resultOverlay||SessionState.overlayMenuCompact;
+        if(resultDocked!=dock){
+            if(dock){savedOverlayX=overlayParams.x;savedOverlayY=overlayParams.y;}
+            else{overlayParams.x=savedOverlayX;overlayParams.y=savedOverlayY;}
+            resultDocked=dock;
         }
-        if(overlayLabel!=null){overlayLabel.setText(SessionState.panelText());pauseButton.setText(inspecting?"取样":paused?"继续":"暂停");if(overlay!=null){int[] p=new int[2];overlay.getLocationOnScreen(p);SessionState.overlayBounds=new android.graphics.Rect(p[0],p[1],p[0]+overlay.getWidth(),p[1]+overlay.getHeight());}}}
-    private void removeOverlay(){SessionState.overlayRefresh=null;SessionState.resultOverlay=false;overlayParams=null;SessionState.overlayBounds=null;main.removeCallbacks(overlayTick);if(overlay!=null){try{windows.removeView(overlay);}catch(Exception ignored){}overlay=null;}}
+        if(dock){overlayParams.x=8;overlayParams.y=SessionState.resultOverlay?overlaySize().y*180/720:Math.max(0,overlaySize().y-overlay.getHeight()-8);}
+        // Results must leave both reward crops and the personal-rank badges unobstructed.
+        overlayParams.width=overlaySize().x*(SessionState.overlayMenuCompact?200:265)/1280;
+        overlay.update(SessionState.stats,SessionState.paused?"已暂停":SessionState.running?SessionState.hud:SessionState.status,inspecting,SessionState.hud,SessionState.resultOverlay||SessionState.overlayMenuCompact);
+        pauseButton.setText(inspecting?"取样":paused?"继续":"暂停");clampOverlay();windows.updateViewLayout(overlay,overlayParams);overlayBounds();
+    }
+    private void removeOverlay(){SessionState.overlayRefresh=null;SessionState.resultOverlay=false;SessionState.overlayMenuCompact=false;overlayParams=null;SessionState.overlayBounds=null;main.removeCallbacks(overlayTick);if(overlay!=null){try{windows.removeView(overlay);}catch(Exception ignored){}overlay=null;}}
     @Override public void onDestroy(){stopRun();super.onDestroy();}
 }

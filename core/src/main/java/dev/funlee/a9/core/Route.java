@@ -26,6 +26,7 @@ public final class Route {
     public static Route parse(String name, String input) {
         String raw=input.trim().replace('，', ',');
         List<Event> out=new ArrayList<>(); List<String> errors=new ArrayList<>();
+        if(raw.isEmpty()) return new Route(name,raw,out,Collections.singletonList("暂无跑法"));
         if (raw.length()>100_000) return new Route(name,raw,out,Collections.singletonList("线路超过长度限制"));
         String[] pairs=raw.split(",", -1); int previous=-1;
         if (pairs.length%2!=0) errors.add("进度与指令必须成对出现");

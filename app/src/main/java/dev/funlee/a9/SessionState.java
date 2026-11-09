@@ -14,10 +14,14 @@ public final class SessionState {
     public static String panelText(){return dashboardEnabled?stats.panel(paused?"已暂停":running?hud:status):hud;}
     public static volatile android.graphics.Rect overlayBounds;
     public static volatile boolean resultOverlay;
+    public static volatile boolean overlayMenuCompact;
     public static volatile Runnable overlayRefresh;
     public static void resultOverlay(boolean value) throws InterruptedException {
-        if(resultOverlay==value)return;
-        resultOverlay=value;
+        overlayMode(value,overlayMenuCompact);
+    }
+    public static void overlayMode(boolean result,boolean menu) throws InterruptedException {
+        if(resultOverlay==result&&overlayMenuCompact==menu)return;
+        resultOverlay=result;overlayMenuCompact=menu;
         Runnable refresh=overlayRefresh;if(refresh==null)return;
         java.util.concurrent.CountDownLatch done=new java.util.concurrent.CountDownLatch(1);
         main.post(()->{try{refresh.run();}finally{done.countDown();}});

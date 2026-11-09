@@ -53,6 +53,7 @@ function localInit()
     local ret=utils.waitStart();if ret~=1 then return ret end
     data['信息']='智能选路中'
     data['心跳时间']=os.time();data['超时状态']=false
+    if _sessionLegacyMap then _sessionLegacyMap(data['多人地图'] or '',not _validateRoute(data['多人地图'],data['线路'])) end
     _driverBegin(data['线路'],data['项目']=='杯赛' and (run.data['杯赛两圈赛制'] or '')~='',data['氮气漂流'])
     local lastProgress=-1
     while true do
@@ -67,6 +68,19 @@ function localInit()
       sleep(30)
     end
     _driverEnd();data['路程']=0;data['多人地图']='';return 1
+  end
+  utils.collectRaceRewards=function()
+    if not _legacyRewardSample then return end
+    local sample=_legacyRewardSample()
+    if not sample.rewardPage then return end
+    local started=tickCount()
+    repeat
+      if sample.rewardCanContinue and (sample.rewardReady or tickCount()-started>=8000) then
+        _sessionLegacyRewards(sample.rewardCoins or -1,sample.rewardFame or -1);return
+      end
+      if tickCount()-started>=20000 then error('比赛奖励结算超时，请检查画面') end
+      data['信息']='等待结算完成并识别本局收益';sleep(400);sample=_legacyRewardSample()
+    until not sample.rewardPage
   end
   run.list={['多人上']=multiple1.operation,['多人下']=multiple2.operation,['杯赛']=cup.operation,
     ['特殊赛事']=spCup.operation,['车联']=dsCup.operation,['生涯']=career.operation,['每日战利品']=dailyCup.operation}
@@ -99,7 +113,7 @@ function main()
   local maxCycles=math.max(0,tonumber(UIconfig.maxCycles) or 0)
   if maxCycles>0 and resume.cycle>maxCycles then _finished();return end
   local cycle=resume.cycle-1
-  repeat
+  while true do
     cycle=cycle+1;_sessionCycle(cycle);print('开始第 '..cycle..' 轮项目队列')
     local enabled=0
     for i=1,#UIconfig.projects do
@@ -112,19 +126,31 @@ function main()
         run.index=i;run.data=cfg.data;data['项目']=cfg['项目'];data['心跳时间']=os.time()
         _hud('项目 '..i..'：'..data['项目'])
         local outcome=nil
-        if data['项目']=='多人上' or data['项目']=='多人下' then
+        if data['项目']=='每日战利品' then outcome=dailyCup.skipReason() end
+        if outcome and outcome~='' then
+          data['信息']=outcome=='dailyQuietHours' and '00:00–00:30，跳过每日战利品' or '每日战利品今日已完成，跳过'
+          _hud(data['信息'])
+        elseif data['项目']=='多人上' or data['项目']=='多人下' then
           outcome=currentMultiplayer.run()
         else
           _sessionProject(data['项目'],tonumber(run.data['次数']) or 1)
           local original=run.data['次数']
           run.data['次数']=tostring(math.max(0,(tonumber(original) or 1)-completed))
-          if tonumber(run.data['次数'])>0 then utils.backToMain();utils.checkAuto();utils.initCar();run.project() end
+          if tonumber(run.data['次数'])>0 then utils.backToMain();utils.checkAuto();utils.initCar();outcome=run.project() end
           run.data['次数']=original
         end
         if _queueDone then _queueDone() end
         if _sessionLimitReached and _sessionLimitReached() then print('已达到本次总完赛上限，任务结束');_finished();return end
-        if outcome=='fuelEmpty' then
+        if outcome=='dailyQuietHours' then
+          print('项目 '..i..' 已跳过：每日战利品 00:00–00:30 不执行')
+        elseif outcome=='dailyAlreadyDone' then
+          print('项目 '..i..' 已跳过：每日战利品今日已完成')
+        elseif outcome=='fuelEmpty' then
           print('第 '..cycle..' 轮，项目 '..i..' 因车辆全部无油已跳过：'..data['项目'])
+        elseif outcome=='noTicket' then
+          print('第 '..cycle..' 轮，项目 '..i..' 因门票不足已跳过剩余场次：'..data['项目'])
+        elseif outcome==-1 then
+          print('第 '..cycle..' 轮，项目 '..i..' 未完成配置场次，已结束本项目：'..data['项目'])
         else print('第 '..cycle..' 轮，项目 '..i..' 已完成：'..data['项目']) end
         run.data={}
         end
@@ -135,7 +161,6 @@ function main()
     if maxCycles>0 and cycle>=maxCycles then
       print('已达到本次循环上限 '..maxCycles..' 轮，任务结束');_finished();return
     end
-    if UIconfig.repeatProjects then sleep(1000) end
-  until not UIconfig.repeatProjects
-  _finished()
+    sleep(1000)
+  end
 end

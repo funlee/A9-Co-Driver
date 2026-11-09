@@ -14,11 +14,17 @@ import java.util.concurrent.TimeUnit;
 /** Screenshot replay by default. Explicit restart/crash modes exercise recovery, never start races. */
 public final class RecoveryDeviceCheck extends Instrumentation {
     private String mode;
-    @Override public void onCreate(Bundle args){super.onCreate(args);mode=args.getString("mode","screenshots");start();}
+    private int cupPosition;
+    @Override public void onCreate(Bundle args){super.onCreate(args);mode=args.getString("mode","screenshots");cupPosition=Integer.parseInt(args.getString("cupPosition","3"));start();}
     @Override public void onStart(){
         Bundle report=new Bundle();
         try{
             if(mode.equals("screenshots"))screenshots(report);
+            else if(mode.equals("daily-schedule"))DailyScheduleDeviceCheck.run(this,report);
+            else if(mode.equals("daily-screenshots"))DailyScreenshotCheck.run(this,report);
+            else if(mode.equals("garage-filter"))new GarageFilterDeviceCheck(this).run(report);
+            else if(mode.equals("rewards"))RewardScreenshotCheck.run(this,report);
+            else if(mode.equals("cup-selection"))new CupSelectionDeviceCheck(this).run(cupPosition,report);
             else if(mode.equals("restart")||mode.equals("crash")){
                 if(SessionState.running)throw new IllegalStateException("Stop the current task before a device recovery check");
                 long until=SystemClock.elapsedRealtime()+15000;
