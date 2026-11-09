@@ -66,7 +66,7 @@ public final class AutomationService extends Service {
     }
     private Notification notification() {
         PendingIntent open=PendingIntent.getActivity(this,0,new Intent(this,MainActivity.class),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
-        return new Notification.Builder(this,CHANNEL).setSmallIcon(android.R.drawable.ic_media_play).setContentTitle("A9 本地助手")
+        return new Notification.Builder(this,CHANNEL).setSmallIcon(android.R.drawable.ic_media_play).setContentTitle("A9伴侣")
                 .setContentText("截屏与任务运行中，可随时暂停或停止").setContentIntent(open).setOngoing(true)
                 .addAction(new Notification.Action.Builder(null,inspecting?"取样":"暂停 / 继续",action(inspecting?SAMPLE:PAUSE,1)).build())
                 .addAction(new Notification.Action.Builder(null,"停止",action(STOP,2)).build()).build();
@@ -80,7 +80,7 @@ public final class AutomationService extends Service {
             for(int i=0;i<projects.length();i++){org.json.JSONObject p=projects.getJSONObject(i);if(p.optBoolean("enabled")&&(p.optString("项目").equals("多人上")||p.optString("项目").equals("多人下")))target+=p.getJSONObject("data").optInt("次数",1);}
             int limit=store.config.optInt("maxRaces",0);
             SessionState.stats.target(limit>0?limit:store.config.optBoolean("repeat",false)?0:target);
-            if(touch==null&&!inspect)throw new IllegalStateException("请先开启 A9 本地助手的无障碍服务");
+            if(touch==null&&!inspect)throw new IllegalStateException("请先开启 A9伴侣的无障碍服务");
             // The activity launches the game immediately after consent. Let its display rotate first.
             Thread.sleep(3000);
             synchronized(this){

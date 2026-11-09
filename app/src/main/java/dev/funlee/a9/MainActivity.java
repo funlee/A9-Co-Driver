@@ -35,7 +35,7 @@ public final class MainActivity extends Activity {
     private EditText edit(String value){EditText e=new EditText(this);e.setText(value);e.setTextSize(14);return e;}
     private void show(){
         root=column();root.setBackgroundColor(0xfff3f5f4);root.setPadding(dp(16),dp(12),dp(16),dp(8));root.setFitsSystemWindows(true);
-        root.addView(label("A9 本地助手",25));root.addView(label("本地配置 · 无需登录",12));status=label(SessionState.status,13);root.addView(status);
+        root.addView(label("A9伴侣",25));root.addView(label("本地配置 · 无需登录",12));status=label(SessionState.status,13);root.addView(status);
         LinearLayout nav=row();String[] names={"运行","路线","诊断","设置"};for(int i=0;i<names.length;i++){final int n=i;nav.addView(button(names[i],()->{tab=n;render();}),new LinearLayout.LayoutParams(0,-2,1));}root.addView(nav);
         body=column();root.addView(scroll(body),new LinearLayout.LayoutParams(-1,0,1));setContentView(root);render();
     }
