@@ -14,8 +14,6 @@
 | `lua/bootstrap.lua`、`multiplayer_current.lua` | 本项目编写的宿主适配、队列调度和现行多人赛流程 |
 | `licenses/` | LuaJava、jnigen 等依赖许可原文 |
 
-维护者于 2026-11-07 确认已获得随包运行资源的公开再分发授权。这些资源随项目采用根目录的 MIT 许可。授权范围见 [第三方依赖说明](../THIRD_PARTY_NOTICES.md)，相关贡献见 [项目鸣谢](../README.md#鸣谢)。
-
 提交新资源时同步更新 `tools/audit-public.py` 的明确清单；修改已有资源时更新 `provenance.json` 对应摘要及验证说明。审核脚本检查资源是否齐全，并可比较 APK 内资源与源码是否逐字节一致。克隆者可运行 `sh tools/check-core.sh` 验证随库资源和调度逻辑。
 
 ## 国服地图核对（2026-11-09）
