@@ -16,6 +16,18 @@ public final class PopupCloseDetector {
     public static int[] find(PixelFrame frame) {
         return find(frame,65,220);
     }
+    public static int[] findSeasonPassUnlock(PixelFrame frame) {
+        if(frame.width!=720||frame.height!=1280)return null;
+        for(int y=55;y<135;y++)for(int x=950;x<1190;x++){
+            if(!at(frame,x,y,false)||!at(frame,x-18,y,true)||!at(frame,x+18,y,true)||
+                    !at(frame,x,y-21,true)||!at(frame,x,y+21,true))continue;
+            for(int rise:new int[]{5,7}){
+                if(whiteNear(frame,x-5,y-rise)&&whiteNear(frame,x+5,y+rise)&&
+                        whiteNear(frame,x-5,y+rise)&&whiteNear(frame,x+5,y-rise))return new int[]{x,y};
+            }
+        }
+        return null;
+    }
     public static int[] findLimitedSale(PixelFrame frame) {
         if(frame.width!=720||frame.height!=1280)return null;
         for(int y=65;y<170;y++)for(int x=950;x<1150;x++){

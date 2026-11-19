@@ -183,6 +183,20 @@ function dailyCup.settle(label,readScreen)
       seen=true;advance(screen,"确定")
     elseif scene=="vehicleUnlock" and screen.unlockLater then
       tap(719-math.floor(screen.unlockLater.y),math.floor(screen.unlockLater.x));sleep(800)
+    elseif seen and scene=="unknown" and (screen.text or ''):find('里程碑',1,true) then
+      -- Club milestones interrupt settlement. Defer the claim to stay in the race flow.
+      for _,word in ipairs(screen.words or {}) do
+        local label=word.text:gsub('%s',''):gsub('領','领')
+        if label=='稍后领取' and word.x>=230 and word.x<=630 and word.y>=495 and word.y<=690 then
+          if not pressedFrame or not screen.frameId or screen.frameId-pressedFrame>=3000 then
+            tap(719-word.y,word.x)
+            print('俱乐部里程碑：已点击稍后领取')
+            pressedFrame=screen.frameId
+            sleep(800)
+          end
+          break
+        end
+      end
     elseif scene=="unknown" and screen.closeX then
       -- Optional promotions/season-pass dialogs after a race: close only the detected X.
       tap(719-math.floor(screen.closeX.y),math.floor(screen.closeX.x));sleep(800)

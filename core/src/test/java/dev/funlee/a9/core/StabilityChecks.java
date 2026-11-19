@@ -38,6 +38,20 @@ final class StabilityChecks {
             dialog[(1090+d)*720+719-(245-d+b)]=0xffffffff;
         }
         check(PopupCloseDetector.find(new PixelFrame(720,1280,dialog))==null&&PopupCloseDetector.findDialog(new PixelFrame(720,1280,dialog))!=null,"Error dialog close uses its own lower region, preserving promotion detector");
+        check(DailyEventUi.seasonPassUnlock("領取 級别U2现已解锁 购买賽季通行证")&&
+                !DailyEventUi.seasonPassUnlock("档案头像现已解锁 购买赛季通行证"),
+                "Season pass unlock requires the level and purchase labels");
+        int[] pass=new int[720*1280];Arrays.fill(pass,0xff102030);
+        for(int x=1090;x<1140;x++)for(int y=55;y<119;y++)pass[x*720+719-y]=0xffff005c;
+        check(PopupCloseDetector.findSeasonPassUnlock(new PixelFrame(720,1280,pass))==null,
+                "A pink region without a white X cannot dismiss the season pass popup");
+        for(int d=-12;d<=12;d++)for(int b=-1;b<=1;b++){
+            pass[(1115+d)*720+719-(87+d*4/3+b)]=0xffffffff;
+            pass[(1115+d)*720+719-(87-d*4/3+b)]=0xffffffff;
+        }
+        int[] passClose=PopupCloseDetector.findSeasonPassUnlock(new PixelFrame(720,1280,pass));
+        check(passClose!=null&&Math.abs(passClose[0]-1115)<=2&&Math.abs(passClose[1]-87)<=2,
+                "Wide season pass unlock uses the white X inside the pink close button");
         int[] pixels=new int[720*1280];Arrays.fill(pixels,0xff112030);
         for(int x=100;x<260;x++)for(int y=240;y<440;y++)pixels[x*720+719-y]=0xffffdd55;
         for(int x=400;x<560;x++)for(int y=240;y<440;y++)pixels[x*720+719-y]=0xffdd77ff;

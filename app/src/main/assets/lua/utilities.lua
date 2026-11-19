@@ -243,7 +243,18 @@ end
 function utils.specialMissionContinue(screen)
   if screen.scene~='missionRewards' then return end
   local stage=tonumber(run.data['特殊赛事阶段']) or 1
-  if not (screen.text or ''):gsub('%s',''):find('阶段'..stage,1,true) then return end
+  -- Keep OCR line boundaries: the next reward count can start with a digit.
+  local digits=(screen.stageLabel or ''):match('阶%s*段%s*(%d+)')
+  if not digits then
+    for _,word in ipairs(screen.words or {}) do
+      if word.x<=230 and word.y>=140 and word.y<=420 then
+        local badge=word.text:gsub('%s','')
+        digits=badge:match('^阶段(%d+)$') or badge:match('^1阶段(%d+)1$')
+        if digits then break end
+      end
+    end
+  end
+  if tonumber(digits)~=stage then return end
   return findUiWord(screen,{['继续']=true,['继绩']=true},900,1265,570,710)
 end
 function utils.continueSpecialMission(screen)
@@ -1928,18 +1939,46 @@ function utils.intoSpecial(screen)
   if cmpColorEx("580|161|FFFFFF-101010,607|160|FFFFFF-101010,610|1238|000000-101010,634|1229|190F0A-101010", 1) == 1 then
     return 1
   end
-  if run.data["称霸模式"] ~= "" then
-    toast("称霸模式，阶段:" .. spStage)
-    sleep(1000)
-    local temp = tonumber(run.data["称霸位置"]) or 1
-    spStage = spStage - 5 * temp
-    tap(460 - 110 * temp, 160)
-    sleep(1000)
-    for i = 1, 3 do
-      swipe(60, 350, 60, 1200, 100)
+  if run.data["称霸模式"] == "0" then
+    local chapter=tonumber(run.data["称霸位置"]) or 1
+    local function numberedWord(screen,label,number,minX,maxX)
+      for _,word in ipairs(screen.words or {}) do
+        local digits=word.text:gsub('%s',''):match(label..'(%d+)')
+        if tonumber(digits)==number and word.x>=minX and word.x<=maxX then return word end
+      end
+    end
+    local tab=numberedWord(_soloEventUi(),'章节',chapter,0,370)
+    if not tab then error('未找到称霸章节 '..chapter) end
+    tapUiWord(tab)
+    sleep(900)
+    for attempt=1,8 do
+      local screen=_soloEventUi()
+      if not numberedWord(screen,'章节',chapter,0,370) then error('已离开称霸章节选择页') end
+      local stage=numberedWord(screen,'阶段',spStage,300,1279)
+      if not stage then
+        -- On white badges OCR can append the right border as a digit 1.
+        -- Accept that reading only between independently recognized adjacent stages.
+        local badge=numberedWord(screen,'阶段',spStage*10+1,300,1279)
+        local before=numberedWord(screen,'阶段',spStage-1,300,1279)
+        local after=numberedWord(screen,'阶段',spStage+1,300,1279)
+        if badge and ((before and before.x<badge.x) or (after and after.x>badge.x)) then stage=badge end
+      end
+      if stage then
+        tapUiWord(stage)
+        sleep(1000)
+        for check=1,4 do
+          if utils.specialMissionContinue(_soloEventUi()) then
+            print('已确认称霸章节 '..chapter..'，阶段 '..spStage)
+            return 1
+          end
+          sleep(400)
+        end
+        error('无法进入称霸阶段 '..spStage..'，请检查解锁条件')
+      end
+      swipe(290,1050,290,550,450)
       sleep(500)
     end
-    utils.mySwipe(60, 600, 60, 250)
+    error('当前章节未找到阶段 '..spStage)
   else
     for i = 1, 7 do
       swipe(60, 250, 60, 1200, 100)

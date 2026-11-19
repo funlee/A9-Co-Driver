@@ -9,6 +9,12 @@ public final class DailyEventUi {
     public static boolean rewardExit(String text,int x,int y) {
         return !RaceRewards.exitLabel(text,x,y).isEmpty();
     }
+    public static boolean seasonPassUnlock(String text) {
+        String normalized=MapMatcher.normalize(text).replace('級','级').replace('別','别')
+                .replace('鎖','锁').replace('賽','赛').replace('購','购').replace('買','买')
+                .replace('證','证').replace('現','现');
+        return normalized.contains("级别")&&normalized.contains("现已解锁")&&normalized.contains("购买赛季通行证");
+    }
     public static String classify(String text) {
         String t=MapMatcher.normalize(text).replace('賽','赛').replace('兌','兑');
         if(VehicleUnlockGuard.prompt(text))return "vehicleUnlock";
@@ -51,8 +57,10 @@ public final class DailyEventUi {
         // Ranked cups can return to their ranking-reward tab instead of single-player rewards.
         if(t.contains("单人奖励")&&t.contains("排名奖励")&&t.contains("比赛")&&
                 (t.contains("顶尖排名")||t.contains("排行榜")||t.contains("最佳用时")))return "event";
+        if(t.contains("阶段")&&t.contains("继续")&&
+                (t.contains("俱乐部奖励")||t.contains("具乐部奖励"))&&
+                (t.contains("单人奖励")||t.contains("单人笑励")))return "missionRewards";
         if(t.contains("俱乐部奖励")&&t.contains("单人奖励")) {
-            if(t.contains("继续")&&t.contains("阶段"))return "missionRewards";
             if(t.contains("比赛")&&(t.contains("最佳用时")||t.contains("阶段")||t.contains("赛事")))return "event";
         }
         return "unknown";

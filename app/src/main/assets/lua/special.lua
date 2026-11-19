@@ -29,31 +29,40 @@ function spCup.atStartTutorial(screen)
   return cmpColorEx(config.startTutorial, 1) == 1
 end
 
+-- Confirm the loading title on two separate frames before using its route.
+function spCup.observeStart(stopAtTutorial)
+  local candidate,lastFrame,carSince,carFrame
+  local started=tickCount()
+  while tickCount()-started<90000 do
+    local auto=utils.taskRouteAuto()
+    local screen=_soloEventUi(auto and data['线路']=='')
+    local key=screen.specialRoute
+    if key and candidate==key and lastFrame~=screen.frameId then
+      utils.getMapName(key)
+      print('特赛地图连续确认：'..data['多人地图'])
+    end
+    candidate=key;lastFrame=screen.frameId
+    if screen.scene=='race' or (stopAtTutorial and spCup.atStartTutorial(screen)) then return end
+    if screen.scene=='noTicket' then return 'noTicket' end
+    if screen.scene=='car' and screen.fuel and screen.fuel>=0 then
+      if not carSince then carSince=tickCount();carFrame=screen.frameId end
+      if screen.frameId~=carFrame and tickCount()-carSince>=3000 then return end
+    else carSince=nil end
+    data['信息']='特赛开赛中，等待比赛画面'
+    sleep(350)
+  end
+  error('特殊赛事点击开始后未确认比赛画面，保留当前任务')
+end
+
 spCup.operation = {
   {
     config.startTutorial,
     function(button)
       data["信息"] = "开赛教学：点击开始"
       print("特殊赛事：已识别开赛教学，点击开始")
-      utils.prepareTaskRoute()
+      utils.prepareTaskRoute(true)
       if button then tap(719-button.y,button.x) else tap(73,1157) end
-      local started=tickCount()
-      local carSince=nil;local carFrame=nil;local carFrames=0
-      while tickCount()-started<90000 do
-        sleep(500)
-        local screen=_soloEventUi()
-        if screen.scene=='race' then return end
-        -- The car page can flash behind a closing tutorial immediately before loading.
-        -- Only a stable, readable car page may send control back to fuel selection.
-        if screen.scene=='car' and screen.fuel and screen.fuel>=0 then
-          if not carSince then carSince=tickCount() end
-          if screen.frameId and screen.frameId~=carFrame then carFrame=screen.frameId;carFrames=carFrames+1 end
-          if carFrames>=2 and tickCount()-carSince>=3000 then return end
-        else carSince=nil;carFrame=nil;carFrames=0 end
-        if screen.scene=='noTicket' then return 'noTicket' end
-        data['信息']='特赛开赛中，等待比赛画面'
-      end
-      error("特殊赛事点击开始后未确认比赛画面，保留当前任务")
+      return spCup.observeStart(false)
     end
   },
   {
@@ -94,7 +103,7 @@ spCup.operation = {
     config.carInfo,
     function()
       data["信息"] = "即将开始游戏"
-      utils.prepareTaskRoute()
+      utils.prepareTaskRoute(true)
       local sRet = utils.startConfiguredRace()
       if type(sRet)=="string" then return sRet end
       if sRet == 0 or sRet == -2 then
@@ -102,6 +111,7 @@ spCup.operation = {
       elseif sRet == -1 or sRet == 2 then
         return nil
       end
+      if utils.taskRouteAuto() then return spCup.observeStart(true) end
       sleep(3000)
     end
   },

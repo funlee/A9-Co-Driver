@@ -85,7 +85,7 @@ public final class LocalStore {
     public static boolean hasTaskRoute(String mode) {
         return "每日战利品".equals(mode)||"杯赛".equals(mode)||"特殊赛事".equals(mode);
     }
-    public static boolean supportsAutoRoute(String mode) {return "杯赛".equals(mode)||"每日战利品".equals(mode);}
+    public static boolean supportsAutoRoute(String mode) {return hasTaskRoute(mode);}
     private boolean migrateTaskRoute(String mode,JSONObject data)throws JSONException {
         if(data==null)return false;
         String prefix="特殊赛事".equals(mode)?mode:"杯赛";boolean changed=false;
@@ -95,13 +95,23 @@ public final class LocalStore {
                 if(routes.containsKey(raw))selected=raw;
                 else if(!raw.isEmpty()) {MapMatcher.Match match=matcher.match(raw);if(match.unique())selected=match.candidates.get(0).internal;}
             }
-            data.put("路线来源",supportsAutoRoute(mode)&&("4".equals(data.optString(prefix+"选路"))||raw.isEmpty())?"2":selected.isEmpty()&&!raw.isEmpty()?"1":"0");
+            String source="2";
+            if("特殊赛事".equals(mode)&&!selected.isEmpty())source="0";
+            else if(!raw.isEmpty()&&!"4".equals(data.optString(prefix+"选路")))source="1";
+            data.put("路线来源",source);
             data.put("已配置地图",selected).put("跑法代码",selected.isEmpty()?raw:"");changed=true;
         }
         for(String key:List.of("已配置地图","跑法代码"))if(!data.has(key)){data.put(key,"");changed=true;}
         if(data.optInt("路线配置版本",0)<1) {
             if(supportsAutoRoute(mode)&&"0".equals(data.optString("路线来源"))&&data.optString("已配置地图").isEmpty()&&data.optString("跑法代码").isEmpty())data.put("路线来源","2");
             data.put("路线配置版本",1);changed=true;
+        }
+        if("特殊赛事".equals(mode)) {
+            String source=data.optString("路线来源");
+            if(("1".equals(source)&&data.optString("跑法代码").trim().isEmpty())||
+                    ("0".equals(source)&&data.optString("已配置地图").isEmpty())) {
+                data.put("路线来源","2");changed=true;
+            }
         }
         changed|=data.remove(prefix+"选路")!=null;changed|=data.remove(prefix+"线路")!=null;
         return changed;

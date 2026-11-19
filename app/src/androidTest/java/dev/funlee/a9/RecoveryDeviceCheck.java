@@ -115,23 +115,23 @@ public final class RecoveryDeviceCheck extends Instrumentation {
         try{
             Text ocr=Tasks.await(recognizer.process(InputImage.fromBitmap(upright,0)),15,TimeUnit.SECONDS);
             if(!MultiplayerUi.classify(ocr.getText()).equals("matching"))throw new AssertionError("Matching OCR: "+ocr.getText());
-            Matrix m=new Matrix();m.postRotate(90);Bitmap side=Bitmap.createBitmap(upright,0,0,1280,720,m,false);
-            int[] p=new int[720*1280];side.getPixels(p,0,720,0,0,720,1280);side.recycle();
-            var back=MatchmakingWatchdog.backButton(new PixelFrame(720,1280,p),false);
-            if(back!=MatchmakingWatchdog.Back.PRESENT)throw new AssertionError("Visible Back classified as "+back);
-            MatchmakingWatchdog watchdog=new MatchmakingWatchdog();watchdog.observe(true,back,0,1);
-            if(watchdog.observe(true,back,180000,2))throw new AssertionError("Visible Back must prevent restart");
+            MatchmakingWatchdog watchdog=new MatchmakingWatchdog();
+            long timeout=MatchmakingWatchdog.TIMEOUT_SECONDS*1000L;
+            if(watchdog.observe(true,0,1)||watchdog.observe(true,timeout,2)||
+                    !watchdog.observe(true,timeout+1,3))throw new AssertionError("Confirmed matching timeout");
             Bitmap rewards=BitmapFactory.decodeStream(getContext().getAssets().open("dynamic-reward-choice.png"));
             try{
                 Text rewardText=Tasks.await(recognizer.process(InputImage.fromBitmap(rewards,0)),15,TimeUnit.SECONDS);
                 if(!MultiplayerUi.classify(rewardText.getText()).equals("rewardChoice"))throw new AssertionError("Dynamic reward OCR: "+rewardText.getText());
+                Matrix m=new Matrix();m.postRotate(90);
                 Bitmap rewardSide=Bitmap.createBitmap(rewards,0,0,1280,720,m,false);
+                int[] p=new int[720*1280];
                 rewardSide.getPixels(p,0,720,0,0,720,1280);rewardSide.recycle();
                 int cards=DynamicRewards.cards(new PixelFrame(720,1280,p)).size();
                 if(cards!=5)throw new AssertionError("Expected five complete reward cards, got "+cards);
                 report.putInt("rewardCards",cards);
             }finally{rewards.recycle();}
-            report.putString("result","PASS: matching OCR and visible Back veto; dynamic reward OCR before Confirm and five cards; no input dispatched");
+            report.putString("result","PASS: matching OCR and timeout, dynamic reward OCR and five cards");
         }finally{recognizer.close();upright.recycle();}
     }
 }

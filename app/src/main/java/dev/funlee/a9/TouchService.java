@@ -1,6 +1,7 @@
 package dev.funlee.a9;
 
 import android.accessibilityservice.*;
+import android.app.AlertDialog;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -43,6 +44,8 @@ public final class TouchService extends AccessibilityService implements RouteEng
     public final dev.funlee.a9.core.VehicleUnlockGuard unlockGuard=new dev.funlee.a9.core.VehicleUnlockGuard();
     private long gestureGeneration;
     private TaskControlMenu controlMenu;
+    private AlertDialog taskFailureDialog;
+    private String failureGamePackage="";
     private ImageButton controlButton;
     private volatile GameActivityHint activityHint;
     private final Runnable refreshControlButton=this::updateControlButton;
@@ -68,6 +71,16 @@ public final class TouchService extends AccessibilityService implements RouteEng
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
         if(event.getEventType()==AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED&&event.getPackageName()!=null){
             foregroundWindowId=event.getWindowId();foreground=event.getPackageName().toString();
+            if(taskFailureDialog!=null&&!failureGamePackage.equals(foreground)){
+                for(AccessibilityWindowInfo window:getWindows()){
+                    try{
+                        if(window.getId()==foregroundWindowId&&window.isFocused()
+                                &&window.getType()==AccessibilityWindowInfo.TYPE_APPLICATION){
+                            dismissTaskFailure();
+                        }
+                    }finally{window.recycle();}
+                }
+            }
             if(armed)scheduleControlButton();
         }
     }
@@ -149,6 +162,36 @@ public final class TouchService extends AccessibilityService implements RouteEng
         if(controlMenu!=null){controlMenu.hide();controlMenu=null;}
         SessionState.controlsOpen=false;
     }
+    void showTaskFailure(String gamePackage,String detail){
+        if(gamePackage.isEmpty()||!gamePackage.equals(foregroundPackage()))return;
+        dismissTaskFailure();
+        // Keep the failure message while omitting the Lua and Java wrappers from the dialog.
+        String reason=detail.split("\n",2)[0].trim()
+                .replaceFirst("^(?:\\[string [^\\]]+\\]:\\d+:\\s*)+", "")
+                .replaceFirst("^(?:[\\w.$]+\\.)?[\\w$]*(?:Exception|Error):\\s*", "")
+                .replaceFirst("^_\\w+[：:]\\s*", "");
+        AlertDialog dialog=new AlertDialog.Builder(this)
+                .setTitle("任务已停止")
+                .setMessage(reason.isEmpty()?"暂时无法确定原因，请回到助手查看任务状态。":reason)
+                .setPositiveButton("确定",(ignored,which)->dismissTaskFailure())
+                .setCancelable(false)
+                .create();
+        dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY);
+        dialog.getWindow().addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
+        try{
+            dialog.show();
+            taskFailureDialog=dialog;
+            failureGamePackage=gamePackage;
+        }catch(WindowManager.BadTokenException|SecurityException e){
+            SessionState.log("无法显示任务停止提示："+e.getMessage());
+        }
+    }
+    void dismissTaskFailure(){
+        if(taskFailureDialog==null)return;
+        taskFailureDialog.dismiss();
+        taskFailureDialog=null;
+        failureGamePackage="";
+    }
     @Override public void onConfigurationChanged(Configuration configuration){
         super.onConfigurationChanged(configuration);
         closeTaskControls();
@@ -158,6 +201,7 @@ public final class TouchService extends AccessibilityService implements RouteEng
     }
     @Override public void onInterrupt() { closeTaskControls();disarm(); }
     @Override public void onDestroy() {
+        dismissTaskFailure();
         closeTaskControls();
         disarm();
         getAccessibilityButtonController().unregisterAccessibilityButtonCallback(shortcutCallback);

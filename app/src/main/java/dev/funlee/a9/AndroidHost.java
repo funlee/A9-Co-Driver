@@ -311,7 +311,8 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         if(score>=0)out.put("seriesScore",score);
     }
     private Map<String,Object> dailyEventUi()throws Exception { return dailyEventUi(false); }
-    private Map<String,Object> dailyEventUi(boolean solo)throws Exception {
+    private Map<String,Object> dailyEventUi(boolean solo)throws Exception { return dailyEventUi(solo,false); }
+    private Map<String,Object> dailyEventUi(boolean solo,boolean specialLoading)throws Exception {
         capture();
         if(RaceHud.visible(frame,wideViewport()))return Map.of("scene","race","words",List.of());
         Bitmap side=Bitmap.createBitmap(frame.copyPixels(),720,1280,Bitmap.Config.ARGB_8888);Matrix m=new Matrix();m.postRotate(270);
@@ -327,6 +328,11 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 words.add(Map.of("text",line.getText(),"x",b.centerX(),"y",b.centerY()));
                 if(VehicleUnlockGuard.laterLabel(line.getText(),b.left,b.top,b.right,b.bottom))later=new int[]{b.left,b.top,b.right,b.bottom};
             }
+            if(DailyEventUi.seasonPassUnlock(full.getText())){
+                int[] close=PopupCloseDetector.findSeasonPassUnlock(frame);
+                if(close!=null)return Map.of("scene","unknown","words",words,"text",full.getText(),
+                        "closeX",Map.of("x",close[0],"y",close[1]));
+            }
             String menu=MainMenuUi.classify(full.getText(),words);
             if(solo&&(menu.equals("exitGame")||scene.equals("unknown")&&!menu.isEmpty()))scene=menu;
             if(solo&&MultiplayerUi.limitedSalePromo(full.getText()))scene="limitedSalePromo";
@@ -336,7 +342,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             boolean settlement=scene.equals("missionRewards")||scene.equals("results")||scene.equals("rewards")||scene.equals("cards")||scene.equals("conversion")||ResultRank.personalReward(full.getText())||(scene.equals("unknown")&&SessionState.resultOverlay);
             if(settlement!=SessionState.resultOverlay){
                 prepareOverlay(settlement,false);
-                return dailyEventUi(solo);
+                return dailyEventUi(solo,specialLoading);
             }
             if(scene.equals("unknown"))android.util.Log.d("A9DailyOcr",full.getText());
             out.put("scene",scene);
@@ -356,6 +362,18 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 if(touch.unlockGuard.active()){
                     out.put("scene","vehicleUnlock");int[] center=touch.unlockGuard.laterCenter();
                     if(center!=null)out.put("unlockLater",Map.of("x",center[0],"y",center[1]));return out;
+                }
+            }
+            if(solo&&scene.equals("missionRewards"))out.put("stageLabel",specialStageLabel());
+            if(specialLoading&&(scene.equals("unknown")||scene.equals("loading"))){
+                String header=text(445,0,675,430,3);
+                if(header.replaceAll("\\s","").matches("(?s).*阶段[0-9]+.*")){
+                    MapMatcher.Match match=store.matcher.matchLoadingTitle(header,header);
+                    if(match.unique()){
+                        String key=match.candidates.get(0).internal;
+                        Route route=store.routes.get(key);
+                        if(route!=null&&route.valid())out.put("specialRoute",key);
+                    }
                 }
             }
             if(scene.equals("loading")){
@@ -383,6 +401,26 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             }
             return out;
         }finally{if(task!=null&&!task.isComplete())task.addOnCompleteListener(Runnable::run,done->cleanup.run());else cleanup.run();}
+    }
+    private String specialStageLabel()throws Exception {
+        // This badge is vertical in landscape. The rotated capture already has its text upright.
+        int left=335,top=25,width=160,height=230;
+        int[] pixels=new int[width*height];
+        for(int y=0;y<height;y++)for(int x=0;x<width;x++){
+            int color=frame.pixel(left+x,top+y);
+            int red=(color>>16)&255,green=(color>>8)&255,blue=color&255;
+            pixels[y*width+x]=red>145&&red>green*1.35&&red>blue*1.1?0xff000000:0xffffffff;
+        }
+        Bitmap badge=Bitmap.createBitmap(pixels,width,height,Bitmap.Config.ARGB_8888);
+        Bitmap zoom=Bitmap.createScaledBitmap(badge,width*3,height*3,true);
+        badge.recycle();
+        try{
+            Task<Text> read=recognizer.process(InputImage.fromBitmap(zoom,0));
+            read.addOnCompleteListener(Runnable::run,done->zoom.recycle());
+            String label=Tasks.await(read,12,TimeUnit.SECONDS).getText();
+            android.util.Log.d("A9SpecialStage",label);
+            return label;
+        }catch(RuntimeException e){if(!zoom.isRecycled())zoom.recycle();throw e;}
     }
     private Map<String,Object> rewardRead(Bitmap upright,Text full)throws Exception{
         return rewardRead(upright,full,false);
@@ -434,7 +472,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             switch(name) {
                 case "_cupCards":return result(l,CupCarousel.cards(frame(),wideViewport()));
                 case "_dailyEventUi":return result(l,dailyEventUi());
-                case "_soloEventUi":return result(l,dailyEventUi(true));
+                case "_soloEventUi":return result(l,dailyEventUi(true,l.toBoolean(1)));
                 case "_garageFilterPrepare":
                     prepareOverlay(false,true);return 0;
                 case "_garageFilterState":return result(l,GarageFilter.read(frame(),viewportAspect()));

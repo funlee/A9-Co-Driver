@@ -258,7 +258,25 @@ public final class MainActivity extends Activity {
         if(mode.equals("每日战利品"))fields.addView(label("每天 00:00–00:30 自动跳过（设备本地时间，00:30 恢复）。其余时间按配置次数参与每轮任务循环。",DETAIL));
         for(int i=0;i<spec.length();i++){
             JSONObject f=spec.getJSONObject(i);String key=f.getString("key"),type=f.getString("type");JSONArray options=f.getJSONArray("options");
+            if(key.equals("称霸位置"))continue; // Rendered alongside the 称霸模式 checkbox.
             if(type.equals("TaskRoute")){taskRouteFields(fields,views,data,mode);}
+            else if(key.equals("称霸模式")){
+                CheckBox enabled=checkBox("称霸模式");
+                enabled.setChecked("0".equals(data.optString(key)));
+                fields.addView(enabled);
+                views.put(key,enabled);
+
+                LinearLayout chapterFields=column();
+                String title="称霸模式章节";
+                chapterFields.addView(heading(title,BODY));
+                EditText chapter=edit(data.optString("称霸位置","1"));
+                chapter.setContentDescription(title);
+                chapterFields.addView(chapter);
+                fields.addView(chapterFields);
+                views.put("称霸位置",chapter);
+                chapterFields.setVisibility(enabled.isChecked()?View.VISIBLE:View.GONE);
+                enabled.setOnCheckedChangeListener((view,checked)->chapterFields.setVisibility(checked?View.VISIBLE:View.GONE));
+            }
             else if(type.equals("EditText")){
                 boolean eventPosition=key.equals("杯赛位置");String title=eventPosition?"赛事位置":key;
                 fields.addView(heading(title,BODY));
@@ -301,6 +319,16 @@ public final class MainActivity extends Activity {
                 }
                 int times=Integer.parseInt(data.optString("次数","1"));if(times<1||times>10000)throw new IllegalArgumentException("执行次数需为 1–10000");
                 if(data.has("杯赛位置")){try{if(Integer.parseInt(data.getString("杯赛位置"))==0)throw new NumberFormatException();}catch(NumberFormatException e){throw new IllegalArgumentException("赛事位置必须为非零整数");}}
+                if(mode.equals("特殊赛事")){
+                    if(!data.optString("称霸模式").isEmpty()&&!data.optString("称霸位置").matches("[1-9][0-9]*"))
+                        throw new IllegalArgumentException("称霸模式章节请填写游戏显示的正整数");
+                    if(!data.optString("特殊赛事阶段").matches("[1-9][0-9]*"))
+                        throw new IllegalArgumentException("特殊赛事阶段请填写游戏显示的正整数");
+                    if("1".equals(data.optString("路线来源"))&&data.optString("跑法代码").isEmpty())
+                        throw new IllegalArgumentException("请填写跑法代码，或选择自动识别地图");
+                    if("0".equals(data.optString("路线来源"))&&data.optString("已配置地图").isEmpty())
+                        throw new IllegalArgumentException("请选择已配置地图，或选择自动识别地图");
+                }
                 if(LocalStore.hasTaskRoute(mode))store.validateTaskRoute(data);
                 if(mode.equals("多人上")&&"0".equals(data.optString("自选奖励")))DynamicRewards.rules(data.optString("自选奖励规则"));
                 if(index<0)store.addProject(mode,data);

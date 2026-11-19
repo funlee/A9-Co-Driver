@@ -172,8 +172,8 @@ final class TaskEditingDeviceCheck {
         JSONObject original=new JSONObject(store.config.toString());
         for(int index:new int[]{0,2,1}) {
             String mode=tasks().getJSONObject(index).getString("项目"),prefix=index==1?"特殊赛事":"杯赛";
-            check(store.defaults(mode).getString("路线来源").equals(index==1?"0":"2"),"Incorrect default route source");
-            if(index!=1) {
+            check(store.defaults(mode).getString("路线来源").equals("2"),"Incorrect default route source");
+            {
                 JSONObject data=tasks().getJSONObject(index).getJSONObject("data");
                 data.put("路线来源","0").put("已配置地图","").put("跑法代码","");data.remove("路线配置版本");store.save();reload();
                 check(tasks().getJSONObject(index).getJSONObject("data").getString("路线来源").equals("2"),"Unconfigured older task did not adopt auto detection");
@@ -187,7 +187,7 @@ final class TaskEditingDeviceCheck {
                 JSONObject snapshot=new JSONObject(store.config.toString());store.save();reload();
                 data=tasks().getJSONObject(index).getJSONObject("data");
                 check(!data.has(prefix+"选路")&&!data.has(prefix+"线路"),"Old route fields survived: "+mode);
-                check(data.getString("路线来源").equals(legacy.equals("3")?"1":index==1?"0":"2"),"Wrong migrated route source: "+mode);
+                check(data.getString("路线来源").equals(legacy.equals("3")?"1":index==1&&legacy.equals("4")?"0":"2"),"Wrong migrated route source: "+mode);
                 check(data.getString("已配置地图").equals(legacy.equals("4")?map:"")&&data.getString("跑法代码").equals(legacy.equals("3")?"10,22":""),"Lost old route data: "+mode);
                 Object expected=LocalStore.javaValue(store.config);store.config=snapshot;
                 check(store.migrateConfig()&&expected.equals(LocalStore.javaValue(store.config)),"Resume migration differs: "+mode);
@@ -196,21 +196,22 @@ final class TaskEditingDeviceCheck {
         store.config=new JSONObject(original.toString());store.save();bind();
         for(int index:new int[]{0,2,1}) {
             openTaskForm(index);
-            if(index!=1){scrollToControl("路线来源");check(node("自动识别地图")!=null,"Cup/daily default must be automatic");click("路线来源");click("选择已配置地图");}
+            scrollToControl("路线来源");check(node("自动识别地图")!=null,"Solo event default must be automatic");click("路线来源");click("选择已配置地图");
             scrollToControl("已配置地图");click("已配置地图");
             input("搜索地图","任务测试地图");click(store.matcher.displayName(map));click("保存");reload();bind();
             JSONObject data=tasks().getJSONObject(index).getJSONObject("data");
             check(data.getString("路线来源").equals("0")&&data.getString("已配置地图").equals(map),"Map selection did not persist");
             openTaskForm(index);scrollToControl("路线来源");click("路线来源");click("自定义跑法代码");scrollToInput("跑法代码");
+            if(index==1){
+                input("跑法代码","");click("保存");check(node("确定")!=null,"Empty special event route was accepted");click("确定");
+            }
             input("跑法代码","bad");click("保存");check(node("确定")!=null,"Invalid route code was accepted");click("确定");
             input("跑法代码","0,21,20,D:100");screenshot("task-route-"+index+".png");click("保存");reload();bind();
             data=tasks().getJSONObject(index).getJSONObject("data");
             check(data.getString("路线来源").equals("1")&&data.getString("跑法代码").equals("0,21,20,D:100")&&data.getString("已配置地图").equals(map),"Custom code or inactive map choice lost");
             String before=tasks().toString();openTaskForm(index);scrollToInput("跑法代码");input("跑法代码","1,22");click("取消");check(tasks().toString().equals(before),"Cancelling route edit changed configuration");
-            if(index!=1) {
-                openTaskForm(index);scrollToControl("路线来源");click("路线来源");click("自动识别地图");screenshot("auto-route-"+index+".png");click("保存");reload();bind();
-                data=tasks().getJSONObject(index).getJSONObject("data");check(data.getString("路线来源").equals("2")&&data.getString("跑法代码").equals("0,21,20,D:100"),"Auto selection did not persist or lost custom draft");
-            }
+            openTaskForm(index);scrollToControl("路线来源");click("路线来源");click("自动识别地图");screenshot("auto-route-"+index+".png");click("保存");reload();bind();
+            data=tasks().getJSONObject(index).getJSONObject("data");check(data.getString("路线来源").equals("2")&&data.getString("跑法代码").equals("0,21,20,D:100"),"Auto selection did not persist or lost custom draft");
         }
         store.saveRoute(map,"30,31");check(store.routes.get(map).raw.equals("30,31"),"Map route update failed");
         store.config=original;store.save();bind();

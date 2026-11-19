@@ -48,7 +48,7 @@ function localInit()
     _validateRoute(key,ROUTES[key]);data['多人地图']=label;data['线路']=ROUTES[key];return 1
   end
   utils.taskRouteAuto=function()
-    return (data['项目']=='杯赛' or data['项目']=='每日战利品') and tostring(run.data['路线来源'] or '2')=='2'
+    return (data['项目']=='杯赛' or data['项目']=='每日战利品' or data['项目']=='特殊赛事') and tostring(run.data['路线来源'] or '2')=='2'
   end
   utils.prepareTaskRoute=function(reset)
     if utils.taskRouteAuto() then

@@ -20,6 +20,7 @@ public final class AutomationService extends Service {
     private CaptureSession capture;
     private Intent captureConsent;
     private int captureResult;
+    private volatile String gamePackage="";
     private org.json.JSONObject resumeState;
     private volatile LuaRuntime runtime;
     private volatile boolean stopping,paused;
@@ -51,6 +52,8 @@ public final class AutomationService extends Service {
         try {
             inspecting=intent.getBooleanExtra("inspect",false);sampleRequested=false;
             SessionState.inspecting=inspecting;SessionState.clearIssue();
+            TouchService touch=TouchService.instance;
+            if(touch!=null)touch.dismissTaskFailure();
             NotificationManager notifications=getSystemService(NotificationManager.class);
             notifications.createNotificationChannel(new NotificationChannel(CHANNEL,"本地自动化",NotificationManager.IMPORTANCE_LOW));
             Notification notification=notification();
@@ -85,6 +88,7 @@ public final class AutomationService extends Service {
                 store.config=new org.json.JSONObject(resumeState.getJSONObject("config").toString());
                 store.migrateConfig();
             }
+            gamePackage=store.config.getString("gamePkg");
             // Old saved sessions may still carry a total-race target. Queue execution is unbounded.
             SessionState.stats.target(0);
             if(touch==null&&!inspect)throw new IllegalStateException(TouchService.unavailableReason(this));
@@ -109,10 +113,10 @@ public final class AutomationService extends Service {
                 }
                 synchronized(this){
                     if(stopping)return;
-                    touch.arm(store.config.getString("gamePkg"));
+                    touch.arm(gamePackage);
                 }
                 if(resumeState!=null)host.restoreQueue(resumeState);
-                GameRecovery recovery=new GameRecovery(this,touch,store.config.getString("gamePkg"),()->stopping,SessionState::inputPaused,host::recoveryReady);
+                GameRecovery recovery=new GameRecovery(this,touch,gamePackage,()->stopping,SessionState::inputPaused,host::recoveryReady);
                 if(!touch.gameInForeground()){
                     SessionState.status("等待游戏前台窗口就绪");
                     long deadline=SystemClock.elapsedRealtime()+15000;
@@ -181,6 +185,8 @@ public final class AutomationService extends Service {
         FailureScreenshot.save(getApplicationContext(), frame);
         SessionState.failure(detail);
         stopRun();
+        TouchService touch=TouchService.instance;
+        if(!inspecting&&touch!=null)touch.showTaskFailure(gamePackage,detail);
     }
     private synchronized void stopRun() {
         if(stopping)return;stopping=true;
