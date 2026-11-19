@@ -33,6 +33,20 @@ local function worldRewardPosition(rules,before,after)
     end
   end
 end
+local leagues={'青铜','白银','黄金','白金','翡翠','钻石','精英','宗师','传奇'}
+local function blankCarList(list)
+  return not list or #list==0 or (#list==1 and tonumber(list[1])==0)
+end
+local function lowerConfiguredLeague(current)
+  for i,league in ipairs(leagues) do
+    if league==current then
+      for j=i-1,1,-1 do
+        if not blankCarList(run.data[leagues[j]..'用车']) then return leagues[j] end
+      end
+      break
+    end
+  end
+end
 function currentMultiplayer.run()
   local count=tonumber(run.data['次数']) or 1
   local completed=_sessionProject(data['项目'],count) or 0
@@ -60,6 +74,7 @@ function currentMultiplayer.run()
     local eventPressedAt=nil;local carPressedAt=nil;local selectedCar=nil;local detailFrames=0;local detailFrame=nil
     local returnHomeAt=nil;local emptyCars={};local emptyDetailFrames=0;local emptyDetailFrame=nil
     local originRetries=0;local alignAttempts=0;local alignKey=nil;local alignFrames=0;local alignFrame=nil;local alignSwipeFrame=nil;local verifiedKey=nil
+    local targetLeague=nil
     local rewardChoice=nil;local rewardAt=0;local rewardTries=0;local dialogMisses=0
     local scoreBefore,scoreAfter,scoreSample,scoreFrame,scoreSince
     local rewardSeenAt,rewardConfirmedAt,rewardObservedCard,rewardObservedAt
@@ -356,6 +371,10 @@ function currentMultiplayer.run()
         end
       elseif scene=='cars' then
         local garage=screen.garage or {}
+        local tabs=screen.leagueTabs or {}
+        if world and not targetLeague and tabs.selected then targetLeague=tabs.selected end
+        local correctLeague=not targetLeague or (garage.rank==targetLeague and
+          (not tabs.selected or tabs.selected==targetLeague))
         if carPressedAt then
           if tickCount()-carPressedAt>30000 then error('选车后未能确认车辆详情，已停止避免重复点击') end
           data['信息']='等待所选车辆详情';sleep(500)
@@ -365,11 +384,20 @@ function currentMultiplayer.run()
             alignFrame=screen.frameId
             -- Use capture time, not the Lua scheduler clock: OCR/gesture work can consume a sleep.
             -- Never start another swipe while the previous gesture's bounce animation is settling.
-            if not alignSwipeFrame or (not garage.start and screen.frameId-alignSwipeFrame>=6000) then
+            if targetLeague and (not correctLeague or not garage.start) then
+              alignFrames=0;alignKey=nil
+              if not alignSwipeFrame or screen.frameId-alignSwipeFrame>=6000 then
+                alignAttempts=alignAttempts+1;alignSwipeFrame=screen.frameId
+                local tab=tabs[targetLeague]
+                if tab then
+                  status('切换并核验'..targetLeague..'车库');click(tab.x,tab.y);sleep(1200)
+                else status('等待识别'..targetLeague..'段位标签');sleep(500) end
+              else sleep(500) end
+            elseif not targetLeague and (not alignSwipeFrame or (not garage.start and screen.frameId-alignSwipeFrame>=6000)) then
               alignAttempts=alignAttempts+1;alignSwipeFrame=screen.frameId;alignFrames=0;alignKey=nil
               status('校验选车列表起点 '..alignAttempts..'/12 · '..(garage.key or '未确认'))
               swipe(419,300,419,1100,600);sleep(1800)
-            elseif screen.frameId-alignSwipeFrame>=3000 then
+            elseif not alignSwipeFrame or screen.frameId-alignSwipeFrame>=3000 then
               if garage.start and garage.key~='' then
                 if garage.key==alignKey then alignFrames=alignFrames+1 else alignFrames=1 end
                 alignKey=garage.key
@@ -380,7 +408,7 @@ function currentMultiplayer.run()
               sleep(500)
             else sleep(500) end
           else sleep(500) end
-        elseif not garage.start or garage.key~=verifiedKey then
+        elseif not correctLeague or not garage.start or garage.key~=verifiedKey then
           originRetries=originRetries+1
           if originRetries>3 then error('选车列表起点反复无法确认，已停止，未选择车辆') end
           -- A missing league OCR result is not proof of movement. Discard authorization,
@@ -389,7 +417,12 @@ function currentMultiplayer.run()
           alignFrame=screen.frameId;alignSwipeFrame=screen.frameId
           status('选车起点暂未确认，重新核验 '..originRetries..'/3');sleep(500)
         else
-          local list=data['项目']=='多人下' and (run.data['多人下用车'] or {'1'}) or run.data[(garage.rank or '')..'用车'] or {'1'}
+          local list=run.data['多人下用车'] or {'1'}
+          if world then
+            list=run.data[garage.rank..'用车']
+            if not list and garage.rank=='青铜' then list={'1'} end
+            if blankCarList(list) then list={} end
+          end
           local configured=0;local exhausted=0;local chosen=false
           local rankKey=garage.rank or series
           usedCars[rankKey]=usedCars[rankKey] or {}
@@ -416,8 +449,16 @@ function currentMultiplayer.run()
           end
           if not chosen then
             carRetries=carRetries+1
-            if configured>0 and configured==exhausted then
-              status('已配置车辆全部无油，跳过本轮'..series..'；保留已完成局数');return 'fuelEmpty'
+            if configured==exhausted and (world or configured>0) then
+              local lower=world and lowerConfiguredLeague(rankKey)
+              if not lower then
+                local reason=world and '当前及更低段位均无配置车可出赛' or '已配置车辆全部无油'
+                status(reason..'，跳过本轮'..series..'；保留已完成局数');return 'fuelEmpty'
+              end
+              status(rankKey..(configured==0 and '未配置车辆' or '配置车辆全部无油')..'，改用'..lower..'配置')
+              targetLeague=lower;emptyCars={};carRetries=0;originRetries=0
+              carListAligned=false;verifiedKey=nil;alignKey=nil;alignFrames=0;alignAttempts=0
+              alignFrame=screen.frameId;alignSwipeFrame=nil
             elseif carRetries>=6 then error('当前可见车辆中没有已配置且有燃油的车辆；请核对车辆序号') end
             sleep(500)
           end

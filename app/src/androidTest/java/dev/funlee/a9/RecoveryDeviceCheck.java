@@ -32,6 +32,7 @@ public final class RecoveryDeviceCheck extends Instrumentation {
             else if(mode.equals("route-reset"))RouteResetDeviceCheck.run(this,report);
             else if(mode.equals("task-queue"))TaskQueueDeviceCheck.run(this,report);
             else if(mode.equals("task-editing"))TaskEditingDeviceCheck.run(this,report);
+            else if(mode.equals("account-login"))accountLogin(report);
             else if(mode.equals("screenshots"))screenshots(report);
             else if(mode.equals("daily-schedule"))DailyScheduleDeviceCheck.run(this,report);
             else if(mode.equals("daily-screenshots"))DailyScreenshotCheck.run(this,report);
@@ -107,6 +108,22 @@ public final class RecoveryDeviceCheck extends Instrumentation {
             if(upright!=null)upright.recycle();
             if(frame!=null)frame.recycle();
             raw.recycle();
+        }
+    }
+    private void accountLogin(Bundle report)throws Exception{
+        try(java.io.InputStream image=getContext().getAssets().open("account-login.png");
+                TextRecognizer recognizer=TextRecognition.getClient(new ChineseTextRecognizerOptions.Builder().build())){
+            Bitmap screenshot=BitmapFactory.decodeStream(image);
+            try{
+                if(!CaptureSession.hasDialogHeader(screenshot))throw new AssertionError("Missed concurrent login dialog");
+                Bitmap scaled=Bitmap.createScaledBitmap(screenshot,1280,
+                        Math.round(1280f*screenshot.getHeight()/screenshot.getWidth()),true);
+                try{
+                    String text=Tasks.await(recognizer.process(InputImage.fromBitmap(scaled,0)),12,TimeUnit.SECONDS).getText();
+                    if(!AccountLoginDialog.matches(text))throw new AssertionError("Unexpected account dialog OCR: "+text);
+                    report.putString("result","PASS: "+text);
+                }finally{if(scaled!=screenshot)scaled.recycle();}
+            }finally{screenshot.recycle();}
         }
     }
     private void screenshots(Bundle report)throws Exception{

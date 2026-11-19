@@ -37,6 +37,20 @@ final class MultiplayerGarageChecks {
         }
         require(MultiplayerGarage.read(new PixelFrame(720,1280,pixels),words,"铂金").get("rank").equals("白金"),"Legacy platinum OCR uses the current white-gold config key");checks++;
         checks+=leagueSelection(assets);
+        String fallbackCases;
+        try(var input=MultiplayerGarageChecks.class.getResourceAsStream("/world-league-fallback.lua")){
+            fallbackCases=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
+        }
+        for(String scenario:List.of("silverEmpty","silverFueled","skipBlank","cascade","detailEmpty","unknown","allEmpty","stuckTab","missingTab")){
+            try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
+                lua.set("scenario",scenario);
+                lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));
+                lua.load("fallback-"+scenario,fallbackCases);lua.start("test");
+                for(int i=0;i<180;i++)if(!lua.step(i*1000L))break;
+                lua.load("verify","assert(done,scenario)");
+            }
+            checks++;
+        }
         require(good.get("start").equals(true),"visible rank rail, paired borders and identified first card establish origin");checks++;
         require(MultiplayerGarage.read(new PixelFrame(720,1280,pixels),words,"").get("start").equals(false),"no league origin => no origin");checks++;
         require(MultiplayerGarage.read(new PixelFrame(720,1280,new int[720*1280]),words,"青铜").get("start").equals(false),"OCR alone cannot authorize selection");checks++;

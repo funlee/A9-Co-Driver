@@ -135,6 +135,7 @@ public final class AutomationService extends Service {
                         SessionState.status(SessionState.stats.restartCount()>0?"已恢复，继续剩余任务":"任务已启动");
                         while(!stopping&&!host.finished) {
                             long now=SystemClock.elapsedRealtime();
+                            host.checkAccountLogin();
                             if(SessionState.inputPaused()){if(pauseAt==0){pauseAt=now;host.pause();}Thread.sleep(50);continue;}
                             if(pauseAt>0){pausedTotal+=now-pauseAt;pauseAt=0;lua.load("resume","data['心跳时间']=os.time()");}
                             if(!touch.gameInForeground()){
@@ -151,7 +152,9 @@ public final class AutomationService extends Service {
                             Thread.sleep(10);
                         }
                     }catch(RuntimeException e){
-                        if(stopping||host.recoveryReason==null)throw e;
+                        if(stopping)throw e;
+                        host.checkAccountLogin();
+                        if(host.recoveryReason==null)throw e;
                         long recoveryAt=SystemClock.elapsedRealtime();
                         restarted=recovery.recover(host.recoveryReason);
                         pausedTotal+=SystemClock.elapsedRealtime()-recoveryAt;

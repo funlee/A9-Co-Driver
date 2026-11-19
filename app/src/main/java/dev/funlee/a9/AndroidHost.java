@@ -44,6 +44,35 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     private boolean restoredQueue;
     private final MatchmakingWatchdog matching=new MatchmakingWatchdog();
     private long lastSavedClock;
+    private long nextAccountCheck;
+    private boolean accountDisplaced;
+
+    private void checkAccountText(String text){
+        if(AccountLoginDialog.matches(text)){
+            accountDisplaced=true;
+            throw new IllegalStateException(AccountLoginDialog.STOP_REASON);
+        }
+    }
+
+    void checkAccountLogin() throws Exception {
+        if(accountDisplaced)throw new IllegalStateException(AccountLoginDialog.STOP_REASON);
+        long now=SystemClock.elapsedRealtime();
+        if(now<nextAccountCheck)return;
+        nextAccountCheck=now+200;
+        Bitmap candidate=capture.possibleAccountDialog();
+        if(candidate==null)return;
+        Task<Text> read=null;
+        try{
+            if(touch==null||!touch.gameInForeground())return;
+            read=recognizer.process(InputImage.fromBitmap(candidate,0));
+            checkAccountText(Tasks.await(read,12,TimeUnit.SECONDS).getText());
+            nextAccountCheck=SystemClock.elapsedRealtime()+750;
+        }finally{
+            if(read!=null&&!read.isComplete())read.addOnCompleteListener(Runnable::run,done->candidate.recycle());
+            else candidate.recycle();
+        }
+    }
+
     private final RaceRewards.Stable rewardStable=new RaceRewards.Stable();
     private boolean legacyPrepared,legacyRaceSeen,legacyRewardDone,legacyInvalid;
     private String legacyMap="";
@@ -139,6 +168,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         try {
             task=recognizer.process(InputImage.fromBitmap(upright,0));
             Text read=Tasks.await(task,12,TimeUnit.SECONDS);
+            checkAccountText(read.getText());
             List<Object> words=new ArrayList<>();StringBuilder text=new StringBuilder();
             Rect excluded=excludedOverlay();
             for(Text.TextBlock block:read.getTextBlocks())for(Text.Line line:block.getLines()){
@@ -178,6 +208,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         catch(Exception e){upright.recycle();sideways.recycle();throw e;}
         task.addOnCompleteListener(Runnable::run,done->{upright.recycle();sideways.recycle();});
         Text result=Tasks.await(task,12,TimeUnit.SECONDS);
+        checkAccountText(result.getText());
         List<Object> words=new ArrayList<>();StringBuilder visible=new StringBuilder(),mapTitle=new StringBuilder();
         int[] laterBounds=null;
         Rect excluded=excludedOverlay();
@@ -279,6 +310,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             String rank=wide?text(262,126,305,185,4):text(250,90,335,200,3);out.put("rankText",rank);
             out.put("emptyFuelSlots",wideViewport()?List.of():FuelAvailability.emptySlots(frame));
             Map<String,Object> garage=GarageOcr.read(recognizer,frame,words,rank,viewportAspect());out.put("garage",garage);
+            out.put("leagueTabs",MultiplayerGarage.leagueTabs(frame));
             if(!Boolean.TRUE.equals(garage.get("start"))){
                 SessionState.log("选车起点尚未稳定："+garage);
                 snapshot(new File(root,"multiplayer-garage-unconfirmed.png").getAbsolutePath(),0,0,719,1279);
@@ -320,6 +352,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         Task<Text> task=null;Runnable cleanup=()->{upright.recycle();side.recycle();};
         try {
             task=recognizer.process(InputImage.fromBitmap(upright,0));Text full=Tasks.await(task,12,TimeUnit.SECONDS);
+            checkAccountText(full.getText());
             String scene=solo?DailyEventUi.classifySolo(full.getText()):DailyEventUi.classify(full.getText());
             Map<String,Object> out=new LinkedHashMap<>();
             out.put("frameId",capture.frameId());out.put("text",full.getText());List<Object> words=new ArrayList<>();int[] later=null;
@@ -469,6 +502,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     }
     @Override public int call(String name,Lua l) {
         try {
+            checkAccountLogin();
             switch(name) {
                 case "_cupCards":return result(l,CupCarousel.cards(frame(),wideViewport()));
                 case "_dailyEventUi":return result(l,dailyEventUi());

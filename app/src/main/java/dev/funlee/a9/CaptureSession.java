@@ -190,6 +190,32 @@ public final class CaptureSession implements AutoCloseable {
     }
     public synchronized long frameId(){return lastReadFrame;}
 
+    // Inspect just the opaque navy header and the pink close-button area before spending an OCR pass.
+    // Capture coordinates here are the upright display, independent of the automation's rotation setting.
+    synchronized Bitmap possibleAccountDialog() {
+        if(latest==null||!hasDialogHeader(latest))return null;
+        int w=Math.min(1280,latest.getWidth());
+        int h=Math.max(1,Math.round((float)w*latest.getHeight()/latest.getWidth()));
+        Bitmap scaled=Bitmap.createScaledBitmap(latest,w,h,true);
+        return scaled==latest?latest.copy(Bitmap.Config.ARGB_8888,false):scaled;
+    }
+    static boolean hasDialogHeader(Bitmap image) {
+        int w=image.getWidth(),h=image.getHeight();
+        if(w<h)return false;
+        for(int y=h/6;y<h*2/5;y+=Math.max(1,h/80)){
+            int center=image.getPixel(w/2,y);
+            if(Color.red(center)>45||Color.green(center)>60||Color.blue(center)>80||
+                    Color.blue(center)<=Color.red(center))continue;
+            int left=image.getPixel(w/3,y);
+            if(Math.abs(Color.red(left)-Color.red(center))>15||Math.abs(Color.blue(left)-Color.blue(center))>18)continue;
+            for(int x=w*7/10;x<w*97/100;x+=Math.max(1,w/90)){
+                int right=image.getPixel(x,y);
+                if(Color.red(right)>225&&Color.green(right)<45&&Color.blue(right)>55&&Color.blue(right)<155)return true;
+            }
+        }
+        return false;
+    }
+
     synchronized Bitmap copyLatestFrame() {
         Bitmap frame = latest == null ? beforeResize : latest;
         return frame == null ? null : frame.copy(Bitmap.Config.ARGB_8888, false);

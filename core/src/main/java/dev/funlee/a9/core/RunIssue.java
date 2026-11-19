@@ -14,6 +14,8 @@ public final class RunIssue {
     }
     public static RunIssue from(String detail) {
         String text=detail==null?"":detail;
+        if(text.contains(AccountLoginDialog.STOP_REASON))
+            return new RunIssue(AccountLoginDialog.STOP_REASON,"请在需要继续使用本机时手动登录游戏，再启动任务。","打开游戏",Action.GAME);
         if(has(text,"触控连续被系统取消","触控确认超时"))
             return new RunIssue("游戏触控未完成","上一次点击或滑动未收到系统确认。请打开游戏，等当前加载或弹窗处理完成后，再返回任务编排续跑。","打开游戏",Action.GAME);
         if(has(text,"无障碍服务已开启但未连接"))

@@ -7,6 +7,12 @@ final class StabilityChecks {
     private static int checks;
     private static void check(boolean ok,String message){checks++;if(!ok)throw new AssertionError(message);}
     static int run(Path assets)throws Exception{
+        check(AccountLoginDialog.matches("检测到并行存取行为")&&AccountLoginDialog.matches("该账号从另一台设备登录。")&&
+                AccountLoginDialog.matches("檢測到並行存取行為")&&AccountLoginDialog.matches("检测測到井行存取行为")&&!AccountLoginDialog.matches("登录历史 最近登录 游戏账号")&&
+                !AccountLoginDialog.matches("断开连接，请重新登录")&&!AccountLoginDialog.matches("在其他设备上登录前请绑定账号"),
+                "Concurrent account access is distinct from login and connection prompts");
+        check(RunIssue.from(AccountLoginDialog.STOP_REASON).title.equals(AccountLoginDialog.STOP_REASON),
+                "Concurrent access has an explicit terminal status");
         check(MultiplayerUi.classify("动态奖励 您可以从这组奖励中选一个").equals("rewardChoice"),"Dynamic selection recognized before Confirm appears");
         check(MultiplayerUi.classify("你的俱乐部达成了该里程碑 万能图纸 稍后领取 前往领奖").equals("milestoneLater"),"Observed club milestone is distinct from claiming rewards");
         check(!MultiplayerUi.classify("俱乐部里程碑 前往领奖 立即购买").equals("milestoneLater"),"Do not treat other milestone or purchase views as safe Later");

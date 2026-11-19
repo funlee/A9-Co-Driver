@@ -6,6 +6,39 @@ import java.util.regex.*;
 /** Evidence from the current CN garage. A completed swipe alone is never a list origin. */
 public final class MultiplayerGarage {
     private static final Pattern PAIR=Pattern.compile("(\\d[\\d,]*)\\s*/\\s*(\\d[\\d,]*)");
+    private static final List<String> LEAGUES=List.of("青铜","白银","黄金","白金","翡翠","钻石","精英","宗师","传奇");
+    private static final int[] BADGE_COLORS={0xd88560,0x96b2d4,0xf0ca30,0xb18eff,0x65c6a5,0x21a9ff,0xc0569f,0xc85059,0xf5e2a4};
+
+    /** Locate league shortcuts by their shield fill. A pink underline marks the selected shortcut. */
+    public static Map<String,Object> leagueTabs(PixelFrame frame){
+        Map<String,Object> tabs=new HashMap<>();
+        String selected="";
+        for(int i=0;i<LEAGUES.size();i++){
+            int rgb=BADGE_COLORS[i],sumX=0,sumY=0,count=0;
+            for(int y=86;y<=174;y+=2)for(int x=546+52*i;x<=579+55*i;x+=2){
+                int c=frame.pixel(719-y,x);
+                if(Math.abs(((c>>16)&255)-(rgb>>16))>16 || Math.abs(((c>>8)&255)-((rgb>>8)&255))>16 ||
+                        Math.abs((c&255)-(rgb&255))>16)continue;
+                sumX+=x;sumY+=y;count++;
+            }
+            if(count<8)continue;
+            int x=sumX/count,y=sumY/count;
+            String league=LEAGUES.get(i);
+            tabs.put(league,Map.of("x",x,"y",y));
+            for(int row=y+15;row<=y+40;row++){
+                boolean line=true;
+                for(int dx=-12;dx<=12;dx+=6){
+                    int c=frame.pixel(719-row,x+dx);
+                    if(((c>>16)&255)<210 || ((c>>8)&255)>55 || (c&255)<45){line=false;break;}
+                }
+                if(line){selected=selected.isEmpty()?league:"?";break;}
+            }
+        }
+        if(tabs.size()<3)return Map.of();
+        if(LEAGUES.contains(selected))tabs.put("selected",selected);
+        return tabs;
+    }
+
     public static String compact(String s){return s.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]","");}
     private static int pos(Map<?,?> w,String key){return ((Number)w.get(key)).intValue();}
     private static String pair(String s){Matcher m=PAIR.matcher(s);return m.find()?m.group(1).replace(",","")+"/"+m.group(2).replace(",",""):"";}
@@ -32,7 +65,7 @@ public final class MultiplayerGarage {
         for(Object o:words){Map<?,?> w=(Map<?,?>)o;if(pos(w,"x")>=90&&pos(w,"x")<=180&&pos(w,"y")>=350&&pos(w,"y")<=480)rail.append(w.get("text"));}
         // Observed OCR substitution on the small bronze shield, only inside the origin rail.
         rank=rail.toString().replace("青洞","青铜").replace("青銅","青铜").replace("吉铜","青铜").replace("铂金","白金");
-        String league="";for(String s:List.of("青铜","白银","黄金","白金","翡翠","钻石","精英","宗师","传奇"))if(rank.contains(s))league=s;
+        String league="";for(String s:LEAGUES)if(rank.contains(s))league=s;
         if((wide||layout18By9)&&league.isEmpty()&&bronzeShield(f,layout18By9))league="青铜";
         int left=-1;
         int top=wide?215:layout18By9?206:195;

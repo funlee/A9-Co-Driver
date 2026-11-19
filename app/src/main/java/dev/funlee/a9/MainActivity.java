@@ -253,7 +253,7 @@ public final class MainActivity extends Activity {
     private void form(int index,String mode,JSONObject data) throws Exception {
         LinearLayout fields=dialogFields();JSONArray spec=store.forms.getJSONArray(mode);Map<String,View> views=new LinkedHashMap<>();
         if(mode.equals("多人上"))fields.addView(label("比赛时自动识别地图并执行“地图配置”中的跑法；识别失败或缺少有效跑法时左划兜底。",DETAIL));
-        if(mode.equals("多人上"))fields.addView(label("按当前段位配置车辆序号。目前只选首屏序号 1–6 中有油的车辆，支持每次用一辆。",DETAIL));
+        if(mode.equals("多人上"))fields.addView(label("优先使用当前段位配置的车辆。该段未配置或配置车全部无油时，逐级尝试较低段位的配置。序号 1–6 按各段车库首屏计算，支持每次用一辆。",DETAIL));
         if(mode.equals("多人下"))fields.addView(label("按配置的车辆序号选车。目前只选首屏序号 1–6 中有油的车辆，支持每次用一辆。",DETAIL));
         if(mode.equals("每日战利品"))fields.addView(label("每天 00:00–00:30 自动跳过（设备本地时间，00:30 恢复）。其余时间按配置次数参与每轮任务循环。",DETAIL));
         for(int i=0;i<spec.length();i++){
