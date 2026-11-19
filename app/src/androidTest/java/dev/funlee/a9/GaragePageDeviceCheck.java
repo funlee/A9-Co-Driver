@@ -14,8 +14,10 @@ import java.util.concurrent.TimeUnit;
 
 final class GaragePageDeviceCheck {
     static void run(Instrumentation test,Bundle report)throws Exception {run(test,report,false);}
-    static void run(Instrumentation test,Bundle report,boolean detail)throws Exception {
-        File source=new File(test.getTargetContext().getFilesDir(),detail?"runtime/multiplayer-car.png":"runtime/multiplayer-garage-unconfirmed.png");
+    static void run(Instrumentation test,Bundle report,boolean detail)throws Exception {run(test,report,detail?"detail":"page");}
+    static void run(Instrumentation test,Bundle report,String mode)throws Exception {
+        boolean detail=mode.equals("detail"),finish=mode.equals("finish");
+        File source=new File(test.getTargetContext().getFilesDir(),finish?"runtime/diagnostic.png":detail?"runtime/multiplayer-car.png":"runtime/multiplayer-garage-unconfirmed.png");
         Bitmap side=BitmapFactory.decodeFile(source.getAbsolutePath());
         int[] pixels=new int[720*1280];side.getPixels(pixels,0,720,0,0,720,1280);
         PixelFrame frame=new PixelFrame(720,1280,pixels);
@@ -27,6 +29,12 @@ final class GaragePageDeviceCheck {
             List<Object> words=new ArrayList<>();
             for(Text.TextBlock block:read.getTextBlocks())for(Text.Line line:block.getLines()){
                 Rect box=line.getBoundingBox();if(box!=null)words.add(Map.of("text",line.getText(),"x",box.centerX(),"y",box.centerY()));
+            }
+            if(finish){
+                String scene=dev.funlee.a9.core.MultiplayerUi.classify(read.getText());
+                report.putString("scene",scene);report.putString("text",read.getText());
+                if(!dev.funlee.a9.core.MultiplayerUi.raceEnded(scene))throw new AssertionError("Missed terminal multiplayer screen");
+                report.putString("result","PASS: multiplayer result without a progress meter is recognized");return;
             }
             if(detail){
                 var full=dev.funlee.a9.core.MultiplayerGarage.detail(words);

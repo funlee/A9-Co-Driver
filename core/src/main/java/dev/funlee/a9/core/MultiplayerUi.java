@@ -2,6 +2,9 @@ package dev.funlee.a9.core;
 
 /** Semantic guards for the current Chinese multiplayer menus. Unknown screens never trigger Start. */
 public final class MultiplayerUi {
+    public static boolean raceEnded(String scene) {
+        return "result".equals(scene)||"raceDisconnected".equals(scene)||"raceCancelled".equals(scene);
+    }
     public static String displayMode(String mode) {
         if("多人上".equals(mode))return "世界系列赛";
         if("多人下".equals(mode))return "大师系列赛";

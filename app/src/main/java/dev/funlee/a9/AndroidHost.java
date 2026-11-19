@@ -649,15 +649,19 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         // Readable backtracking after a crash is not an OCR outage. Keep route progress monotonic.
         if(rawProgress>=0)lastDigitTime=clock;
         if(p>lastProgress){lastProgress=p;lastProgressTime=clock;}
-        if(legacyRaceSeen&&rawProgress<0&&clock-lastDigitTime>=2500&&clock-lastDriverResultCheck>=2500){
+        if(rawProgress<0&&clock-lastDigitTime>=2500&&clock-lastDriverResultCheck>=2500){
             lastDriverResultCheck=clock;
-            String scene=(String)dailyEventUi(true).get("scene");
-            if(scene.equals("results")||scene.equals("rewards")){
+            prepareOverlay(true,false);
+            Map<String,Object> observed=legacyRaceSeen?dailyEventUi(true):multiplayerUi(false,false);
+            String scene=(String)observed.get("scene");
+            boolean settlement=scene.equals("results")||scene.equals("rewards");
+            if(legacyRaceSeen?settlement:MultiplayerUi.raceEnded(scene)){
                 if(driver!=null)driver.stop();
                 SessionState.racePanel(false);
-                SessionState.log("单人比赛已进入结果页，转入结算");
-                return result(l,true,-1,"比赛结束",true);
+                SessionState.log("比赛已进入赛后页面（"+scene+"），交由赛事流程处理");
+                return result(l,true,-1,"比赛结束",legacyRaceSeen&&settlement);
             }
+            prepareOverlay(false,false);
         }
         if(!driverFallback&&clock-lastDigitTime>12_000)throw failure("12 秒未能确认进度，请检查游戏画面是否被遮挡");
         if(clock-lastProgressTime>90_000)throw failure("比赛进度 90 秒未前进，请检查游戏是否卡住或暂停");

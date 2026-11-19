@@ -7,6 +7,10 @@ final class StabilityChecks {
     private static int checks;
     private static void check(boolean ok,String message){checks++;if(!ok)throw new AssertionError(message);}
     static int run(Path assets)throws Exception{
+        check(MultiplayerUi.raceEnded("result")&&MultiplayerUi.raceEnded("raceDisconnected")&&
+                MultiplayerUi.raceEnded("raceCancelled")&&!MultiplayerUi.raceEnded("race")&&
+                !MultiplayerUi.raceEnded("unknown")&&!MultiplayerUi.raceEnded("event"),
+                "Missing multiplayer progress hands verified results and interruptions back to the event flow");
         check(AccountLoginDialog.matches("检测到并行存取行为")&&AccountLoginDialog.matches("该账号从另一台设备登录。")&&
                 AccountLoginDialog.matches("檢測到並行存取行為")&&AccountLoginDialog.matches("检测測到井行存取行为")&&!AccountLoginDialog.matches("登录历史 最近登录 游戏账号")&&
                 !AccountLoginDialog.matches("断开连接，请重新登录")&&!AccountLoginDialog.matches("在其他设备上登录前请绑定账号"),
