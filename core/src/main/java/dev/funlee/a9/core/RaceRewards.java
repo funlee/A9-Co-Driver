@@ -6,7 +6,7 @@ import java.text.Normalizer;
 public final class RaceRewards {
     public static String exitLabel(String text,int x,int y) {
         if(x<=850||y<=590)return "";
-        String t=MapMatcher.normalize(text);
+        String t=MapMatcher.normalize(text).replace('錯','错').replace('機','机').replace('會','会').replace('繼','继').replace('續','续');
         if(t.equals("继续")||t.equals("继绩"))return "继续";
         if(t.equals("错失机会")||t.equals("错矢机会"))return "错失机会";
         return "";

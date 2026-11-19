@@ -8,6 +8,9 @@ final class RewardChecks {
     private static void check(boolean ok,String why){count++;if(!ok)throw new AssertionError(why);}
     static int run(Path assets)throws Exception{
         count=0;
+        for(String label:List.of("錯失机会","錯失機會","错矢机会"))check(RaceRewards.exitLabel(label,1044,638).equals("错失机会"),"Canonical reward skip: "+label);
+        check(RaceRewards.exitLabel("繼續",1044,638).equals("继续"),"Traditional continue");
+        check(RaceRewards.exitLabel("观看广告",1044,638).isEmpty()&&RaceRewards.exitLabel("錯失机会",1044,480).isEmpty(),"Exclude ad and non-footer labels");
         check(ResultRank.personalReward("比赛賽奖励 你的用时 总金币"),"Live doubled race glyph remains a personal reward page");
         check(RaceRewards.amount("4,800",false)==4800&&RaceRewards.amount("＋207",true)==207,"Separate scoped gold and paid fame amounts");
         for(String s:List.of("90%","+90%","+25%","18小时38分","+189 90%","+189 +207","+1O9","+999999999","+189\n+207"))check(RaceRewards.amount(s,true)==-1,"Ambiguous/boost fame rejected: "+s);

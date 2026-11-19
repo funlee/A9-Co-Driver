@@ -155,6 +155,13 @@ final class OrchestrationRecoveryChecks {
                 "  assert(tickCount()-tappedAt<3000,'Confirmed home should return before the retry deadline')",
                 "  done=true",
                 "end"));
+        script(assets,List.of("utilities"),"data={};local taps=0;local tappedAt;function toast()end;"+
+                "function _soloEventUi()return {scene=tappedAt and tickCount()-tappedAt>=5000 and 'home' or 'rewards',rewardPage=true,rewardCanContinue=true,frameId=123,rewardExitButton={x=1044,y=638,label='错失机会'}}end;"+
+                "function tap(x,y)assert(x==81 and y==1044);taps=taps+1;tappedAt=tappedAt or tickCount()end;"+
+                "function keyPress()error('Do not leave the verified reward page with Back')end;"+
+                "function test()utils.backToMain();assert(taps==1,'Old reward frame cannot trigger another tap');done=true end");
+        script(assets,List.of("utilities"),"data={};function _soloEventUi()return {scene='rewards',rewardPage=true,rewardCanContinue=false,rewardExitButton={x=1044,y=638,label='错失机会'}}end;"+
+                "function tap()error('Disabled footer must not be clicked')end;function test()assert(not pcall(utils.backToMain));done=true end");
         int[] pixels=new int[720*1280];
         for(int y=464;y<553;y++)for(int x=858;x<1191;x++){
             if(y<493||y>524||x<970||x>1069)pixels[x*720+719-y]=0xffc3fb12;
@@ -168,7 +175,7 @@ final class OrchestrationRecoveryChecks {
                 "function _soloEventUi()return {scene='unknown'}end;"+
                 "function tap(x,y)taps=taps+1;assert(x==210 and y==1025,'Open the selected Daily hero directly')end;function print()end;"+
                 "function test()utils.openHomeTab({scene='home',text='挑战限时',dailyExplore={x=1025,y=509},words={{text='每日',x=592,y=628},{text='探索骞事',x=1025,y=509}}},'daily');assert(taps==1);done=true end");
-        return 8;
+        return 10;
     }
     private static void script(Path assets,List<String> modules,String fixture)throws Exception {
         try(LuaRuntime lua=new LuaRuntime((n,l)->0,List.of())) {

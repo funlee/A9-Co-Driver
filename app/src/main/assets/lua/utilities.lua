@@ -336,6 +336,9 @@ function utils.backToMain()
   local closedPopup=false
   local attempts=0
   local navigationDeadline=0
+  local rewardTapAt=-10000
+  local rewardTaps=0
+  local rewardFrame=nil
   local deadline=tickCount()+90000
   while attempts<25 and tickCount()<deadline do
     local screen=_soloEventUi()
@@ -357,6 +360,15 @@ function utils.backToMain()
         utils.dismissExitDialog(screen)
         dismissedExit=true
       else sleep(500) end
+    elseif screen.scene=='rewards' and screen.rewardPage then
+      local button=screen.rewardExitButton
+      if screen.rewardCanContinue and button and (button.label=='继续' or button.label=='错失机会')
+        and button.x>850 and button.y>590 and rewardTaps<3 and tickCount()-rewardTapAt>=4000
+        and (not rewardFrame or screen.frameId~=rewardFrame) then
+        data['信息']='恢复已完成比赛的奖励页'
+        tapUiWord(button);rewardTapAt=tickCount();rewardFrame=screen.frameId;rewardTaps=rewardTaps+1
+      end
+      sleep(500)
     elseif screen.scene=='profileUnlock' and dailyCup and dailyCup.dismissProfile then
       dailyCup.dismissProfile(screen)
     elseif screen.scene=='limitedSalePromo' then

@@ -283,7 +283,8 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         if(readSeriesScore){
             String normalized=MapMatcher.normalize(text).replace('賽','赛').replace('總','总').replace('計','计');
             if(scene.equals("event")&&normalized.contains("世界系列赛")){
-                addSeriesScore(out,excluded,303,550,520,595);
+                if(wideViewport())addSeriesScore(out,excluded,315,525,460,578);
+                else addSeriesScore(out,excluded,303,550,520,595);
             }else if(Boolean.TRUE.equals(out.get("rewardPage"))&&normalized.contains("系列赛分数")&&normalized.contains("总计")){
                 addSeriesScore(out,excluded,543,505,690,550);
             }
@@ -417,6 +418,10 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 MapMatcher.Match match=store.matcher.match(title);
                 if(match.unique())out.put("route",match.candidates.get(0).internal);
             }
+            if(scene.equals("rewards")){
+                Map<String,Object> exit=RewardOcr.exitButton(full,frame);
+                out.put("rewardPage",true);out.put("rewardCanContinue",!exit.isEmpty());out.put("rewardExitButton",exit);
+            }
             if(scene.equals("rewards")&&legacyPrepared&&legacyRaceSeen){
                 if(!legacyRewardDone)out.putAll(rewardRead(upright,full,true));
                 // Solo rewards can offer an ad multiplier; only the lower exit is safe to advance.
@@ -460,21 +465,12 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     }
     private Map<String,Object> rewardRead(Bitmap upright,Text full,boolean soloLayout)throws Exception{
         if(!RewardOcr.page(full.getText())){rewardStable.reset();return Map.of("rewardPage",false);}
-        RaceRewards value=RewardOcr.read(recognizer,upright,full,soloLayout);
+        RaceRewards value=RewardOcr.read(recognizer,upright,full,soloLayout,wideViewport());
         RaceRewards stable=rewardStable.observe(value,capture.frameId(),SystemClock.elapsedRealtime());
         android.util.Log.d("A9RewardOcr","observed="+value.coins+"/"+value.fame+" stable="+stable.coins+"/"+stable.fame);
-        String exit="";boolean canContinue=false;
-        Map<String,Object> exitButton=Map.of();
-        for(Text.TextBlock block:full.getTextBlocks())for(Text.Line line:block.getLines()){
-            Rect bounds=line.getBoundingBox();if(bounds==null)continue;
-            String label=RaceRewards.exitLabel(line.getText(),bounds.centerX(),bounds.centerY());
-            if(label.isEmpty())continue;
-            int color=frame.pixel(719-bounds.centerY()+25,bounds.centerX());
-            if(ColorPattern.color(color,"FFFFFF-202020",1)||ColorPattern.color(color,"12FBC3-303030",1)){
-                exit=label;canContinue=true;
-                exitButton=Map.of("x",bounds.centerX(),"y",bounds.centerY(),"label",label);
-            }
-        }
+        Map<String,Object> exitButton=RewardOcr.exitButton(full,frame);
+        boolean canContinue=!exitButton.isEmpty();
+        String exit=(String)exitButton.getOrDefault("label","");
         return Map.of("rewardPage",true,"rewardCoins",stable.coins,"rewardFame",stable.fame,"rewardCanContinue",canContinue,"rewardExit",exit,"rewardExitButton",exitButton,"rewardReady",stable.coins>=0&&stable.fame>=0);
     }
     private Map<String,Object> legacyRewardSample()throws Exception{
