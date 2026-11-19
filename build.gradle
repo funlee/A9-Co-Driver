@@ -1,0 +1,9 @@
+plugins {
+    id 'com.android.application' version '8.10.1' apply false
+}
+
+// Local screenshot fixtures are optional and never supply application runtime assets.
+ext.withLocalTestFixtures = providers.gradleProperty('withLocalTestFixtures').map { it.toBoolean() }.getOrElse(false)
+allprojects {
+    layout.buildDirectory.set(rootProject.layout.projectDirectory.dir("build/${project.name}"))
+}

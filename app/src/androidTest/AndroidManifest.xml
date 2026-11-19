@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <instrumentation android:name="dev.funlee.a9.RecoveryDeviceCheck" android:targetPackage="dev.funlee.a9local" android:label="Bounded recovery checks"/>
+    <instrumentation android:name="dev.funlee.a9.UnlockScreenshotCheck" android:targetPackage="dev.funlee.a9local" android:label="Read-only unlock screenshot check"/>
+    <instrumentation android:name="dev.funlee.a9.DashboardScreenshotCheck" android:targetPackage="dev.funlee.a9local" android:label="Read-only dashboard and rank check"/>
+    <instrumentation android:name="dev.funlee.a9.GarageScreenshotCheck" android:targetPackage="dev.funlee.a9local" android:label="Read-only garage selection check"/>
+    <instrumentation android:name="dev.funlee.a9.AccessibilityButtonCheck" android:targetPackage="dev.funlee.a9local" android:label="Right-side pause shortcut check"/>
+    <instrumentation android:name="dev.funlee.a9.RuntimeHelpDeviceCheck" android:targetPackage="dev.funlee.a9local" android:label="Runtime help navigation check"/>
+    <instrumentation android:name="dev.funlee.a9.SettingsDeviceCheck" android:targetPackage="dev.funlee.a9local" android:label="Settings interaction checks"/>
+</manifest>

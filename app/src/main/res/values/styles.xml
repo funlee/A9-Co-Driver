@@ -1,0 +1,14 @@
+<resources>
+    <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:colorAccent">#087F73</item>
+        <item name="android:navigationBarColor">#F5F7F9</item>
+        <item name="android:statusBarColor">#F5F7F9</item>
+        <item name="android:windowBackground">#F5F7F9</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+    <string name="accessibility_description">按你启用的本地任务，在游戏中点击、滑动并执行跑图动作。右侧无障碍悬浮按钮可暂停或继续任务，悬浮面板和通知可停止任务。</string>
+    <string name="init_error">初始化失败：%1$s</string>
+    <string name="session_status">%1$s%2$s</string>
+</resources>

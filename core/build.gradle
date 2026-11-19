@@ -1,0 +1,37 @@
+plugins { id 'java-library' }
+java { sourceCompatibility = JavaVersion.VERSION_11; targetCompatibility = JavaVersion.VERSION_11 }
+dependencies {
+    api 'party.iroiro.luajava:luajava:4.1.0'
+    api 'party.iroiro.luajava:lua53:4.1.0'
+    implementation 'org.jspecify:jspecify:1.0.0'
+    runtimeOnly 'com.badlogicgames.jnigen:jnigen-loader:3.1.1'
+    runtimeOnly 'com.badlogicgames.jnigen:jnigen-commons:3.1.1'
+    testRuntimeOnly 'party.iroiro.luajava:lua53-platform:4.1.0:natives-desktop'
+}
+tasks.register('checkPublic', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.funlee.a9.core.PublicChecks'
+    jvmArgs '-ea'
+    args rootProject.file('app/src/main/assets').absolutePath
+}
+tasks.register('checkCore', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.funlee.a9.core.CoreChecks'
+    jvmArgs '-ea'
+    args rootProject.file('app/src/main/assets').absolutePath
+}
+tasks.register('checkLocalScreenshots', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'dev.funlee.a9.core.CoreChecks'
+    jvmArgs '-ea'
+    args rootProject.file('app/src/main/assets').absolutePath,
+         rootProject.file('private/test-fixtures/core').absolutePath
+    doFirst {
+        if (!rootProject.file('private/test-fixtures/core').isDirectory())
+            throw new GradleException('Optional local screenshots are unavailable; run :core:checkCore instead.')
+    }
+}
+tasks.named('check') { dependsOn 'checkPublic', 'checkCore' }

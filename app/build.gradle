@@ -1,0 +1,34 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'dev.funlee.a9'
+    compileSdk 36
+    buildToolsVersion '36.0.0'
+    defaultConfig {
+        applicationId 'dev.funlee.a9local'
+        minSdk 26
+        targetSdk 35
+        versionCode 113
+        versionName '1.0.0'
+        testInstrumentationRunner 'dev.funlee.a9.RecoveryDeviceCheck'
+    }
+    // Optional local screenshots only. All runtime resources are in the repository.
+    if (rootProject.ext.withLocalTestFixtures) {
+        sourceSets.androidTest.assets.srcDir rootProject.file('private/test-fixtures/android')
+    }
+    def required = ['data/routes.txt','data/map-rules.tsv','data/progress.lib','data/forms.json',
+                    'data/default-projects.json','data/provenance.json','lua/bootstrap.lua','lua/shared.lua','lua/utilities.lua',
+                    'lua/rewards.lua','lua/workflows.lua','lua/multiplayer_up.lua','lua/multiplayer_down.lua',
+                    'lua/multiplayer_current.lua','lua/cup.lua','lua/special.lua','lua/club.lua',
+                    'lua/daily.lua']
+    required.each { path ->
+        if (!file("src/main/assets/${path}").isFile())
+            throw new GradleException("Missing bundled runtime asset: ${path}. Restore the complete repository checkout.")
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_11; targetCompatibility JavaVersion.VERSION_11; coreLibraryDesugaringEnabled true }
+}
+dependencies {
+    implementation project(':core')
+    implementation 'party.iroiro.luajava:android:4.1.0:lua53@aar'
+    implementation 'com.google.mlkit:text-recognition-chinese:16.0.1'
+    coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.5'
+}

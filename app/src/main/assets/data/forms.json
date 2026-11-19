@@ -1,0 +1,411 @@
+{
+  "多人上": [
+    {
+      "key": "项目名称",
+      "type": "EditText",
+      "value": "多人上",
+      "options": []
+    },
+    {
+      "key": "次数",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "青铜用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "白银用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "黄金用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "白金用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "翡翠用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "钻石用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "精英用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "宗师用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "传奇用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "用车模式",
+      "type": "RadioGroup",
+      "value": "0",
+      "options": [
+        "每次用一辆",
+        "每辆用一次"
+      ]
+    }
+  ],
+  "多人下": [
+    {
+      "key": "项目名称",
+      "type": "EditText",
+      "value": "多人下",
+      "options": []
+    },
+    {
+      "key": "次数",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "多人下用车",
+      "type": "EditText",
+      "value": "1,2,3,4",
+      "options": []
+    },
+    {
+      "key": "选车模式",
+      "type": "RadioGroup",
+      "value": "1",
+      "options": [
+        "滑动选车",
+        "点击选车"
+      ]
+    },
+    {
+      "key": "用车模式",
+      "type": "RadioGroup",
+      "value": "0",
+      "options": [
+        "每次用一辆",
+        "每辆用一次"
+      ]
+    },
+    {
+      "key": "选车筛选",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "已拥有",
+        "性能分",
+        "降序"
+      ]
+    }
+  ],
+  "杯赛": [
+    {
+      "key": "项目名称",
+      "type": "EditText",
+      "value": "杯赛",
+      "options": []
+    },
+    {
+      "key": "次数",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "杯赛位置",
+      "type": "EditText",
+      "value": "4",
+      "options": []
+    },
+    {
+      "key": "路线来源",
+      "type": "TaskRoute",
+      "value": "2",
+      "options": [
+        "自动识别地图",
+        "选择已配置地图",
+        "自定义跑法代码"
+      ]
+    },
+    {
+      "key": "杯赛用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "用车模式",
+      "type": "RadioGroup",
+      "value": "0",
+      "options": [
+        "每次用一辆",
+        "每辆用一次"
+      ]
+    },
+    {
+      "key": "选车方式",
+      "type": "RadioGroup",
+      "value": "0",
+      "options": [
+        "滑动选车",
+        "点击选车"
+      ]
+    },
+    {
+      "key": "选车筛选",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "已拥有",
+        "性能分",
+        "降序"
+      ]
+    }
+  ],
+  "特殊赛事": [
+    {
+      "key": "项目名称",
+      "type": "EditText",
+      "value": "特殊赛事",
+      "options": []
+    },
+    {
+      "key": "次数",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "特殊赛事位置",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "称霸模式",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "称霸模式，章节:"
+      ]
+    },
+    {
+      "key": "称霸位置",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "特殊赛事阶段",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "路线来源",
+      "type": "TaskRoute",
+      "value": "0",
+      "options": [
+        "选择已配置地图",
+        "自定义跑法代码"
+      ]
+    },
+    {
+      "key": "特殊赛事用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "用车模式",
+      "type": "RadioGroup",
+      "value": "0",
+      "options": [
+        "每次用一辆",
+        "每辆用一次"
+      ]
+    },
+    {
+      "key": "选车方式",
+      "type": "RadioGroup",
+      "value": "0",
+      "options": [
+        "滑动选车",
+        "点击选车"
+      ]
+    },
+    {
+      "key": "选车筛选",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "已拥有",
+        "性能分",
+        "降序"
+      ]
+    }
+  ],
+  "车联": [
+    {
+      "key": "项目名称",
+      "type": "EditText",
+      "value": "车联",
+      "options": []
+    },
+    {
+      "key": "次数",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "车手联会位置",
+      "type": "EditText",
+      "value": "",
+      "options": []
+    },
+    {
+      "key": "分支选择",
+      "type": "ComboBox",
+      "value": "0",
+      "options": [
+        "单刷支线",
+        "单刷主线",
+        "先支线后主线"
+      ]
+    },
+    {
+      "key": "危险等级",
+      "type": "ComboBox",
+      "value": "0",
+      "options": [
+        "难度1",
+        "难度2",
+        "难度3"
+      ]
+    },
+    {
+      "key": "难度不足",
+      "type": "ComboBox",
+      "value": "0",
+      "options": [
+        "最低难度",
+        "最高难度"
+      ]
+    },
+    {
+      "key": "车手联会选路",
+      "type": "ComboBox",
+      "value": "3",
+      "options": [
+        "不选路",
+        "左划",
+        "右划",
+        "百分比选路",
+        "自定义选图"
+      ]
+    },
+    {
+      "key": "杯赛线路5",
+      "type": "EditText",
+      "value": "",
+      "options": []
+    },
+    {
+      "key": "车手联会用车",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    }
+  ],
+  "每日战利品": [
+    {
+      "key": "项目名称",
+      "type": "EditText",
+      "value": "每日战利品",
+      "options": []
+    },
+    {
+      "key": "次数",
+      "type": "EditText",
+      "value": "1",
+      "options": []
+    },
+    {
+      "key": "杯赛位置",
+      "type": "EditText",
+      "value": "2",
+      "options": []
+    },
+    {
+      "key": "路线来源",
+      "type": "TaskRoute",
+      "value": "2",
+      "options": [
+        "自动识别地图",
+        "选择已配置地图",
+        "自定义跑法代码"
+      ]
+    },
+    {
+      "key": "杯赛用车",
+      "type": "EditText",
+      "value": "1,2,3,4,5,6",
+      "options": []
+    },
+    {
+      "key": "用车模式",
+      "type": "RadioGroup",
+      "value": "0",
+      "options": [
+        "每次用一辆",
+        "每辆用一次"
+      ]
+    },
+    {
+      "key": "选车方式",
+      "type": "RadioGroup",
+      "value": "0",
+      "options": [
+        "滑动选车",
+        "点击选车"
+      ]
+    },
+    {
+      "key": "选车筛选",
+      "type": "CheckBoxGroup",
+      "value": "",
+      "options": [
+        "已拥有",
+        "性能分",
+        "降序"
+      ]
+    }
+  ]
+}
