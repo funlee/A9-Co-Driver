@@ -42,11 +42,21 @@ public final class MultiplayerGarage {
     public static String compact(String s){return s.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]","");}
     private static int pos(Map<?,?> w,String key){return ((Number)w.get(key)).intValue();}
     private static String pair(String s){Matcher m=PAIR.matcher(s);return m.find()?m.group(1).replace(",","")+"/"+m.group(2).replace(",",""):"";}
-    private static boolean edge(PixelFrame f,int x,int top){
+    public static boolean validPerformance(String text){
+        String value=pair(text);
+        if(value.isEmpty())return false;
+        String[] parts=value.split("/");
+        try{
+            int current=Integer.parseInt(parts[0]),maximum=Integer.parseInt(parts[1]);
+            return current>=100&&maximum>=current;
+        }catch(NumberFormatException ignored){return false;}
+    }
+    private static boolean edge(PixelFrame f,int x,int top){return edge(f,x,top,false);}
+    private static boolean edge(PixelFrame f,int x,int top,boolean scrolled){
         int hits=0;
         for(int y=top+12;y<top+205;y++){
             int c=f.pixel(719-y,x),r=(c>>>16)&255,g=(c>>>8)&255,b=c&255;
-            if(((g>140&&b>110&&r<100)||(g>100&&b>180&&r<30))||(r>150&&g>180&&b<160)||(r>180&&g<100&&b>50))hits++;
+            if((scrolled&&r<35&&g>=40&&b>=80&&b>g+25)||((g>140&&b>110&&r<100)||(g>100&&b>180&&r<30))||(r>150&&g>180&&b<160)||(r>180&&g<100&&b>50))hits++;
         }
         return hits>=150;
     }
@@ -75,6 +85,12 @@ public final class MultiplayerGarage {
         int nameStart=wide?235:layout18By9?258:290;
         int centerOffset=cardCenterOffset(aspect);
         for(int x=wide?215:202;x<=(wide?233:220);x++)if(edge(f,x,top)&&edge(f,x,top+rowPitch)){left=x;break;}
+        int originLeft=left;
+        List<Integer> candidates=new ArrayList<>();
+        if(left>=0)candidates.add(left);
+        for(int x=4;x<=650;x++)if(x!=originLeft&&edge(f,x,top,true)&&edge(f,x,top+rowPitch,true))candidates.add(x);
+        for(int candidate:candidates){
+        left=candidate;
         List<Object> cards=new ArrayList<>();
         if(left>=0)for(int i=1;i<=6;i++){
             int x=left+((i-1)/2)*columnPitch,y=top+((i-1)%2)*rowPitch;
@@ -82,22 +98,25 @@ public final class MultiplayerGarage {
             if(x+cardWidth>(wide?1260:1280))continue;
             String performance="";int fuel=-1,capacity=0;Set<String> tokens=new TreeSet<>();
             for(Object o:words){Map<?,?> w=(Map<?,?>)o;int wx=pos(w,"x"),wy=pos(w,"y");String t=w.get("text").toString();
-                if(wx>x&&wx<x+150&&wy>y&&wy<y+70)performance=pair(t);
+                if(wx>x&&wx<x+150&&wy>y&&wy<y+70){String p=pair(t);if(!p.isEmpty())performance=p;}
                 if(wx>x&&wx<x+130&&wy>y+170&&wy<y+225){
                     String p=pair(t);if(!p.isEmpty()){String[] a=p.split("/");try{int n=Integer.parseInt(a[0]),d=Integer.parseInt(a[1]);if(d>=1&&d<=9&&n>=0&&n<=d){fuel=n;capacity=d;}}catch(NumberFormatException ignored){}}
                 }
                 if(wx>x+nameStart&&wx<x+cardWidth&&wy>y+90&&wy<y+185){
-                    for(String token:t.toUpperCase(Locale.ROOT).split("[^A-Z0-9]+"))if(token.length()>=4&&token.matches(".*[A-Z].*"))tokens.add(token);
+                    for(String token:t.toUpperCase(Locale.ROOT).split("[^A-Z0-9]+"))if((token.length()>=4&&token.matches(".*[A-Z].*"))||token.matches("[A-Z]{1,3}[0-9]{1,3}"))tokens.add(token);
                     String model=compact(t);
-                    if(layout18By9&&model.length()>=6&&model.matches("(?=.*[A-Z])(?=.*[0-9]).*"))tokens.add(model);
+                    if((layout18By9||wide)&&model.length()>=6&&model.matches("(?=.*[A-Z])(?=.*[0-9]).*"))tokens.add(model);
                 }
             }
             if(!wide&&!layout18By9&&FuelAvailability.emptySlots(f).contains(i)){fuel=0;capacity=6;}
             if(!performance.isEmpty()&&!tokens.isEmpty())cards.add(Map.of("index",i,"x",x+centerOffset,"y",y+110,"performance",performance,"tokens",new ArrayList<>(tokens),"fuel",fuel,"capacity",capacity));
         }
         Map<?,?> first=null;for(Object c:cards)if(((Number)((Map<?,?>)c).get("index")).intValue()==1)first=(Map<?,?>)c;
-        boolean start=!league.isEmpty()&&left>=0&&first!=null;
-        return Map.of("left",left,"start",start,"rank",league,"key",start?league+":"+first.get("performance"):"","cards",cards);
+        if(first==null)continue;
+        boolean start=!league.isEmpty()&&left==originLeft;
+        return Map.of("left",left,"start",start,"rank",league,"key",start?league+":"+first.get("performance"):"","cards",cards,"pitch",columnPitch);
+        }
+        return Map.of("left",-1,"start",false,"rank",league,"key","","cards",List.of(),"pitch",columnPitch);
     }
     private static boolean bronzeShield(PixelFrame frame,boolean layout18By9){
         int bronze=0;

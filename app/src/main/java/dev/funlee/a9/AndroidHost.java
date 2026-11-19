@@ -136,10 +136,8 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     private boolean wideViewport(){return viewportAspect()>=2.0;}
     private boolean ultrawideViewport(){return viewportAspect()>2.07;}
     private void addWideHomeButton(Map<String,Object> out){
-        // The ultrawide HUD moves this icon inward. Verify both the roof and doorway.
-        if(ultrawideViewport()&&RaceHud.backWedge(frame)&&ColorPattern.matches(frame,
-                "698|1206|FFFFFF-555555,683|1193|FFFFFF-555555,683|1217|FFFFFF-555555,666|1194|FFFFFF-555555,666|1216|FFFFFF-555555,666|1206|45331F-353535",1))
-            out.put("homeButton",Map.of("x",1206,"y",34));
+        Map<String,Integer> button=RaceHud.homeButton(frame,ultrawideViewport());
+        if(!button.isEmpty())out.put("homeButton",button);
     }
     private Rect excludedOverlay() {
         return uprightBounds(SessionState.overlayBounds);
@@ -321,8 +319,10 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             if(excluded==null||!Rect.intersects(excluded,new Rect(150,75,1061,206))){
                 Map<String,Object> focused=GarageOcr.detail(recognizer,frame,ultrawideViewport());
                 String performance=focused.get("performance").toString();
+                String fullPerformance=detail.get("performance").toString();
+                boolean complete=performance.replaceAll("[^0-9]","").length()>=fullPerformance.replaceAll("[^0-9]","").length();
                 detail=Map.of("name",detail.get("name")+" "+focused.get("name"),
-                        "performance",performance.matches("[0-9]{2,}/[0-9]{3,}")?performance:detail.get("performance"));
+                        "performance",complete&&performance.matches("[0-9]{2,}/[0-9]{3,}")?performance:fullPerformance);
             }
             out.put("carDetail",detail);out.put("fuel",FuelAvailability.detail(words));
             android.util.Log.d("A9CarDetail",detail.toString());
@@ -464,6 +464,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         RaceRewards stable=rewardStable.observe(value,capture.frameId(),SystemClock.elapsedRealtime());
         android.util.Log.d("A9RewardOcr","observed="+value.coins+"/"+value.fame+" stable="+stable.coins+"/"+stable.fame);
         String exit="";boolean canContinue=false;
+        Map<String,Object> exitButton=Map.of();
         for(Text.TextBlock block:full.getTextBlocks())for(Text.Line line:block.getLines()){
             Rect bounds=line.getBoundingBox();if(bounds==null)continue;
             String label=RaceRewards.exitLabel(line.getText(),bounds.centerX(),bounds.centerY());
@@ -471,9 +472,10 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             int color=frame.pixel(719-bounds.centerY()+25,bounds.centerX());
             if(ColorPattern.color(color,"FFFFFF-202020",1)||ColorPattern.color(color,"12FBC3-303030",1)){
                 exit=label;canContinue=true;
+                exitButton=Map.of("x",bounds.centerX(),"y",bounds.centerY(),"label",label);
             }
         }
-        return Map.of("rewardPage",true,"rewardCoins",stable.coins,"rewardFame",stable.fame,"rewardCanContinue",canContinue,"rewardExit",exit,"rewardReady",stable.coins>=0&&stable.fame>=0);
+        return Map.of("rewardPage",true,"rewardCoins",stable.coins,"rewardFame",stable.fame,"rewardCanContinue",canContinue,"rewardExit",exit,"rewardExitButton",exitButton,"rewardReady",stable.coins>=0&&stable.fame>=0);
     }
     private Map<String,Object> legacyRewardSample()throws Exception{
         if(!legacyPrepared||!legacyRaceSeen||legacyRewardDone)return Map.of("rewardPage",false);

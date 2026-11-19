@@ -60,7 +60,7 @@ final class RewardChecks {
         check(fallback.currentActivity("领奖：已确认领取每日目标奖励 2 项").equals("已确认领取每日目标奖励 2 项"),"Confirmed rewards remain visible as results, not race settlement");
         check(fallback.currentActivity("已暂停").equals("已暂停")&&fallback.currentActivity("任务停止：错误").equals("任务停止"),"Pause and stop override current reward activity");
         TaskStats menus=new TaskStats();check(menus.currentActivity("多人流程：cars · debug").equals("选择车辆"),"Compact menu title hides internal scene names");
-        for(int scenario=0;scenario<6;scenario++)workflow(assets,scenario);
+        for(int scenario=0;scenario<7;scenario++)workflow(assets,scenario);
         try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
             lua.load("workflows",Files.readString(assets.resolve("lua/workflows.lua")));
             lua.load("counter-check","data={['杯赛']=0,['特赛']=0,['车联']=0};function test()run.dataList['杯赛']();run.dataList['每日战利品']();run.dataList['特殊赛事']();run.dataList['车联']();assert(data['杯赛']==2 and data['特赛']==1 and data['车联']==1 and run.dataList['生涯']==nil)end");
@@ -90,6 +90,10 @@ final class RewardChecks {
         List<Object> frames=new ArrayList<>();frames.add(screen("race"));
         Map<String,Object> reward=new LinkedHashMap<>(screen("result"));reward.put("text","比赛奖励 你的用时 总金币 继续");reward.put("words",List.of(Map.of("text","继续","x",1100,"y",650)));reward.put("rewardPage",true);
         if(scenario==4){reward.put("rewardExit","错失机会");reward.put("words",List.of(Map.of("text","观看广告","x",1100,"y",540),Map.of("text","错失机会","x",1050,"y",650)));}
+        if(scenario==6){
+            reward.put("rewardExit","继续");reward.put("words",List.of(Map.of("text","继绩","x",1100,"y",650)));
+            reward.put("rewardExitButton",Map.of("x",1100,"y",650,"label","继续"));
+        }
         // A tempting generic close must not bypass reward collection.
         reward.put("closeX",Map.of("x",1200,"y",100));
         Map<String,Object> animating=new LinkedHashMap<>(reward);animating.put("rewardCoins",100);animating.put("rewardFame",90);animating.put("rewardReady",false);animating.put("rewardCanContinue",false);frames.add(animating);

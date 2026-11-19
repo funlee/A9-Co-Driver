@@ -289,7 +289,7 @@ final class StabilityChecks {
                 lua.load("helpers","utils={defultCfg=function(v,d)return v or d end};function test() done(currentMultiplayer.run()) end");
                 lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));lua.start("test");
                 try{for(int i=0;i<60&&completedAt[0]<0;i++){clock[0]=i*1000;lua.step(clock[0]);}}
-                catch(RuntimeException e){if(!e.getMessage().contains("没有已配置且有燃油的车辆"))throw e;blocked=true;}
+                catch(RuntimeException e){if(!e.getMessage().contains("没有已配置且有燃油的车辆")&&!e.getMessage().contains("翻页后无法核对重叠车辆"))throw e;blocked=true;}
             }
             boolean knownEmpty=scenario==0||scenario==3;
             check(knownEmpty?"fuelEmpty".equals(outcome[0])&&completedAt[0]<60000&&!blocked:blocked&&completedAt[0]<0,

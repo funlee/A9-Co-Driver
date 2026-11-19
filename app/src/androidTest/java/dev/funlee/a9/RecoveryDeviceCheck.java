@@ -40,6 +40,8 @@ public final class RecoveryDeviceCheck extends Instrumentation {
             else if(mode.equals("rotation-recovery"))RotationRecoveryDeviceCheck.run(this,report);
             else if(mode.equals("home-replay")||mode.equals("home-clean"))homeReplay(report,mode.equals("home-clean"));
             else if(mode.equals("capture-resources"))CaptureResourceDeviceCheck.run(this,report);
+            else if(mode.equals("garage-current-detail"))GaragePageDeviceCheck.run(this,report,true);
+            else if(mode.equals("garage-page"))GaragePageDeviceCheck.run(this,report);
             else if(mode.equals("garage-detail"))GarageDetailDeviceCheck.run(this,report);
             else if(mode.equals("garage-filter"))new GarageFilterDeviceCheck(this).run(report);
             else if(mode.equals("rewards"))RewardScreenshotCheck.run(this,report);

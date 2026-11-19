@@ -36,6 +36,12 @@ final class MultiplayerGarageChecks {
             require(recognized.get("start").equals(true)&&recognized.get("rank").equals(league),league+": recognize league on garage rail");checks++;
         }
         require(MultiplayerGarage.read(new PixelFrame(720,1280,pixels),words,"铂金").get("rank").equals("白金"),"Legacy platinum OCR uses the current white-gold config key");checks++;
+        require(MultiplayerGarage.validPerformance("1,868/1,868")&&!MultiplayerGarage.validPerformance("1,868/1,368"),
+                "Reject impossible OCR performance before replacing a valid card reading");checks++;
+        var shortModel=MultiplayerGarage.read(new PixelFrame(720,1280,pixels),List.of(
+                word("1,868/1,868",270,225),word("5/6",240,390),word("R1",580,350)),"青铜");
+        require(shortModel.get("start").equals(true)&&((List<?>)((Map<?,?>)((List<?>)shortModel.get("cards")).get(0)).get("tokens")).contains("R1"),
+                "Short alphanumeric model names retain their identity token");checks++;
         checks+=leagueSelection(assets);
         String fallbackCases;
         try(var input=MultiplayerGarageChecks.class.getResourceAsStream("/world-league-fallback.lua")){
@@ -47,6 +53,20 @@ final class MultiplayerGarageChecks {
                 lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));
                 lua.load("fallback-"+scenario,fallbackCases);lua.start("test");
                 for(int i=0;i<180;i++)if(!lua.step(i*1000L))break;
+                lua.load("verify","assert(done,scenario)");
+            }
+            checks++;
+        }
+        String paginationCases;
+        try(var input=MultiplayerGarageChecks.class.getResourceAsStream("/world-car-pagination.lua")){
+            paginationCases=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
+        }
+        for(String scenario:List.of("car27","empty27","emptyBoth","delayedPage","missingBottom","slowPagination","fuzzyName","sameColumnShift","overshoot","stuckPage")){
+            try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
+                lua.set("scenario",scenario);
+                lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));
+                lua.load("pagination-"+scenario,paginationCases);lua.start("test");
+                for(int i=0;i<600;i++)if(!lua.step(i*(scenario.equals("slowPagination")?4000L:1000L)))break;
                 lua.load("verify","assert(done,scenario)");
             }
             checks++;

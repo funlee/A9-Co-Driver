@@ -30,6 +30,15 @@ final class CupSelectionChecks {
             widePixels[edge*720+x]=edge<240?0xffe0dde2:0xff00335d;
         PixelFrame wideFrame=new PixelFrame(720,1280,widePixels);
         if(RaceHud.visible(wideFrame)||!RaceHud.backWedge(wideFrame))throw new AssertionError("Wide Back wedge looks like a race");
+        for(int center:new int[]{1206,1224}){
+            int[] homePixels=widePixels.clone();
+            for(int[] point:new int[][]{{0,-13},{-13,2},{11,2},{-12,19},{10,19}})
+                homePixels[(center+point[0])*720+719-(34+point[1])]=0xffeeeeee;
+            PixelFrame home=new PixelFrame(720,1280,homePixels);
+            Map<String,Integer> button=RaceHud.homeButton(home,true);
+            if(!button.equals(Map.of("x",center,"y",34))||!RaceHud.homeButton(home,false).isEmpty())
+                throw new AssertionError("Find the shifted Home icon only on the supported menu layout");
+        }
         var wideCards=CupCarousel.cards(wideFrame,true);
         if(wideCards.size()!=3||!wideCards.get(2).get("center").equals(467))throw new AssertionError("Wide card positions changed");
         for(int x=99;x<=199;x++){
@@ -86,7 +95,7 @@ final class CupSelectionChecks {
                 "if selected==2 then entered=entered+1 else selected=2 end end;"+
                 "assert(utils.chooseCup('-2',true)==1 and entered==1,'transient missing card prevented a verified selection')"
         );
-        int checked=5;
+        int checked=7;
         for(String script:cases){
             try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
                 lua.load("utilities",Files.readString(assets.resolve("lua/utilities.lua")));lua.load("cup-fixture",fixture);

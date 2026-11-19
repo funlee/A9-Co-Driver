@@ -124,6 +124,10 @@ function dailyCup.readMap()
   if not chosen then print("每日战利品地图未确认，使用左划兜底") end
 end
 local function press(screen,label)
+  local exit=screen.rewardExitButton
+  if exit and exit.label==label and exit.x>850 and exit.y>590 then
+    tap(719-math.floor(exit.y),math.floor(exit.x));sleep(800);return true
+  end
   for _,w in ipairs(screen.words or {}) do
     local text=string.gsub(w.text,"%s","")
     if label=="继续" and text=="继绩" then text="继续" end

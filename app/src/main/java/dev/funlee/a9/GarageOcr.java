@@ -12,8 +12,8 @@ import java.util.concurrent.TimeUnit;
 final class GarageOcr {
     /** Read identity from separate crops of the same frame, away from the busy garage background. */
     static Map<String,Object> detail(TextRecognizer ocr,PixelFrame frame,boolean wide)throws Exception{
-        String name=region(ocr,frame,160,100,670,165,4);
-        String performance=wide?region(ocr,frame,862,128,1022,172,4):region(ocr,frame,780,125,1060,160,1);
+        String name=region(ocr,frame,160,100,670,180,4);
+        String performance=wide?region(ocr,frame,780,128,1060,172,4):region(ocr,frame,780,125,1060,160,1);
         return MultiplayerGarage.detail(List.of(Map.of("text",name,"x",300,"y",140),
                 Map.of("text",performance,"x",950,"y",140)));
     }
@@ -39,10 +39,16 @@ final class GarageOcr {
             Map<?,?> card=(Map<?,?>)value;
             int left=((Number)card.get("x")).intValue()-MultiplayerGarage.cardCenterOffset(aspect),top=((Number)card.get("y")).intValue()-110;
             if(aspect>=2.0){
-                int right=aspect>2.07?123:145;
+                int right=150;
                 String performance=region(ocr,frame,left+10,top+28,left+right,top+65,4);
-                if(performance.matches("(?s).*\\d{2,}\\s*/\\s*[0-9,]{3,}.*"))
+                String originalPerformance=card.get("performance").toString();
+                boolean complete=performance.replaceAll("[^0-9]","").length()>=originalPerformance.replaceAll("[^0-9]","").length();
+                if(complete&&MultiplayerGarage.validPerformance(performance)&&performance.matches("(?s).*\\d{2,}\\s*/\\s*[0-9,]{3,}.*"))
                     supplemented.add(Map.of("text",performance,"x",left+73,"y",top+46));
+            }
+            if(aspect>2.07){
+                String name=region(ocr,frame,left+235,top+110,left+345,top+177,4);
+                supplemented.add(Map.of("text",name,"x",left+290,"y",top+145));
             }
             if(((Number)card.get("fuel")).intValue()>=0)continue;
             int green=0;
