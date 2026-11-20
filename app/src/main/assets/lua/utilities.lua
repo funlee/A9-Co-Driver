@@ -278,6 +278,16 @@ function utils.dismissExitDialog(screen)
   tapUiWord(stay)
   sleep(1);sleep(1000)
 end
+local function dismissDriveTutorial(screen)
+  if screen.scene~='unknown' then return false end
+  local text=(screen.text or ''):gsub('[ \t\r\n]',''):gsub('堤','提')
+  if not text:find('大师操作模式',1,true) or not text:find('不再提示',1,true) then return false end
+  local button=findUiWord(screen,{['继续']=true,['确定']=true},950,1265,580,710)
+  if not button then return false end
+  print('已识别驾驶模式说明，继续返回车辆页面')
+  tapUiWord(button);sleep(1);sleep(1500)
+  return true
+end
 function utils.openHomeTab(screen,name)
   local daily=name=='daily'
   local function dailyButton(s)
@@ -316,10 +326,17 @@ function utils.openHomeTab(screen,name)
   if not daily then return end
 
   local afterHome=0
-  for attempt=1,8 do
+  local dismissedExit=false
+  for attempt=1,12 do
     local fresh=_soloEventUi()
-    if fresh.scene=='exitGame' then error('赛事入口被退出提示遮挡，请关闭后续跑') end
-    if fresh.scene=='home' then
+    if fresh.scene=='exitGame' then
+      afterHome=0
+      if not dismissedExit then
+        utils.dismissExitDialog(fresh)
+        dismissedExit=true;opened=false
+        print('每日赛事入口的退出提示已关闭，重新核对入口')
+      end
+    elseif fresh.scene=='home' then
       afterHome=0
       button=not opened and dailyButton(fresh)
       if button then
@@ -342,6 +359,9 @@ function utils.backToMain()
   local sentBack=false
   local triedHome=false
   local closedPopup=false
+  local driveTutorialPages=0
+  local triedRankingHome=false
+  local dismissedDemotion=false
   local attempts=0
   local navigationDeadline=0
   local rewardTapAt=-10000
@@ -380,6 +400,23 @@ function utils.backToMain()
         tapUiWord(button);rewardTapAt=tickCount();rewardFrame=screen.frameId;rewardTaps=rewardTaps+1
       end
       sleep(500)
+    elseif screen.scene=='specialRanking' and rewardTaps>0 and not triedRankingHome then
+      triedRankingHome=true;triedHome=true
+      print('特殊赛事奖励已退出，从排行榜返回主界面')
+      if screen.homeButton then tapUiWord(screen.homeButton) else tap(690,1244) end
+      sleep(1);navigationDeadline=tickCount()+3000;sleep(400)
+    elseif screen.scene=='unknown' and tickCount()-rewardTapAt<12000 then
+      -- Do not spend the Home or Back attempt on a reward-page transition.
+      sleep(500)
+    elseif driveTutorialPages<2 and dismissDriveTutorial(screen) then
+      driveTutorialPages=driveTutorialPages+1
+    elseif screen.scene=='leagueDemotion' then
+      if screen.demotionConfirm and not dismissedDemotion then
+        dismissedDemotion=true
+        print('已确认世界赛降级提示，继续恢复任务')
+        tapUiWord(screen.demotionConfirm)
+      end
+      sleep(1200)
     elseif screen.scene=='profileUnlock' and dailyCup and dailyCup.dismissProfile then
       dailyCup.dismissProfile(screen)
     elseif screen.scene=='vehicleUnlock' then
@@ -1322,8 +1359,9 @@ function utils.screenFreeze(isBack)
 end
 local function ticketedTrial(screen)
   local project=data['项目']
+  local trialText=(screen.text or ''):gsub('%s',''):find('免费试驾',1,true)
   return (project=='杯赛' or project=='特殊赛事') and screen.scene=='car' and screen.fuel==-1 and not screen.starUpPending
-    and (screen.text or ''):gsub('%s',''):find('免费试驾',1,true) and startButton(screen)
+    and (trialText or (project=='特殊赛事' and screen.zeroTicketStart)) and startButton(screen)
 end
 function utils.startRace()
   local fuel=utils.carFuel()
@@ -1334,12 +1372,14 @@ function utils.startRace()
   end
   if fuel==0 then return 'fuelEmpty' end
   data['信息']='开始跑图'
-  for i=1,4 do
+  local driveTutorialPages=0
+  for i=1,8 do
     local screen=_soloEventUi()
     if screen.scene=='car' then
       if screen.starUpPending or screen.fuel==0 then return 'fuelEmpty' end
-      if fuel=='trial' and not ticketedTrial(screen) then return 'fuelEmpty' end
-      if utils.mycolor(50,830,'12FBC3-101010')~=1 then
+      if fuel=='trial' and not ticketedTrial(screen) then
+        data['信息']='等待重新确认赛事试驾按钮'
+      elseif utils.mycolor(50,830,'12FBC3-303030')~=1 then
         tap(50,830);print('打开TouchDrive');sleep(1000)
       else
         local button=startButton(screen)
@@ -1351,6 +1391,8 @@ function utils.startRace()
           return 1
         end
       end
+    elseif driveTutorialPages<2 and dismissDriveTutorial(screen) then
+      driveTutorialPages=driveTutorialPages+1
     end
     sleep(500)
   end
@@ -1430,7 +1472,9 @@ function utils.carFuel(allowGarage)
     if availability then
       if screen.frameId~=frame and previous==availability then return availability end
       previous=availability;frame=screen.frameId
-    else previous=nil end
+    elseif previous~='trial' or (screen.scene~='car' and screen.scene~='unknown') then
+      previous=nil
+    end
     sleep(500)
   end
   if stillInGarage then return nil end
@@ -1698,8 +1742,13 @@ local function waitWideCupSelected(target)
     sleep(500)
   end
 end
-function utils.chooseCup(num,wide)
+function utils.chooseCup(num,wide,configuredOnly)
   data["信息"] = "选择杯赛"
+  local function unavailable(reason)
+    if not configuredOnly then error(reason,2) end
+    print(reason)
+    return 0
+  end
   local cupAddr = LOCAL_ROOT .. "/cup" .. run.index .. ".png"
   local ret, x, y = -1, -1, -1
   num = tonumber(num)
@@ -1710,18 +1759,18 @@ function utils.chooseCup(num,wide)
     keepCapture()
     local cards=_cupCards()
     if #cards==0 or cards[1].center>210 then
-      error('超宽屏未能确认配置的赛事位置 '..num..'，保留当前任务')
+      return unavailable('超宽屏未能确认配置的赛事位置 '..num..'，保留当前任务')
     end
     local position=math.min(num,#cards)
     for i=2,position do
       local gap=cards[i].center-cards[i-1].center
-      if gap<115 or gap>185 then error('超宽屏赛事卡片未完整识别，保留当前任务') end
+      if gap<115 or gap>185 then return unavailable('超宽屏赛事卡片未完整识别，保留当前任务') end
     end
     local center=cards[position].center
     if not cards[position].selected then
       tap(115,center);sleep(1);sleep(1000)
       center=waitWideCupSelected(cards[position])
-      if not center then error('无法确认已选中杯赛位置 '..position) end
+      if not center then return unavailable('无法确认已选中杯赛位置 '..position) end
     end
     for step=position+1,num do
       local nextCard
@@ -1738,10 +1787,10 @@ function utils.chooseCup(num,wide)
         if nextCard then break end
         if attempt<4 then swipe(115,1050,115,745,300);sleep(1);sleep(800) end
       end
-      if not nextCard then error('超宽屏未能确认配置的赛事位置 '..num..'，保留当前任务') end
+      if not nextCard then return unavailable('超宽屏未能确认配置的赛事位置 '..num..'，保留当前任务') end
       center=nextCard.center;tap(115,center);sleep(1);sleep(1000)
       center=waitWideCupSelected(nextCard)
-      if not center then error('无法确认已选中杯赛位置 '..step) end
+      if not center then return unavailable('无法确认已选中杯赛位置 '..step) end
     end
     tap(115,center)
     return 1
@@ -1786,10 +1835,10 @@ function utils.chooseCup(num,wide)
     if not _cupCards then error("当前版本无法识别倒数赛事位置") end
     keepCapture()
     local cards = _cupCards()
-    if #cards == 0 then error("无法识别赛事卡片，已停止以避免进入错误赛事") end
+    if #cards == 0 then return unavailable('无法识别赛事卡片，已停止以避免进入错误赛事') end
     local target = cards[#cards]
     if not target.selected then tap(100, target.center);sleep(1);sleep(1000) end
-    if not utils.waitCupSelected(target.center) then error("无法确认最后一个赛事已选中") end
+    if not utils.waitCupSelected(target.center) then return unavailable('无法确认最后一个赛事已选中') end
     for step = 2, abs do
       local previous = nil
       for attempt = 1, 6 do
@@ -1816,19 +1865,19 @@ function utils.chooseCup(num,wide)
           print("倒数赛事第 "..step.." 张，当前卡片中心："..table.concat(positions,","))
           snapShot(LOCAL_ROOT.."/cup-carousel-unconfirmed.png",0,0,719,1279)
         end
-        error("赛事数量不足或无法定位杯赛位置 " .. num)
+        return unavailable('赛事数量不足或无法定位杯赛位置 '..num)
       end
       tap(100, previous.center);sleep(1);sleep(1000)
       if wide then
-        if not waitWideCupSelected(previous) then error("无法确认已向左选择赛事，已停止") end
+        if not waitWideCupSelected(previous) then return unavailable('无法确认已向左选择赛事，已停止') end
       elseif not utils.waitCupSelected(previous.center) then
-        error("无法确认已向左选择赛事，已停止")
+        return unavailable('无法确认已向左选择赛事，已停止')
       end
     end
     keepCapture();cards = _cupCards()
     local selected = nil
     for _, card in ipairs(cards) do if card.selected then selected = card;break end end
-    if not selected then error("无法确认已选中杯赛位置 " .. num) end
+    if not selected then return unavailable('无法确认已选中杯赛位置 '..num) end
     if wide then tap(100, selected.center);return 1 end
     xy = {100, selected.center}
   end
@@ -1836,7 +1885,8 @@ function utils.chooseCup(num,wide)
     tap(xy[1], xy[2])
     sleep(1);sleep(2000)
   end
-  if not utils.cupSelectedAt(xy[2]) then error("无法确认已选中杯赛位置 " .. num .. "，已停止以避免进入错误赛事") end
+  if not utils.cupSelectedAt(xy[2]) then return unavailable('无法确认已选中杯赛位置 '..num..'，已停止以避免进入错误赛事') end
+  if configuredOnly then tap(xy[1],xy[2]);return 1 end
   local res = {-1, -1, -1, -1}
   if utils.fileExist(cupAddr) then res = utils.findCup(cupAddr) end
   if res[3] ~= -1 then

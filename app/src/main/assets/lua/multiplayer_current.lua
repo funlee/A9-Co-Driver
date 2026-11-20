@@ -105,6 +105,55 @@ local function confirmCar(screen,card,index,position)
   end
   error('目标车位仍在移动，未选择车辆')
 end
+local function awaitGarageOverlap(previous,position,direction,afterFrame)
+  local stableOffset,stableLeft,lastGarage
+  local stableFrames=0
+  for retry=1,18 do
+    sleep(90)
+    local nextScreen=_multiplayerUi(false,false,true)
+    if nextScreen.scene~='cars' then error('跨屏选车时已离开车库，已停止') end
+    if nextScreen.frameId and nextScreen.frameId>afterFrame then
+      afterFrame=nextScreen.frameId
+      local nextGarage=nextScreen.garage or {};lastGarage=nextGarage
+      local offset=nil
+      if direction==-1 and nextGarage.start and nextGarage.rank==position.rank then offset=0
+      else
+        local candidates={}
+        local moved=(tonumber(previous.left) or 0)-(tonumber(nextGarage.left) or 0)
+        for _,old in ipairs(previous.cards or {}) do
+          for _,new in ipairs(nextGarage.cards or {}) do
+            local delta=old.index-new.index
+            local shifted=delta*direction>0 or moved*direction>=20
+            if position.offset+delta>=0 and delta*direction>=0 and delta%2==0 and shifted then
+              local match=sameCard(old,new,12)
+              local lowContrast=old.clipped or new.clipped or
+                (old.availability=='locked' and new.availability=='locked')
+              if match or (lowContrast and sameCard(old,new,8,5)) then
+                local evidence=candidates[delta] or {matches=0,confirmed=false}
+                evidence.matches=evidence.matches+(match and sameCard(old,new) and 2 or 1)
+                evidence.confirmed=evidence.confirmed or match
+                candidates[delta]=evidence
+              end
+            end
+          end
+        end
+        for delta,evidence in pairs(candidates) do
+          if evidence.confirmed and evidence.matches>=2 then
+            if offset then offset=nil;break end
+            offset=position.offset+delta
+          end
+        end
+      end
+      local left=tonumber(nextGarage.left) or 0
+      if offset and offset==stableOffset and stableLeft and math.abs(left-stableLeft)<=3 then
+        stableFrames=stableFrames+1
+      else stableFrames=1 end
+      stableOffset=offset;stableLeft=left
+      if offset and stableFrames>=2 then return nextScreen,offset end
+    end
+  end
+  return nil,nil,lastGarage,afterFrame
+end
 local function locateCar(screen,index,position)
   local garage=screen.garage
   local attempts=0
@@ -123,67 +172,32 @@ local function locateCar(screen,index,position)
     end
     attempts=attempts+1
     if attempts>60 then error('无法连续核验配置车辆 '..index..' 的跨屏位置，已停止选车') end
-    local previous=garage
     local direction=index<=position.offset and -1 or 1
-    local distance=math.min(tonumber(garage.pitch) or 359,464)
+    local pitch=math.min(tonumber(garage.pitch) or 359,464)
+    -- Ultrawide layouts can show only two complete columns. Leave most of a column
+    -- visible across the drag, and give the carousel time to settle before release.
+    local wide=pitch==359
+    local distance=wide and math.floor(pitch*0.7) or pitch
+    local duration,hold=wide and 600 or 300,wide and 180 or 100
     local from=direction==1 and 1100 or 300
-    swipe(419,from,419,from-direction*distance,300,100)
-    local afterFrame=screen.frameId
-    local stableOffset=nil;local stableLeft=nil;local stableFrames=0;local accepted=false
-    local lastGarage
-    for retry=1,18 do
-      sleep(90)
-      local nextScreen=_multiplayerUi(false,false,true)
-      if nextScreen.scene~='cars' then error('跨屏选车时已离开车库，已停止') end
-      if nextScreen.frameId~=afterFrame and nextScreen.frameId>screen.frameId then
-        afterFrame=nextScreen.frameId
-        local nextGarage=nextScreen.garage or {};lastGarage=nextGarage
-        local offset=nil
-        if direction==-1 and nextGarage.start and nextGarage.rank==position.rank then offset=0
-        else
-          local candidates={}
-          for _,old in ipairs(previous.cards or {}) do
-            for _,new in ipairs(nextGarage.cards or {}) do
-              local delta=old.index-new.index
-              local moved=(tonumber(previous.left) or 0)-(tonumber(nextGarage.left) or 0)
-              local shifted=delta*direction>0 or moved*direction>=20
-              if position.offset+delta>=0 and delta*direction>=0 and delta%2==0 and shifted then
-                local match=sameCard(old,new,12)
-                local lowContrast=old.clipped or new.clipped or
-                  (old.availability=='locked' and new.availability=='locked')
-                if match or (lowContrast and sameCard(old,new,8,5)) then
-                  local evidence=candidates[delta] or {matches=0,confirmed=false}
-                  evidence.matches=evidence.matches+(match and sameCard(old,new) and 2 or 1)
-                  evidence.confirmed=evidence.confirmed or match
-                  candidates[delta]=evidence
-                end
-              end
-            end
-          end
-          for delta,evidence in pairs(candidates) do
-            if evidence.confirmed and evidence.matches>=2 then
-              if offset then offset=nil;break end
-              offset=position.offset+delta
-            end
-          end
-        end
-        local left=tonumber(nextGarage.left) or 0
-        if offset and offset==stableOffset and stableLeft and math.abs(left-stableLeft)<=3 then
-          stableFrames=stableFrames+1
-        else stableFrames=1 end
-        stableOffset=offset;stableLeft=left
-        if offset and stableFrames>=2 then
-          position.offset=offset;garage=nextGarage;screen=nextScreen;accepted=true;break
-        end
-      end
+    swipe(419,from,419,from-direction*distance,duration,hold)
+    local nextScreen,offset,lastGarage,lastFrame=awaitGarageOverlap(garage,position,direction,screen.frameId)
+    if not nextScreen and wide and lastGarage then
+      -- A short reverse drag can bring the overlap back. Keep the same verified anchor
+      -- and direction until the corrected position is confirmed in consecutive frames.
+      print('宽屏选车翻页重叠不足，回拖核验上一页车辆')
+      local backFrom=direction==1 and 300 or 1100
+      swipe(419,backFrom,419,backFrom+direction*distance,duration,hold)
+      nextScreen,offset,lastGarage=awaitGarageOverlap(garage,position,direction,lastFrame)
     end
-    if not accepted then
-      if _jsonEncode then print('翻页定位失败，起始偏移 '..position.offset..'：'.._jsonEncode(previous)..' → '.._jsonEncode(lastGarage or {})) end
+    if not nextScreen then
+      if _jsonEncode then print('翻页定位失败，起始偏移 '..position.offset..'：'.._jsonEncode(garage)..' → '.._jsonEncode(lastGarage or {})) end
       error('车辆 '..index..' 翻页后无法核对重叠车辆，已停止，未改选其他车辆')
     end
+    position.offset=offset;screen=nextScreen;garage=nextScreen.garage
   end
 end
-function currentMultiplayer.run()
+function currentMultiplayer.run(resumingTutorial)
   local count=tonumber(run.data['次数']) or 1
   local completed=_sessionProject(data['项目'],count) or 0
   for _,key in ipairs({'选车筛选'}) do
@@ -205,9 +219,13 @@ function currentMultiplayer.run()
     local route=nil;local routeAvailable=true;local candidate=nil;local candidateFrames=0;local lastMapText=''
     local raceMode=mode;local fallback=false;local fallbackReason=''
     local raced=false;local resultSeen=false;local eventSince=nil;local rewardsSince=nil;local rewardsDone=false;local rewardExitAt=nil
-    local lastScene='';local changed=tickCount();local started=false;local seriesSelected=false
+    local lastScene='';local changed=tickCount();local started=resumingTutorial==true;local seriesSelected=started
+    resumingTutorial=false
+    local tutorialPressedAt=nil
+    local demotionPressedAt=nil
     local lastPulse=0;local carRetries=0;local carListAligned=false
     local eventPressedAt=nil;local carPressedAt=nil;local selectedCar=nil
+    local unverifiedCarBackAt=nil;local unverifiedCarBacks=0
     local returnHomeAt=nil;local emptyCars={};local emptyDetailFrames=0;local emptyDetailFrame=nil
     local originRetries=0;local alignAttempts=0;local alignKey=nil;local alignFrames=0;local alignFrame=nil;local alignSwipeFrame=nil;local verifiedKey=nil
     local position={offset=0}
@@ -218,7 +236,7 @@ function currentMultiplayer.run()
     local rewardSeenAt,rewardConfirmedAt,rewardObservedCard,rewardObservedAt
     local rewardHandled=false
     local returnFrame=nil;local returnFrames=0
-    local postActionKey=nil;local postActionFrame=nil;local postActionTries=0
+    local postActionKey=nil;local postActionFrame=nil
     local function postPress(screen,label,minY,phase)
       local button=word(screen,label,minY)
       local exit=screen.rewardExitButton
@@ -229,18 +247,19 @@ function currentMultiplayer.run()
       local key=phase..':'..label
       -- OCR and tap dispatch can outlive a page animation. Never repeatedly tap
       -- Continue through a stale reward image into the next menu's Start button.
+      -- Different reward batches can share the same Continue label, so use it
+      -- only for pacing taps across fresh frames.
       if postActionFrame and (frame-postActionFrame<3000 or
           (key==postActionKey and frame-postActionFrame<8000)) then
         data['信息']='已点击结算按钮，等待切页';sleep(500);return true
       end
-      if key~=postActionKey then postActionTries=0 end
-      if postActionTries>=3 then error('结算按钮多次点击后页面仍未切换，已停止避免误点') end
-      postActionKey=key;postActionFrame=frame;postActionTries=postActionTries+1
+      postActionKey=key;postActionFrame=frame
       click(button.x,button.y);sleep(1200);return true
     end
     while true do
       local screen=_multiplayerUi(readSeriesScore,started or raced)
       local scene=screen.scene
+      local tutorial=started and not raced and spCup and spCup.tutorialButton(screen)
       if _racePanel then _racePanel(scene=='race') end
       if scene=='event' or scene=='home' or scene=='cars' or scene=='series' then rewardsSince=nil end
       if scene~='rewardChoice' then
@@ -254,7 +273,7 @@ function currentMultiplayer.run()
         _sessionRaceResult(screen.finalRank or 0)
         if not resultSeen then resultSeen=true;status(settlementStatus(screen)) end
       end
-      if started and not raced and scene=='unknown' then
+      if started and not raced and scene=='unknown' and not tutorial then
         if screen.mapText and screen.mapText~=lastMapText then
           lastMapText=screen.mapText;print('地图标题 OCR：'..lastMapText)
           snapShot(getWorkPath()..'/multiplayer-map.png')
@@ -272,7 +291,23 @@ function currentMultiplayer.run()
       end
       -- The host handles the timeout while matching is confirmed.
       if scene~='matching' and tickCount()-changed>120000 then error('多人界面等待超时：'..scene..'，请查看诊断截图') end
-      if scene=='profileUnlock' then
+      if tutorial then
+        if not tutorialPressedAt then
+          tutorialPressedAt=tickCount()
+          status('多人开赛教学：已确认并点击开始')
+          click(tutorial.x,tutorial.y);sleep(1500)
+        elseif tickCount()-tutorialPressedAt>30000 then error('多人开赛教学点击后未能确认切页，保留当前任务')
+        else sleep(500) end
+      elseif scene=='leagueDemotion' then
+        local confirm=screen.demotionConfirm
+        if confirm and not demotionPressedAt then
+          demotionPressedAt=tickCount()
+          status('已确认世界赛降级提示，等待返回赛事')
+          click(confirm.x,confirm.y);sleep(1500)
+        elseif demotionPressedAt and tickCount()-demotionPressedAt>30000 then
+          error('世界赛降级提示未能关闭，已保留任务进度')
+        else sleep(500) end
+      elseif scene=='profileUnlock' then
         dailyCup.dismissProfile(screen,_multiplayerUi);changed=tickCount()
       elseif scene=='vehicleUnlock' then
         -- Highest priority: never dispatch a close-X, Back, Continue or unlock action here.
@@ -513,6 +548,7 @@ function currentMultiplayer.run()
           end
         end
       elseif scene=='cars' then
+        unverifiedCarBackAt=nil
         local garage=screen.garage or {}
         local tabs=screen.leagueTabs or {}
         if world and not targetLeague and tabs.selected then targetLeague=tabs.selected end
@@ -601,7 +637,8 @@ function currentMultiplayer.run()
             elseif card then
                 if card.availability=='empty' or card.availability=='locked' or card.availability=='starUp' then
                   emptyCars[index]=true;exhausted=exhausted+1
-                  if card.availability=='starUp' then print('车辆 '..index..' 待升星，尝试下一辆配置车辆') end
+                  if card.availability=='starUp' then print('车辆 '..index..' 待升星，尝试下一辆配置车辆')
+                  elseif not world and card.availability=='empty' then print('车辆 '..index..' 无油，尝试下一辆配置车辆') end
                 elseif card.availability=='ready' then
                   usedCars[rankKey][entry]=true
                   lastPage={rank=rankKey,index=index,offset=position.offset,cards=garage.cards}
@@ -634,8 +671,22 @@ function currentMultiplayer.run()
             sleep(500)
           end
         end
+      elseif scene=='car' and not started and not selectedCar then
+        if unverifiedCarBackAt then
+          if tickCount()-unverifiedCarBackAt>10000 then error('未校验车辆详情无法返回选择列表，已停止') end
+          sleep(500)
+        else
+          unverifiedCarBacks=unverifiedCarBacks+1
+          if unverifiedCarBacks>3 then error('反复进入未校验车辆详情，已停止') end
+          unverifiedCarBackAt=tickCount()
+          carListAligned=false;alignAttempts=0;alignKey=nil;alignFrames=0
+          alignSwipeFrame=nil;alignFrame=nil;verifiedKey=nil
+          pageOffset=nil;pageLeft=nil;pageFrame=nil
+          status('发现未校验车辆详情，返回列表重新核对车辆序号')
+          if screen.homeButton then keyPress('back') else click(38,29) end
+          sleep(1200)
+        end
       elseif scene=='car' and not started then
-        if not selectedCar then error('未经过列表起点及序号校验，禁止直接开始比赛') end
         if screen.fuel==0 or screen.starUpPending then
           if screen.frameId~=emptyDetailFrame then emptyDetailFrames=emptyDetailFrames+1;emptyDetailFrame=screen.frameId end
           if emptyDetailFrames>=2 then

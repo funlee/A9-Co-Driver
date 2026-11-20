@@ -103,8 +103,10 @@ final class StabilityChecks {
         check(limited&&errors[0]==maxRetries&&results[0]==0,"Animated close waits before bounded retries and never counts an unfinished race: "+errorScene);
         }
         postRaceTransitions(assets);
+        postRaceRewardBatches(assets);
         disconnectedRace(assets);
-        carAlignment(assets);
+        carAlignment(assets,false);
+        carAlignment(assets,true);
         fuelSkip(assets);
         skippedQueue(assets);
         for(boolean skip:List.of(false,true))for(boolean crash:List.of(false,true))continuousCycles(assets,skip,crash);
@@ -238,6 +240,48 @@ final class StabilityChecks {
             }
         }
     }
+    private static void postRaceRewardBatches(Path assets)throws Exception{
+        List<String> rewards=List.of("金币 18,888","蓝币 38","稀有卡牌 X1","进口零件 X2","联会币 388","万能图纸 X1");
+        List<String> dismissed=new ArrayList<>();
+        int race=-2, results=-1;
+        int[] livePage={race}, capturedPage={race}, staleFrames={0}, returned={0};
+        long[] frame={0};
+        try(LuaRuntime lua=new LuaRuntime((name,l)->{
+            if(name.equals("_multiplayerUi")){
+                if(staleFrames[0]>0){
+                    staleFrames[0]--;
+                }else{
+                    capturedPage[0]=livePage[0];
+                    frame[0]+=1000;
+                }
+                int page=capturedPage[0];
+                String phase=page==race?"race":page==results?"result":page<rewards.size()?"bonus":"event";
+                Map<String,Object> screen=MultiplayerGarageChecks.fixture(transitionScreen(phase));
+                if(phase.equals("bonus"))screen.put("text","恭喜！你获得了这些奖励 "+rewards.get(page)+" 继续");
+                screen.put("frameId",frame[0]);
+                if(page==race)livePage[0]=results;
+                LuaRuntime.push(l,screen);return 1;
+            }
+            if(name.equals("_fallbackStep")){l.push(99);return 1;}
+            if(name.equals("_sessionRaceReturned"))returned[0]++;
+            if(name.equals("tap")&&l.toInteger(2)==1100&&719-l.toInteger(1)==650){
+                int page=livePage[0];
+                check(page==capturedPage[0]&&page>=results&&page<rewards.size(),"Only tap Continue on the current reward or result page");
+                if(page>=0)dismissed.add(rewards.get(page));
+                livePage[0]++;
+                staleFrames[0]=2;
+            }
+            return 0;
+        },List.of("_multiplayerUi","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned",
+                "_sessionOperation","_fallbackBegin","_fallbackStep","tap","swipe","print","_hud"))){
+            lua.set("data",Map.of("项目","多人下","多人",0));lua.set("run",Map.of("data",Map.of("次数",1)));
+            lua.load("helpers","utils={defultCfg=function(v,d)return v or d end}");
+            lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));
+            lua.start("currentMultiplayer.run");
+            for(int i=0;i<180&&returned[0]==0;i++)lua.step(i*1000L);
+        }
+        check(dismissed.equals(rewards)&&returned[0]==1,"Process more than three identical Continue labels and return without tapping Start");
+    }
     private static void disconnectedRace(Path assets)throws Exception{
         String observed="你的排名 你已 断开连接 连接丟失 你的用时 00:00.000 排行榜 继续";
         check(MultiplayerUi.classify(observed).equals("raceDisconnected"),"Observed disconnected result overrides normal result labels");
@@ -327,18 +371,22 @@ final class StabilityChecks {
         check(!finished[0]&&total[0]==200&&world[0]==102&&master[0]==98,"Skipped quota never counts as finishes; existing 78 survive and 200 actual finishes observed without automatic stop");
         check(skipped[0]==1&&entered.subList(0,3).equals(List.of("4:2","5:1","5:2")),"Skip advances to next task even after recovery; next cycle retries skipped mode");
     }
-    private static void carAlignment(Path assets)throws Exception{
-        int[] frames={0},swipes={0};List<String> taps=new ArrayList<>();
+    private static void carAlignment(Path assets,boolean unexpectedDetail)throws Exception{
+        int[] frames={0},swipes={0},backs={0};List<String> taps=new ArrayList<>();
         try(LuaRuntime lua=new LuaRuntime((name,l)->{
             if(name.equals("_multiplayerUi")){
                 int n=frames[0]++;
                 LuaRuntime.push(l,MultiplayerGarageChecks.fixture(n==0?Map.of("scene","series","text","世界系列赛 大师系列赛","words",List.of(Map.of("text","大师系列赛","x",640,"y",450))):
                     n==1?Map.of("scene","event","text","大师系列赛 里程碑 开始","words",List.of(Map.of("text","开始","x",1100,"y",650))):
+                    unexpectedDetail&&n<4?Map.of("scene","car","text","车辆详情 开始","words",List.of(Map.of("text","开始","x",1100,"y",650))):
                     Map.of("scene","cars","text","车辆选择 选择参与此赛事的车辆","words",List.of(
                         Map.of("text","2/3","x",swipes[0]<1?240:704,"y",390)))));return 1;
             }
             if(name.equals("swipe")){check(l.toInteger(1)==419&&l.toInteger(2)==300&&l.toInteger(4)==1100,"Garage recenter swipes right in card region");swipes[0]++;}
-            if(name.equals("tap")&&frames[0]>2)taps.add(l.toInteger(1)+","+l.toInteger(2));
+            if(name.equals("tap")&&frames[0]>2){
+                if(unexpectedDetail&&frames[0]<=4&&l.toInteger(1)==690&&l.toInteger(2)==38)backs[0]++;
+                else taps.add(l.toInteger(1)+","+l.toInteger(2));
+            }
             return 0;
         },List.of("_multiplayerUi","_sessionProject","tap","swipe","_hud","print"))){
             lua.set("data",Map.of("项目","多人下"));lua.set("run",Map.of("data",Map.of("次数",10,"多人下用车",List.of("1","2","3","4"))));
@@ -346,7 +394,8 @@ final class StabilityChecks {
             lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));lua.start("currentMultiplayer.run");
             for(int i=0;i<20&&taps.isEmpty();i++)lua.step(i*2000L);
         }
-        check(swipes[0]==1&&taps.equals(List.of("414,874")),"Re-read after recenter selects configured car 3, not stale shifted car 1");
+        check(swipes[0]==1&&taps.equals(List.of("414,874"))&&backs[0]==(unexpectedDetail?1:0),
+            "Re-read after recenter selects configured car 3, with one back tap from unexpected details when needed");
     }
     private static void continuousCycles(Path assets,boolean skip,boolean crash)throws Exception{
         TaskCheckpoint checkpoint=new TaskCheckpoint();int[] cycle={0},project={0},races={0},entries={0};boolean[] finished={false},failed={false};

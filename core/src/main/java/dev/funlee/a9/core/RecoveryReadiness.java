@@ -4,7 +4,7 @@ import java.util.Set;
 
 /** A foreground splash/login animation is not yet an actionable game menu. */
 public final class RecoveryReadiness {
-    private static final Set<String> MENUS=Set.of("home","series","event","cars","car","promo","options","dailyGoals","milestoneLater","vehicleUnlock","profileUnlock");
+    private static final Set<String> MENUS=Set.of("home","series","event","cars","car","promo","options","dailyGoals","milestoneLater","vehicleUnlock","profileUnlock","leagueDemotion");
     private RecoveryReadiness() {}
     public static boolean incompatibleDevice(String text) {
         String normalized=MapMatcher.normalize(text).replace('遊','游').replace('戲','戏');

@@ -7,11 +7,13 @@ local dispatched=0
 local oldOffset=0
 local pageLeft=500
 local repeatRace=scenario=='remembered' or scenario=='differentPage' or scenario=='reversePage'
+local wideCar10=scenario=='wideCar10' or scenario=='wideCar10Overscroll'
 local firstSwipes=nil
 local fullPageReads=0
 data={['项目']='多人上',['多人']=0}
 run={data={['次数']=repeatRace and 2 or 1,['青铜用车']={27,28,5},['用车模式']='1'}}
 if scenario=='reversePage' then run.data['青铜用车']={28,5} end
+if wideCar10 then run.data['青铜用车']={10} end
 local resets=0
 utils={defultCfg=function(v,d)return v or d end}
 function print()end
@@ -25,10 +27,17 @@ function _fallbackStep()return 99 end
 function _sessionRaceReturned()
   if scenario=='differentPage' then offset=12 else offset=offset+2 end
 end
-function swipe(_,from,__,to)
+function swipe(_,from,__,to,duration,hold)
   if phase~='cars' then return end
   swipes=swipes+1;oldOffset=offset;dispatched=0
-  if scenario=='sameColumnShift' and swipes%2==1 then pageLeft=pageLeft-150
+  if wideCar10 then
+    if to>from then
+      assert(scenario=='wideCar10Overscroll' and swipes==2 and chosen==0,'Unexpected corrective drag')
+      offset=2
+    elseif math.abs(to-from)>270 or duration<500 or hold<150 or (scenario=='wideCar10Overscroll' and swipes==1) then
+      offset=offset+6 -- The gesture moved past every car in the verified screenshot.
+    else offset=offset+2 end
+  elseif scenario=='sameColumnShift' and swipes%2==1 then pageLeft=pageLeft-150
   elseif scenario~='stuckPage' then offset=math.max(0,offset+(to<from and 1 or -1)*(scenario=='overshoot' and 8 or 2));pageLeft=500 end
 end
 function tap(y,x)
@@ -96,13 +105,15 @@ function test()
     assert(chosen==0,message)
   else
     assert(message:find('started'),message)
-    local expected=scenario=='reversePage' and 5 or (repeatRace or scenario=='empty27' or scenario=='locked27') and 28 or scenario=='emptyBoth' and 5 or 27
+    local expected=wideCar10 and 10 or scenario=='reversePage' and 5 or (repeatRace or scenario=='empty27' or scenario=='locked27') and 28 or scenario=='emptyBoth' and 5 or 27
     assert(chosen==expected,'selected '..chosen..' instead of '..expected)
     if scenario=='car27' then assert(fullPageReads==1,'Only the destination needs full OCR after scrolling') end
     if scenario=='reversePage' then assert(resets==0 and swipes>firstSwipes,'Move left from remembered position without a reset') end
     if scenario=='remembered' then assert(firstSwipes==swipes,'Adjacent car repeated the origin search') end
     if scenario=='differentPage' then assert(swipes>firstSwipes,'Changed page must recount from the origin') end
-    assert(swipes>=11,'Must observe every overlapping column')
+    if wideCar10 then
+      assert(swipes==(scenario=='wideCar10Overscroll' and 3 or 2),'Verify each column before selecting car 10')
+    else assert(swipes>=11,'Must observe every overlapping column') end
   end
   done=true
 end

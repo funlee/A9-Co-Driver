@@ -21,7 +21,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             "cmpColorEx","cmpColor","getPixelColor","findColor","findMultiColor","findPic","snapShot","rotateImage",
             "getDisplaySize","getDisplayRotate","getWorkPath","getSdPath","getPackageName","getInstalledApk","frontAppName","runApp","stopApp","keyPress",
             "setScreenScale","setControlBarPos","rnd","toast","print","colorToRGB","_jsonEncode","_jsonDecode","_textOcr","_digit","_mapMatch","_recoverEventStart",
-            "_validateRoute","_driverBegin","_driverStep","_driverEnd","_racePanel","_hud","_finished","_multiplayerUi","_rewardUi","_fallbackBegin","_fallbackStep","_sessionCycle","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_sessionLegacyCompleted","_sessionRaceRewards","_sessionLegacyPrepare","_sessionLegacyMap","_legacyRewardSample","_sessionLegacyRewards","_sessionOperation","_routeDisplay","_cupCards","_dailyEventUi","_soloEventUi","_garageFilterState","_garageFilterPrepare","_dailyTaskStatus","_queueResume","_queueRewardsDone","_queueEnter","_queueDone");
+            "_validateRoute","_driverBegin","_driverStep","_driverEnd","_racePanel","_hud","_taskNotice","_finished","_multiplayerUi","_rewardUi","_fallbackBegin","_fallbackStep","_sessionCycle","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_sessionLegacyCompleted","_sessionRaceRewards","_sessionLegacyPrepare","_sessionLegacyMap","_legacyRewardSample","_sessionLegacyRewards","_sessionOperation","_routeDisplay","_cupCards","_dailyEventUi","_soloEventUi","_garageFilterState","_garageFilterPrepare","_dailyTaskStatus","_queueResume","_queueRewardsDone","_queueEnter","_queueDone");
     private final Context context;
     private final LocalStore store;
     private final CaptureSession capture;
@@ -178,6 +178,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             String scene=menu.isEmpty()?MultiplayerUi.classify(text.toString()):menu;
             Map<String,Object> screen=new LinkedHashMap<>(Map.of("text",text.toString(),"words",words,
                     "frameId",capture.frameId(),"scene",scene));
+            if(addLeagueDemotion(screen,words))screen.put("scene","leagueDemotion");
             if(scene.equals("home"))screen.put("dailyGoalsHighlighted",MainMenuUi.dailyGoalsHighlighted(frame));
             addWideHomeButton(screen);
             return screen;
@@ -233,6 +234,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             SessionState.log("界面文字为空，已保存当前截屏用于排查");
         }
         String scene=MultiplayerUi.classify(text,words);
+        if(addLeagueDemotion(out,words))scene="leagueDemotion";
         if(touch!=null){
             touch.unlockGuard.observe(VehicleUnlockGuard.prompt(text),laterBounds,!scene.equals("unknown")&&!scene.equals("vehicleUnlock"));
             if(touch.unlockGuard.active()){
@@ -342,6 +344,12 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         long score=RaceRewards.amount(text(719-bottom,left,719-top,right,2),false);
         if(score>=0)out.put("seriesScore",score);
     }
+    private boolean addLeagueDemotion(Map<String,Object> out,List<?> words) {
+        Map<String,Integer> button=MultiplayerUi.leagueDemotionButton(frame,words);
+        if(button.isEmpty())return false;
+        out.put("demotionConfirm",button);
+        return true;
+    }
     private Map<String,Object> dailyEventUi()throws Exception { return dailyEventUi(false); }
     private Map<String,Object> dailyEventUi(boolean solo)throws Exception { return dailyEventUi(solo,false); }
     private Map<String,Object> dailyEventUi(boolean solo,boolean specialLoading)throws Exception {
@@ -369,6 +377,10 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             String menu=MainMenuUi.classify(full.getText(),words);
             if(solo&&(menu.equals("exitGame")||scene.equals("unknown")&&!menu.isEmpty()))scene=menu;
             if(solo&&MultiplayerUi.limitedSalePromo(full.getText()))scene="limitedSalePromo";
+            if(solo&&addLeagueDemotion(out,words))scene="leagueDemotion";
+            if(solo&&(scene.equals("unknown")||scene.equals("car"))&&DailyEventUi.zeroTicketStart(full.getText(),words,frame)){
+                scene="car";out.put("zeroTicketStart",true);
+            }
             if(solo&&scene.equals("unknown")&&DailyEventUi.rewardOnly(full.getText(),words,frame))scene="dailyRewardOnly";
             if(solo&&scene.equals("unknown")&&wideViewport()&&RaceHud.backWedge(frame)&&
                     CupCarousel.cards(frame,true).size()>=3)scene="wideCupList";
@@ -554,6 +566,12 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                     if(l.toBoolean(1))SessionState.overlayMode(false,false);
                     SessionState.racePanel(l.toBoolean(1));return 0;
                 case "_hud":SessionState.hud(s(l,1));return 0;
+                case "_taskNotice":{
+                    String message=s(l,1);
+                    SessionState.log(message);
+                    if(touch!=null)touch.showTaskNotice(message,n(l,2));
+                    return 0;
+                }
                 case "_finished":finished=true;persist(true);return 0;
                 case "_jsonEncode":return result(l,toJson(l.toObject(1)).toString());
                 case "_jsonDecode":return result(l,LocalStore.javaValue(new JSONTokener(s(l,1)).nextValue()));

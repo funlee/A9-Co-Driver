@@ -1,9 +1,11 @@
 package dev.funlee.a9;
 
 import android.app.Instrumentation;
+import android.app.UiAutomation;
 import android.content.Intent;
 import android.graphics.*;
 import android.os.*;
+import android.view.accessibility.AccessibilityNodeInfo;
 import com.google.android.gms.tasks.Tasks;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.*;
@@ -39,6 +41,7 @@ public final class RecoveryDeviceCheck extends Instrumentation {
             else if(mode.equals("garage-screenshots"))new GarageFilterDeviceCheck(this).screenshots(report);
             else if(mode.equals("rotation-recovery"))RotationRecoveryDeviceCheck.run(this,report);
             else if(mode.equals("home-replay")||mode.equals("home-clean"))homeReplay(report,mode.equals("home-clean"));
+            else if(mode.equals("league-demotion"))leagueDemotionReplay(report);
             else if(mode.equals("capture-resources"))CaptureResourceDeviceCheck.run(this,report);
             else if(mode.equals("world-score"))GaragePageDeviceCheck.run(this,report,"score");
             else if(mode.equals("wide-reward-earnings"))GaragePageDeviceCheck.run(this,report,"wideFame");
@@ -50,6 +53,14 @@ public final class RecoveryDeviceCheck extends Instrumentation {
             else if(mode.equals("garage-filter"))new GarageFilterDeviceCheck(this).run(report);
             else if(mode.equals("rewards"))RewardScreenshotCheck.run(this,report);
             else if(mode.equals("cup-selection"))new CupSelectionDeviceCheck(this).run(cupPosition,cupTitle,report);
+            else if(mode.equals("systemui-anr")){
+                UiAutomation ui=getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES);
+                AccessibilityNodeInfo root=ui.getRootInActiveWindow();
+                try{
+                    if(!GameRecovery.waitForSystemUi(root))throw new AssertionError("No verified System UI Wait button was clicked");
+                    report.putString("result","PASS: production recovery selected Wait on the System UI ANR");
+                }finally{if(root!=null)root.recycle();}
+            }
             else if(mode.equals("restart")||mode.equals("crash")){
                 if(SessionState.running)throw new IllegalStateException("Stop the current task before a device recovery check");
                 long until=SystemClock.elapsedRealtime()+15000;
@@ -71,6 +82,34 @@ public final class RecoveryDeviceCheck extends Instrumentation {
             }else throw new IllegalArgumentException("Unknown mode");
             finish(0,report);
         }catch(Throwable e){report.putString("result","FAIL: "+e);finish(1,report);}
+    }
+    private void leagueDemotionReplay(Bundle report)throws Exception{
+        File image=new File(getTargetContext().getFilesDir(),"league-demotion.png");
+        Bitmap raw=BitmapFactory.decodeFile(image.getAbsolutePath());
+        if(raw==null)throw new IllegalStateException("Missing private league-demotion.png fixture");
+        Bitmap frame=null,upright=null;
+        try(TextRecognizer recognizer=TextRecognition.getClient(new ChineseTextRecognizerOptions.Builder().build())){
+            frame=CaptureSession.normalizeFrame(raw,90,raw.getWidth(),raw.getHeight());
+            Matrix matrix=new Matrix();matrix.postRotate(270);
+            upright=Bitmap.createBitmap(frame,0,0,720,1280,matrix,false);
+            Text read=Tasks.await(recognizer.process(InputImage.fromBitmap(upright,0)),20,TimeUnit.SECONDS);
+            List<Map<String,Object>> words=new ArrayList<>();
+            for(Text.TextBlock block:read.getTextBlocks())for(Text.Line line:block.getLines()){
+                Rect bounds=line.getBoundingBox();
+                if(bounds!=null)words.add(Map.of("text",line.getText(),"x",bounds.centerX(),"y",bounds.centerY()));
+            }
+            int[] pixels=new int[720*1280];
+            frame.getPixels(pixels,0,720,0,0,720,1280);
+            Map<String,Integer> button=MultiplayerUi.leagueDemotionButton(new PixelFrame(720,1280,pixels),words);
+            if(Math.abs(button.getOrDefault("x",0)-633)>10||Math.abs(button.getOrDefault("y",0)-528)>10)
+                throw new AssertionError("League demotion action not confirmed: "+words);
+            report.putString("result","PASS: production league demotion recognition found the confirmation on the real screenshot");
+            report.putString("button",button.toString());
+        }finally{
+            if(upright!=null)upright.recycle();
+            if(frame!=null)frame.recycle();
+            raw.recycle();
+        }
     }
     private void homeReplay(Bundle report,boolean cleanHome)throws Exception{
         File image=new File(getTargetContext().getFilesDir(),"home-replay.jpg");

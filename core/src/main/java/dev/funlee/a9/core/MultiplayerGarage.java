@@ -134,7 +134,7 @@ public final class MultiplayerGarage {
         String league=master?(masterRail(frame,words)?"大师系列赛":""):league(frame,words,rank,wide,medium);
         int left=-1;
         for(int x=wide?18:4;x<650;x++){
-            if(slotEdge(frame,x,top,master)&&slotEdge(frame,x,top+rowPitch,master)){left=x;break;}
+            if(slotEdge(frame,x,top)&&slotEdge(frame,x,top+rowPitch)){left=x;break;}
         }
         boolean origin=!league.isEmpty()&&left>=(wide?215:202)&&left<=(wide?233:220);
         List<Object> cards=new ArrayList<>();
@@ -146,7 +146,7 @@ public final class MultiplayerGarage {
             for(int row=0;row<2;row++){
                 int y=top+row*rowPitch;
                 boolean bordered=false;
-                for(int dx=-3;dx<=3&&!bordered;dx++)bordered=slotEdge(frame,x+dx,y,master);
+                for(int dx=-3;dx<=3&&!bordered;dx++)bordered=slotEdge(frame,x+dx,y);
                 if(!bordered)continue;
                 cards.add(Map.of("index",2*column+row+1,"x",x+cardCenterOffset(aspect),"y",y+110,
                         "signature",thumbnail(frame,x,y),"clipped",clipped,
@@ -170,23 +170,31 @@ public final class MultiplayerGarage {
         return gold>=105;
     }
 
-    private static boolean borderColor(int c,boolean master){
+    private static boolean borderColor(int c){
+        if(blueGutter(c))return false;
         int r=(c>>16)&255,g=(c>>8)&255,b=c&255;
+        // Maxed cards have a pale gold outline; their highlights can be brighter than yellow ribbons.
+        boolean paleGold=r>=185&&b>=170&&r>=g-8&&r<=g+45&&g>=b+12&&g<=b+76;
         return (r<60&&b>=80&&b>g+24)||(g>140&&b>105&&r<105)||(r>145&&g>155&&b<170)||(r>=95&&g<85&&b>40&&r>g+65)
-                ||(master&&Math.min(r,Math.min(g,b))>=180&&Math.max(r,Math.max(g,b))-Math.min(r,Math.min(g,b))<=40);
+                ||paleGold||(Math.min(r,Math.min(g,b))>=180&&Math.max(r,Math.max(g,b))-Math.min(r,Math.min(g,b))<=40);
     }
-    private static boolean slotEdge(PixelFrame frame,int x,int top,boolean master){
+    private static boolean blueGutter(int color){
+        int r=color>>16&255,g=color>>8&255,b=color&255;
+        return r<=48&&g<=65&&b<=95&&r<g&&g<b;
+    }
+    private static boolean slotEdge(PixelFrame frame,int x,int top){
         // The horizontal line must begin here. A right border or a clipped card has no such corner.
         boolean corner=false;
         for(int y=top-4;y<=top+5&&!corner;y++)
-            corner=borderColor(frame.pixel(719-y,x+2),master)&&borderColor(frame.pixel(719-y,x+5),master)
-                    &&borderColor(frame.pixel(719-y,x+10),master)&&borderColor(frame.pixel(719-y,x+76),master)
-                    &&!borderColor(frame.pixel(719-y,x-5),master);
+            corner=borderColor(frame.pixel(719-y,x+2))&&borderColor(frame.pixel(719-y,x+5))
+                    &&borderColor(frame.pixel(719-y,x+10))&&borderColor(frame.pixel(719-y,x+76))
+                    &&!borderColor(frame.pixel(719-y,x-5));
         if(!corner)return false;
         int hits=0;
         for(int y=top+14;y<top+204;y+=4){
             int gap=frame.pixel(719-y,x-5);
-            if((gap>>16&255)<24&&(gap>>8&255)<50&&(gap&255)<80&&borderColor(frame.pixel(719-y,x),master))hits++;
+            boolean gutter=(gap>>16&255)<24&&(gap>>8&255)<50&&(gap&255)<80;
+            if((gutter||blueGutter(gap))&&borderColor(frame.pixel(719-y,x)))hits++;
         }
         return hits>=36;
     }
@@ -195,7 +203,8 @@ public final class MultiplayerGarage {
         int starBanner=0;
         for(int y=top+5;y<=top+22;y+=3)for(int x=left+12;x<=left+154;x+=7){
             int c=frame.pixel(719-y,x),r=c>>16&255,g=c>>8&255,b=c&255;
-            if(r>=195&&g>=140&&g<=225&&r-g>=16&&b<80)starBanner++;
+            // The solid yellow Star Up ribbon is distinct from the darker gold maxed-card artwork.
+            if(Math.abs(r-243)<=18&&Math.abs(g-187)<=15&&b<=38)starBanner++;
         }
         if(starBanner>=70)return "starUp";
         for(Object word:words){

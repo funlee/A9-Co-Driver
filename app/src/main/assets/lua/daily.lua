@@ -13,9 +13,15 @@ local config = {
   tips = "190|808|FFFFFF-101010,190|912|12FBC3-101010"
 }
 dailyCup.carList = {}
-function dailyCup.openRaceGarage(screen)
+dailyCup.matchTimeout = 30000
+
+function dailyCup.matchesLobby(screen)
   local title = (screen.text or ''):gsub('%s', '')
-  if not title:find('每日车辆战利品', 1, true) then return false end
+  return screen.scene=='event' and title:find('每日车辆战利品',1,true)~=nil
+end
+
+function dailyCup.openRaceGarage(screen)
+  if not dailyCup.matchesLobby(screen) then return false end
   keepCapture()
   if cmpColorEx(config.cupInfo, 1) == 1 then return false end
   if not cup.openRaceGarage(screen, '每日战利品') then return false end
@@ -71,7 +77,7 @@ function dailyCup.returnToSolo(screen)
   local since=tickCount();local lastTap=-10000;local tries=0
   local claimed=false
   while tickCount()-since<15000 do
-    if screen.scene=='event' or screen.scene=='dailyRewardOnly' then return true end
+    if screen.scene=='event' or screen.scene=='dailyRewardOnly' then return true,screen end
     if screen.scene=='clubRewards' and tickCount()-lastTap>=4000 and tries<3 then
       if not claimed then
         for _,w in ipairs(screen.words or {}) do
@@ -239,10 +245,9 @@ dailyCup.operation = {
     config.selectMission,
     function()
       data["信息"] = "选择指定杯赛"
-      if utils.chooseCup(utils.defultCfg(run.data["杯赛位置"], "2")) == 0 then
-        return -1
+      if utils.chooseCup(run.data['杯赛位置'] or '2',false,true)==1 then
+        data['信息']='已进入配置位置，核对每日战利品标题'
       end
-      data["信息"] = "选择杯赛完毕"
       sleep(3000)
     end
   },

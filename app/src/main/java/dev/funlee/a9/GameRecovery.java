@@ -56,6 +56,7 @@ final class GameRecovery {
             status("游戏离开前台，确认闪退状态");
             // A surface/root transition is not by itself a crash.
             long homeSince=-1,otherSince=-1,until=activeTime()+6000;
+            int dialogActions=0;
             while(activeTime()<until){
                 gate();if(touch.gameInForeground()){
                     if(homeSince>=0){recordAttempt();restartGame();awaitReady();SessionState.log("游戏退出后已重新进入前台，恢复任务检查点");return true;}
@@ -68,7 +69,9 @@ final class GameRecovery {
                     if(activeTime()-homeSince>=1000)break;
                 }else{
                     homeSince=-1;
-                    if(foreground.equals("android")&&closeCrashDialog()){until=activeTime()+6000;waitBriefly();continue;}
+                    if(foreground.equals("android")&&dialogActions<2&&closeCrashDialog()){
+                        dialogActions++;otherSince=-1;until=activeTime()+6000;waitBriefly();continue;
+                    }
                     if(!foreground.isEmpty()){
                         if(otherSince<0){otherSince=activeTime();SessionState.log("等待退出后的前台窗口稳定："+foreground);}
                         if(activeTime()-otherSince>1800)throw new IllegalStateException("当前前台为 "+foreground+"，不是游戏、桌面或助手；已停止恢复，避免打断其他应用");
@@ -262,6 +265,7 @@ final class GameRecovery {
         return onMain(()->{
             AccessibilityNodeInfo root=touch.getRootInActiveWindow();if(root==null)return false;
             try{
+                if(waitForSystemUi(root))return true;
                 if(!"android".contentEquals(root.getPackageName()==null?"":root.getPackageName()))return false;
                 String all=text(root);
                 if(!all.contains(normalize(label))||!(all.contains("停止运行")||all.contains("keepsstopping")||all.contains("hasstopped")))return false;
@@ -270,6 +274,26 @@ final class GameRecovery {
                 try{return click(close);}finally{close.recycle();}
             }finally{root.recycle();}
         });
+    }
+    static boolean waitForSystemUi(AccessibilityNodeInfo root){
+        if(root==null||!"android".contentEquals(root.getPackageName()==null?"":root.getPackageName()))return false;
+        AccessibilityNodeInfo title=find(root,n->"android:id/alertTitle".equals(n.getViewIdResourceName())&&
+                systemUiNotResponding(n.getText()));
+        if(title==null)return false;
+        title.recycle();
+        AccessibilityNodeInfo wait=find(root,n->"android:id/aerr_wait".equals(n.getViewIdResourceName())&&
+                (normalize(n.getText()).equals("wait")||normalize(n.getText()).equals("等待")));
+        if(wait==null)return false;
+        try{
+            if(!click(wait))return false;
+            SessionState.log("系统界面无响应，已选择等待系统恢复");
+            return true;
+        }finally{wait.recycle();}
+    }
+    private static boolean systemUiNotResponding(CharSequence title){
+        String normalized=normalize(title).replace('’','\'');
+        return normalized.equals("systemuiisn'tresponding")||normalized.equals("系统界面无响应")||
+                normalized.equals("系统界面没有响应");
     }
     private boolean onMain(Callable<Boolean> action)throws Exception{
         gate();

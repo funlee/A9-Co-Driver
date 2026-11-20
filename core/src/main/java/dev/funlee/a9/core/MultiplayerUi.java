@@ -1,6 +1,7 @@
 package dev.funlee.a9.core;
 
 import java.util.List;
+import java.util.Map;
 
 /** Semantic guards for the current Chinese multiplayer menus. Unknown screens never trigger Start. */
 public final class MultiplayerUi {
@@ -16,6 +17,31 @@ public final class MultiplayerUi {
         String t=MapMatcher.normalize(text).replace('賽','赛').replace('傳','传').replace('銷','销');
         return (t.contains("传奇促销")||t.contains("赛道制霸"))
                 &&(t.contains("限时发售")||t.contains("一举成名"));
+    }
+    private static boolean leagueDemotionLayout(PixelFrame frame) {
+        // The dialog's centered white action sits on a dark blue panel. Sample
+        // away from the two Chinese glyphs and verify the button's outside edges.
+        return ColorPattern.color(frame.pixel(719-517,550),"FFFFFF-202020",1)
+                &&ColorPattern.color(frame.pixel(719-540,716),"FFFFFF-202020",1)
+                &&ColorPattern.color(frame.pixel(719-525,520),"533016-252525",1)
+                &&ColorPattern.color(frame.pixel(719-525,749),"533016-252525",1)
+                &&ColorPattern.color(frame.pixel(719-162,525),"2B190C-151515",1);
+    }
+    public static Map<String,Integer> leagueDemotionButton(PixelFrame frame,List<?> words) {
+        if(!leagueDemotionLayout(frame))return Map.of();
+        boolean title=false;
+        Map<String,Integer> button=Map.of();
+        for(Object item:words){
+            if(!(item instanceof Map))continue;
+            Map<?,?> word=(Map<?,?>)item;
+            Object label=word.get("text"), x=word.get("x"), y=word.get("y");
+            if(!(label instanceof String)||!(x instanceof Number)||!(y instanceof Number))continue;
+            int centerX=((Number)x).intValue(),centerY=((Number)y).intValue();
+            String t=MapMatcher.normalize((String)label).replace('級','级').replace('經','经').replace('己','已').replace('確','确');
+            if(centerX>=550&&centerX<=730&&centerY>=158&&centerY<=208&&(t.equals("你已降级")||t.equals("你已经降级")))title=true;
+            if(centerX>=555&&centerX<=708&&centerY>=513&&centerY<=543&&t.equals("确定"))button=Map.of("x",centerX,"y",centerY);
+        }
+        return title?button:Map.of();
     }
     public static String classify(String text,List<?> words) {
         String scene=classify(text);

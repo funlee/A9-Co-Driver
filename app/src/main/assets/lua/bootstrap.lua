@@ -166,8 +166,10 @@ function main()
           _hud(data['信息'])
         elseif data['项目']=='多人上' or data['项目']=='多人下' then
           -- Task boundaries return to a shared entry point; multiplayer need not interpret cup pages.
-          utils.backToMain()
-          outcome=currentMultiplayer.run()
+          local restoring=resume.restored and cycle==resume.cycle and i==resume.index
+          local tutorial=restoring and spCup and spCup.tutorialButton(_soloEventUi())
+          if not tutorial then utils.backToMain() end
+          outcome=currentMultiplayer.run(not not tutorial)
         else
           _sessionProject(data['项目'],tonumber(run.data['次数']) or 1)
           local original=run.data['次数']
@@ -190,11 +192,19 @@ function main()
           end
           run.data['次数']=original
         end
+        if outcome=='dailyUnmatched' then
+          local message='跳过每日战利品：未能在配置位置 '..(cfg.data['杯赛位置'] or '2')..' 确认赛事'
+          data['信息']=message
+          _taskNotice(message,4000)
+          sleep(4200)
+        end
         if _queueDone then _queueDone() end
         if outcome=='dailyQuietHours' then
           print('项目 '..i..' 已跳过：每日战利品 00:00–00:30 不执行')
         elseif outcome=='dailyExpired' then
           print('第 '..cycle..' 轮，项目 '..i..' 已跳过：配置位置的每日战利品只剩奖励页，无法开赛')
+        elseif outcome=='dailyUnmatched' then
+          print('第 '..cycle..' 轮，项目 '..i..' 已跳过：未匹配配置位置的每日战利品')
         elseif outcome=='fuelEmpty' then
           print('第 '..cycle..' 轮，项目 '..i..' 因车辆全部无油已跳过：'..data['项目'])
         elseif outcome=='vehicleLocked' then

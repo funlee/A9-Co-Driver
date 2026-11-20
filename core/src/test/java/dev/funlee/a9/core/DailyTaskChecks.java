@@ -18,6 +18,7 @@ final class DailyTaskChecks {
         for(String time:List.of("00:30:00","00:30:01","12:00:00","23:59:59"))
             check(policy("2026-11-09T"+time).skipReason().isEmpty(),"Allowed boundary: "+time);
         for(String reason:List.of("dailyQuietHours",""))queue(assets,reason);
+        for(String scene:List.of("unknown","event","cars","car"))unmatchedQueue(assets,scene);
         try(LuaRuntime lua=new LuaRuntime((n,l)->0,List.of())) {
             lua.load("workflows",Files.readString(assets.resolve("lua/workflows.lua")));
             lua.load("retired daily options","utils={defultCfg=function(v,d)return v or d end};"+
@@ -30,7 +31,9 @@ final class DailyTaskChecks {
             lua.load("daily",Files.readString(assets.resolve("lua/daily.lua")));
             lua.load("fixture","data={['项目']='每日战利品',['杯赛']=0};UIconfig={spPrize=''};run.data={['次数']='2'};"+
                 "local done=0;function _dailyTaskStatus()return done==0 and '' or 'dailyQuietHours' end;"+
-                "run.nitro=function()end;utils={freePkg=function()end,getToken=function()end,getCoupons=function()end};"+
+                "local lobby=true;function _soloEventUi()return {scene=lobby and 'event' or 'car',text='每日车辆战利品'}end;"+
+                "run.carDetails={['每日战利品']=function()return 0 end};function dailyCup.openRaceGarage()lobby=false;return true end;"+
+                "run.nitro=function()end;run.rebootHandle=function()end;utils={tipsHandle=function()end};"+
                 "function keepCapture()end;function cmpColorEx()return 1 end;function _sessionLegacyPrepare()assert(done==0)end;"+
                 "function _sessionLegacyCompleted()done=done+1 end;run.list={['每日战利品']={{'race',function()return 0 end}}};"+
                 "function test()assert(run.project()=='dailyQuietHours');assert(done==1);"+
@@ -38,6 +41,18 @@ final class DailyTaskChecks {
             execute(lua,"test");checks+=2;
         }
         return checks;
+    }
+    private static void unmatchedQueue(Path assets,String scene)throws Exception {
+        try(LuaRuntime lua=new LuaRuntime((n,l)->0,List.of())) {
+            lua.set("unmatchedScene",scene);
+            for(String module:List.of("bootstrap","workflows","daily"))
+                lua.load(module,Files.readString(assets.resolve("lua/"+module+".lua")));
+            try(var input=DailyTaskChecks.class.getResourceAsStream("/daily-unmatched-queue.lua")){
+                lua.load("fixture",new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8));
+            }
+            lua.start("test");for(int i=0;i<60;i++)lua.step(i*1000L);
+            lua.load("verify","assert(verified)");checks++;
+        }
     }
     private static void queue(Path assets,String reason)throws Exception {
         try(LuaRuntime lua=new LuaRuntime((n,l)->0,List.of())) {

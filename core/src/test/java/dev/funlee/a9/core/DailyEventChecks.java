@@ -69,6 +69,22 @@ final class DailyEventChecks {
             if(alive)throw new AssertionError("Daily flow did not terminate");
         }
         if(DailyEventUi.rewardExit("观看广告",1100,650)||DailyEventUi.rewardExit("错失机会",1100,400)||!DailyEventUi.rewardExit("错失机会",1100,650))throw new AssertionError("Ad exit guard");
-        return scenes.length+cases.size()+3;
+        String vehicle="TOUCHDRIVE 升级 加速";
+        int[] button=new int[720*1280];
+        for(int x=980;x<=1235;x++)for(int y=610;y<=687;y++)button[x*720+719-y]=0xffc3fb12;
+        PixelFrame trial=new PixelFrame(720,1280,button);
+        if(!DailyEventUi.zeroTicketStart("TOUCHDRIVE 升級 加速",List.of(Map.of("text","开始 A0","x",1100,"y",650)),trial)||
+                DailyEventUi.zeroTicketStart(vehicle,List.of(Map.of("text","开始10","x",1100,"y",650)),trial)||
+                DailyEventUi.zeroTicketStart(vehicle,List.of(Map.of("text","开始0","x",1100,"y",550)),trial))
+            throw new AssertionError("Zero-ticket Start requires the exact cost on the enabled vehicle button");
+        List<?> mixedIcon=List.of(Map.of("text","开始40","x",1105,"y",650));
+        for(int x=1149;x<=1161;x++)for(int y=638;y<=658;y++)
+            if(x<=1151||x>=1159||y<=640||y>=656)button[x*720+719-y]=0xff263e45;
+        if(!DailyEventUi.zeroTicketStart(vehicle,mixedIcon,new PixelFrame(720,1280,button)))
+            throw new AssertionError("Isolate the zero when OCR mistakes the ticket icon for 4");
+        for(int y=639;y<=657;y++)button[1170*720+719-y]=0xff263e45;
+        if(DailyEventUi.zeroTicketStart(vehicle,mixedIcon,new PixelFrame(720,1280,button)))
+            throw new AssertionError("An additional digit cannot pass the zero-cost check");
+        return scenes.length+cases.size()+6;
     }
 }

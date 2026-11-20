@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import time
 
@@ -35,10 +36,48 @@ def status():
                                        and gpu in ('host','swangle','lavapipe') and FEATURES in params))
     return info
 
+def system_ui_anr_visible():
+    windows = adb('shell', 'dumpsys', 'window', 'displays', timeout=5).stdout
+    return re.search(r'^\s*mCurrentFocus=Window\{[^\n]*Application Not Responding: com\.android\.systemui\s*\}',
+                     windows, re.MULTILINE) is not None
+
+def wait_for_boot(previous_boot=None, timeout=55):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            ready = adb('shell', 'getprop', 'sys.boot_completed', check=False, timeout=2).stdout.strip() == '1'
+            if ready and (previous_boot is None or boot_id() not in ('', previous_boot)):
+                return
+        except subprocess.TimeoutExpired:
+            pass
+        time.sleep(1)
+    raise SystemExit('启动仍未完成，请查看模拟器日志。')
+
+def boot_id():
+    return adb('shell', 'cat', '/proc/sys/kernel/random/boot_id', check=False, timeout=2).stdout.strip()
+
+def recover_system_ui(info):
+    if info.get('avd') != AVD_NAME:
+        raise SystemExit('未连接指定的 A9 模拟器，已取消恢复。')
+    for attempt in range(4):
+        if not system_ui_anr_visible():
+            print('系统界面已响应，无需重启模拟器。', flush=True)
+            return
+        if attempt < 3:
+            time.sleep(4)
+    previous_boot = boot_id()
+    if not previous_boot:
+        raise SystemExit('无法确认当前 Android 启动标识，已取消恢复。')
+    print('系统界面持续无响应，正在重启指定模拟器的 Android 系统。', flush=True)
+    adb('reboot')
+    wait_for_boot(previous_boot, timeout=90)
+    print('Android 系统已完成重启。', flush=True)
+
 def main():
     parser = argparse.ArgumentParser(description='启动支持 ASTC 检测的 A9 模拟器')
     parser.add_argument('--status', action='store_true', help='仅查看当前配置')
     parser.add_argument('--restart', action='store_true', help='需要时重启同名模拟器应用图形配置')
+    parser.add_argument('--recover-system-ui', action='store_true', help='系统界面持续无响应时重启指定模拟器')
     parser.add_argument('--gpu', choices=('lavapipe','swangle','host'), default='lavapipe',
                         help='默认 lavapipe 软件渲染，已通过单局实测；host 更快但本机曾发生 GPU 超时，100 局稳定性尚未验证')
     args = parser.parse_args()
@@ -46,6 +85,8 @@ def main():
     if args.status:
         print(json.dumps(info, ensure_ascii=False, indent=2))
         return
+    if args.recover_system_ui and info['connected']:
+        recover_system_ui(info)
     if info['connected'] and (not info.get('configured_for_a9') or info.get('gpu') != args.gpu):
         if info.get('avd') != AVD_NAME:
             raise SystemExit('5554 端口被其他模拟器使用，请先关闭或换端口。')
@@ -74,15 +115,7 @@ def main():
             subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=out,
                              stderr=subprocess.STDOUT, start_new_session=True)
         print('模拟器启动中；日志：' + str(log), flush=True)
-        for _ in range(55):
-            try:
-                if adb('shell', 'getprop', 'sys.boot_completed', check=False, timeout=2).stdout.strip() == '1':
-                    break
-            except subprocess.TimeoutExpired:
-                pass
-            time.sleep(1)
-        else:
-            raise SystemExit('启动仍未完成，请查看模拟器日志。')
+        wait_for_boot()
     result = adb('shell', 'am', 'start', '-W', '-n', GAME + '/.MainActivity')
     print(result.stdout)
 

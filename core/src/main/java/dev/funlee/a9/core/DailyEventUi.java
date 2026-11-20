@@ -9,6 +9,41 @@ public final class DailyEventUi {
     public static boolean rewardExit(String text,int x,int y) {
         return !RaceRewards.exitLabel(text,x,y).isEmpty();
     }
+    public static boolean zeroTicketStart(String text,List<?> words,PixelFrame frame){
+        String normalized=MapMatcher.normalize(text).replace('級','级').toUpperCase(java.util.Locale.ROOT);
+        if(!normalized.contains("TOUCHDRIVE")||!normalized.contains("升级")||!normalized.contains("加速")||
+                normalized.contains("立即购买")||normalized.contains("立即入手"))return false;
+        for(Object value:words){
+            Map<?,?> word=(Map<?,?>)value;
+            int x=((Number)word.get("x")).intValue(),y=((Number)word.get("y")).intValue();
+            if(x<990||x>1175||y<605||y>685)continue;
+            String label=MapMatcher.normalize(word.get("text").toString());
+            if(!label.matches("开始[令Aa]?0")&&!(label.equals("开始40")&&isolatedZeroCost(frame)))continue;
+            int lime=0;
+            for(int dy:new int[]{-15,15})for(int dx:new int[]{-55,0,55}){
+                int color=frame.pixel(719-y-dy,x+dx);
+                if(ColorPattern.color(color,"12FBC3-303030",1))lime++;
+            }
+            if(lime>=4)return true;
+        }
+        return false;
+    }
+    private static boolean isolatedZeroCost(PixelFrame frame){
+        // In the standard layout OCR can read the adjacent ticket icon as a 4.
+        // Read the ink to the right of the icon independently and require one hollow digit.
+        int left=1185,right=0,top=665,bottom=0;
+        for(int x=1146;x<1185;x++)for(int y=631;y<665;y++)if(ticketInk(frame,x,y)){
+            left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);
+        }
+        if(left<1147||left>1152||right-left<9||right-left>16||top<634||bottom-top<17||bottom-top>25)return false;
+        int x=(left+right)/2,y=(top+bottom)/2;
+        return ticketInk(frame,left+1,y)&&ticketInk(frame,right-1,y)&&ticketInk(frame,x,top+1)&&
+                ticketInk(frame,x,bottom-1)&&!ticketInk(frame,x,y);
+    }
+    private static boolean ticketInk(PixelFrame frame,int x,int y){
+        int color=frame.pixel(719-y,x);
+        return (color>>16&255)<115&&(color>>8&255)<175;
+    }
     public static boolean seasonPassUnlock(String text) {
         String normalized=MapMatcher.normalize(text).replace('級','级').replace('別','别')
                 .replace('鎖','锁').replace('賽','赛').replace('購','购').replace('買','买')

@@ -43,8 +43,11 @@ function run.project()
   run.nitro()
   local ret = 0
   local times = tonumber(run.data["次数"]) or 1
+  local daily=data['项目']=='每日战利品'
+  local dailyMatched=false
+  local dailySearchSince=nil
   for i = 1, times do
-    if data["项目"] == "每日战利品" then
+    if daily then
       local reason=dailyCup.skipReason()
       if reason~='' then return reason end
     end
@@ -56,8 +59,19 @@ function run.project()
     while true do
       local carHandler=run.carDetails and run.carDetails[data['项目']]
       local screen=carHandler and _soloEventUi()
+      local scene=screen and screen.scene
+      if daily and screen then
+        if scene=='event' then dailyMatched=dailyCup.matchesLobby(screen)
+        elseif scene=='home' or scene=='wideCupList' then dailyMatched=false end
+        if dailyMatched then dailySearchSince=nil
+        else
+          dailySearchSince=dailySearchSince or tickCount()
+          if tickCount()-dailySearchSince>=dailyCup.matchTimeout then return 'dailyUnmatched' end
+        end
+      end
+      local allowRace=not daily or dailyMatched
       local tutorial=data['项目']=='特殊赛事' and spCup and spCup.tutorialButton and spCup.tutorialButton(screen)
-      if screen and screen.scene=='race' then soloRaceSeen=true end
+      if allowRace and scene=='race' then soloRaceSeen=true end
       local homeHandler=run.homeEntries and run.homeEntries[data['项目']]
       if screen and screen.scene=='home' and homeHandler then
         ret=homeHandler(screen)
@@ -67,55 +81,60 @@ function run.project()
       elseif screen and screen.scene=='wideCupList' and
           (data['项目']=='每日战利品' or data['项目']=='杯赛') then
         data['信息']='选择配置的赛事'
-        utils.chooseCup(run.data['杯赛位置'] or '2',true)
+        utils.chooseCup(run.data['杯赛位置'] or '2',true,daily)
         sleep(2500)
       elseif screen and screen.scene=='profileUnlock' and dailyCup then
         dailyCup.dismissProfile(screen)
       elseif screen and screen.scene=='clubRewards' and dailyCup then
-        dailyCup.returnToSolo(screen)
-      elseif screen and data['项目']=='每日战利品' and screen.scene=='dailyRewardOnly' then
+        local _,returned=dailyCup.returnToSolo(screen)
+        if daily and returned then dailyMatched=dailyCup.matchesLobby(returned) end
+      elseif daily and scene=='dailyRewardOnly' then
         sleep(1);sleep(2000)
         local fresh=_soloEventUi()
         if fresh.scene=='dailyRewardOnly' and fresh.frameId~=screen.frameId then return 'dailyExpired' end
-      elseif screen and data['项目']=='每日战利品' and dailyCup and dailyCup.dismissClaimSpotlight
-          and dailyCup.dismissClaimSpotlight(screen) then
+      elseif daily and screen and dailyCup.dismissClaimSpotlight(screen) then
         -- Read the configured event carousel again after dismissing the claim hint.
-      elseif screen and screen.scene=='lockedCar' then
+      elseif allowRace and scene=='lockedCar' then
         return 'vehicleLocked'
-      elseif screen and screen.scene=='car' then
+      elseif allowRace and scene=='car' then
         ret=carHandler()
         if ret~=nil then goto lbl_129 end
       elseif screen and screen.scene=='cars' and data['项目']=='杯赛' then
         ret=cup.operation[4][2]()
         if ret~=nil then goto lbl_129 end
-      elseif screen and screen.scene=='cars' and data['项目']=='每日战利品' then
+      elseif dailyMatched and scene=='cars' then
         ret=dailyCup.operation[4][2]()
         if ret~=nil then goto lbl_129 end
       elseif screen and screen.scene=='event' and data['项目']=='杯赛' and cup.openRaceGarage(screen) then
         -- The verified button has been pressed. Read the new screen next.
-      elseif screen and screen.scene=='event' and data['项目']=='每日战利品' and dailyCup.openRaceGarage(screen) then
+      elseif dailyMatched and scene=='event' and dailyCup.openRaceGarage(screen) then
         -- On wide displays the older event pattern may miss the verified Race button.
       elseif tutorial then
         ret=spCup.operation[1][2](tutorial)
         if ret~=nil then goto lbl_129 end
       elseif not soloRaceSeen and screen and data['项目']=='特殊赛事' and utils.continueSpecialMission(screen) then
         -- Continue from the configured stage's pre-race reward overview.
-      elseif soloRaceSeen and screen and cup.isSettlement(screen.scene) then
+      elseif allowRace and soloRaceSeen and screen and cup.isSettlement(screen.scene) then
         ret=dailyCup.settle(data['项目'],_soloEventUi)
         if ret~=nil then goto lbl_129 end
-      else
-      for im1 = 1, #run.list[data["项目"]] do
-        keepCapture()
-        if cmpColorEx(run.list[data["项目"]][im1][1], 1) == 1 then
-          ret = run.list[data["项目"]][im1][2]()
-          if ret ~= nil then
-            goto lbl_129
+      elseif allowRace or scene=='unknown' then
+        local operations=run.list[data['项目']]
+        -- Before confirming the daily lobby, legacy colors may only navigate the menu and carousel.
+        local lastOperation=allowRace and #operations or 2
+        for im1 = 1, lastOperation do
+          keepCapture()
+          if (not daily or im1~=3 or scene=='event') and cmpColorEx(operations[im1][1], 1) == 1 then
+            ret = operations[im1][2]()
+            if daily and im1<=2 then
+              dailyMatched=false
+              break  -- Re-read the destination before allowing any race actions.
+            end
+            if ret ~= nil then goto lbl_129 end
           end
+          sleep(10)
         end
-        sleep(10)
       end
-      end
-      utils.tipsHandle()
+      if allowRace then utils.tipsHandle() end
       run.rebootHandle()
       sleep(500)
     end

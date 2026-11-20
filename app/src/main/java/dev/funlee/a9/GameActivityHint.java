@@ -54,9 +54,20 @@ final class GameActivityHint {
         if(wait>0){main.postDelayed(showPending,wait);return;}
         if(shownForScreen==changed){pending="";return;}
         shownForScreen=changed;
-        TextView label=new TextView(context);
-        label.setText(pending);
+        String message=pending;
         pending="";
+        show(message,SHOW_MS);
+    }
+
+    void showNow(String message,long duration){
+        clear();
+        last=message;
+        show(message,duration);
+    }
+
+    private void show(String message,long duration){
+        TextView label=new TextView(context);
+        label.setText(message);
         label.setTextColor(0xfff5fafb);
         label.setTextSize(15);
         label.setMaxLines(2);
@@ -85,7 +96,7 @@ final class GameActivityHint {
         try{
             windows.addView(label,params);
             view=label;
-            main.postDelayed(dismiss,SHOW_MS);
+            main.postDelayed(dismiss,duration);
         }catch(WindowManager.BadTokenException|SecurityException e){
             SessionState.log("无法显示当前操作提示："+e.getMessage());
         }

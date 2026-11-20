@@ -211,6 +211,11 @@ public final class TouchService extends AccessibilityService implements RouteEng
     void offerActivityHint(String message){
         main.post(()->{if(activityHint!=null)activityHint.offer(message);});
     }
+    void showTaskNotice(String message,int duration){
+        main.post(()->{
+            if(activityHint!=null&&armed&&SessionState.running&&gameInForeground())activityHint.showNow(message,duration);
+        });
+    }
     void clearActivityHint(){
         main.post(()->{if(activityHint!=null)activityHint.clear();});
     }

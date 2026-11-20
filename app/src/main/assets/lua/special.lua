@@ -16,7 +16,7 @@ local config = {
 }
 function spCup.tutorialButton(screen)
   if not screen or screen.scene~='unknown' then return nil end
-  local text=(screen.text or ''):gsub('%s','')
+  local text=(screen.text or ''):gsub('[ \t\r\n]',''):gsub('賽','赛'):gsub('不廿落后','不甘落后')
   local slipstream=text:find('不甘落后',1,true) and text:find('氮气',1,true) and text:find('滑流',1,true)
   local obstacles=text:find('新游戏机制',1,true) and text:find('360度旋转',1,true) and text:find('赛道上的物品',1,true)
   if not slipstream and not obstacles then return nil end
@@ -32,8 +32,10 @@ function spCup.atStartTutorial(screen)
 end
 
 -- Confirm the loading title on two separate frames before using its route.
+local failedStarts=0
 function spCup.observeStart(stopAtTutorial)
   local candidate,lastFrame,carSince,carFrame
+  local homeFrame
   local started=tickCount()
   while tickCount()-started<90000 do
     local auto=utils.taskRouteAuto()
@@ -44,8 +46,18 @@ function spCup.observeStart(stopAtTutorial)
       print('特赛地图连续确认：'..data['多人地图'])
     end
     candidate=key;lastFrame=screen.frameId
-    if screen.scene=='race' or (stopAtTutorial and spCup.atStartTutorial(screen)) then return end
+    if screen.scene=='race' then failedStarts=0;return end
+    if stopAtTutorial and spCup.atStartTutorial(screen) then return end
     if screen.scene=='noTicket' then return 'noTicket' end
+    if screen.scene=='home' and screen.frameId then
+      if homeFrame and homeFrame~=screen.frameId then
+        failedStarts=failedStarts+1
+        if failedStarts>2 then error('特殊赛事开赛后反复返回主界面，保留当前任务') end
+        print('特殊赛事开赛后返回主界面，重试当前局 '..failedStarts..'/2')
+        return
+      end
+      homeFrame=screen.frameId
+    else homeFrame=nil end
     if screen.scene=='car' and screen.fuel and screen.fuel>=0 then
       if not carSince then carSince=tickCount();carFrame=screen.frameId end
       if screen.frameId~=carFrame and tickCount()-carSince>=3000 then return end
@@ -132,13 +144,19 @@ spCup.operation = {
     config.racing,
     function()
       utils.prepareTaskRoute()
-      utils.newAutoDriver()
-      data["信息"] = "比赛中"
+      local result=utils.newAutoDriver()
+      if result=='settlement' then return dailyCup.settle('特殊赛事',_soloEventUi) end
+      if result~=1 then return result end
+      data['信息']='等待特殊赛事结算'
       repeat
         keepCapture()
         if cmpColorEx(config.racing, 1) == 1 then
           tap(236, 1100)
           sleep(650)
+        elseif cup.isSettlement(_soloEventUi().scene) then
+          return dailyCup.settle('特殊赛事',_soloEventUi)
+        else
+          sleep(400)
         end
         if data["超时状态"] then
           return -1

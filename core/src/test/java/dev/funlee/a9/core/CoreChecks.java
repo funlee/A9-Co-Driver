@@ -71,6 +71,23 @@ public final class CoreChecks {
         check(MultiplayerUi.classify("TOUCHDRIVE 性能分 467/1094 开始").equals("car"),"Car is recognized when the overlay covers Upgrade");
         check(MultiplayerUi.classify("晋级奖励 小白联赛 在系列赛中晋级新联赛的奖励 领取").equals("rewardClaim"),"Master series promotion has a distinct free reward claim");
         check(!MultiplayerUi.classify("领取礼包 购买").equals("rewardClaim"),"Promotion claim requires league reward context");
+        int[] demotion=new int[720*1280];
+        demotion[550*720+719-517]=0xffffffff;
+        demotion[716*720+719-540]=0xffffffff;
+        demotion[520*720+719-525]=0xff152d51;
+        demotion[749*720+719-525]=0xff122b50;
+        demotion[525*720+719-162]=0xff0c192b;
+        List<?> demotionWords=List.of(Map.of("text","你己降級！","x",630,"y",184),Map.of("text","確 定","x",633,"y",529));
+        PixelFrame demotionFrame=new PixelFrame(720,1280,demotion);
+        check(MultiplayerUi.leagueDemotionButton(demotionFrame,demotionWords).equals(Map.of("x",633,"y",529)),
+                "Use the white confirmation button on the league demotion dialog");
+        check(MultiplayerUi.leagueDemotionButton(demotionFrame,List.of(Map.of("text","你已升级！","x",630,"y",184),
+                Map.of("text","确定","x",633,"y",529))).isEmpty(),"Do not tap a different league dialog");
+        check(MultiplayerUi.leagueDemotionButton(demotionFrame,List.of(demotionWords.get(0),
+                Map.of("text","确定","x",1065,"y",605))).isEmpty(),"Ignore another confirmation outside the white button");
+        demotion[749*720+719-525]=0xffffffff;
+        check(MultiplayerUi.leagueDemotionButton(new PixelFrame(720,1280,demotion),demotionWords).isEmpty(),
+                "Ignore a white band extending beyond the confirmation");
         check(MultiplayerUi.classify("动态奖励 从这组奖励中选一个 确认").equals("rewardChoice"),"Free choice rewards require both the selection prompt and confirmation");
         check(!MultiplayerUi.classify("奖励 购买 确认").equals("rewardChoice"),"Purchase confirmation is never treated as a free choice reward");
         check(MultiplayerUi.classify("你的用时 01:38.532 排行榜 继续").equals("result"),"Result remains recognizable when rank is obscured");
