@@ -1,6 +1,6 @@
 data={['项目']='每日战利品',['用车次数']={}}
 run={data={['用车模式']='1',['选车方式']='0',['杯赛用车']={12,22}}}
-local frame,offset,resets,chosen=0,8,0,0
+local frame,offset,resets,chosen=0,scenario=='large' and 150 or 8,0,0
 local tapped={}
 local blankReads=2
 function print()end
@@ -31,7 +31,8 @@ function swipe(_,from,__,to)
   assert(blankReads==0,'Wait for the car cards to reappear before dragging again')
   if to>from then
     resets=resets+1
-    if scenario~='stuck' then offset=0 end
+    if scenario=='large' then offset=math.max(0,offset-4)
+    elseif scenario~='stuck' then offset=0 end
     blankReads=4
   else
     assert(resets>=2,'Do not count cars before a verified origin')
@@ -54,6 +55,7 @@ function test()
     assert((scenario=='stuck' and #tapped==0) or (scenario=='mismatch' and tapped[1]==12 and not utils.verifiedDailyCar))
   else
     assert(utils.chooseCarCup(utils.taskCars()) and utils.verifiedDailyCar.score=='5888')
+    if scenario=='large' then assert(resets>30,'A large garage must not stop after 30 drags') end
     offset=12
     assert(utils.chooseCarCup(utils.taskCars()) and utils.verifiedDailyCar.score=='5878')
     assert(table.concat(tapped,',')=='12,22','Actual tiles match the configured order')

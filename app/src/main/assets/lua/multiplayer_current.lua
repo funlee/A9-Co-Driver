@@ -220,20 +220,40 @@ local function settledSoloGrid()
   end
 end
 
+local function visibleSoloGrid()
+  for sample=1,32 do
+    local page=_soloGarageUi(true)
+    if page.garage and #page.garage.cards>0 then return page end
+    sleep(200)
+  end
+end
+
 function vehicleGrid.soloOrigin()
-  local previous=settledSoloGrid()
-  for attempt=1,30 do
-    if not previous then break end
-    -- A long pull at the left end can bounce the complete grid off the screen.
+  local previous=visibleSoloGrid()
+  local stalled=0
+  while previous and stalled<5 and not data['超时状态'] do
     local atStart=previous.garage.start
-    swipe(414,350,414,atStart and 660 or 1135,atStart and 660 or 470,120)
-    sleep(500)
-    local current=settledSoloGrid()
-    if current and atStart and sameSoloPage(previous.garage,current.garage) then
-      print('每日战利品车库已回到最左，确认第 1 列')
-      return current
+    if atStart then
+      -- A long pull at the left end can bounce the complete grid off the screen.
+      swipe(414,350,414,660,660,120)
+      sleep(500)
+      local current=settledSoloGrid()
+      if current and sameSoloPage(previous.garage,current.garage) then
+        print('每日战利品车库已回到最左，确认第 1 列')
+        return current
+      end
+      previous=current or visibleSoloGrid()
+      stalled=stalled+1
+    else
+      -- Travel by momentum in a large garage. Intermediate pages need only be visible;
+      -- a fully settled page and the empty leading gutter are required at the origin.
+      swipe(414,255,414,1150,190)
+      sleep(380)
+      local current=visibleSoloGrid()
+      if current and sameSoloPage(previous.garage,current.garage) then stalled=stalled+1
+      else stalled=0 end
+      previous=current
     end
-    previous=current
   end
   error('未确认每日战利品车库最左起点，已保留任务进度')
 end
