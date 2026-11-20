@@ -4,6 +4,7 @@ local frame,offset,resets,chosen=0,scenario=='large' and 150 or 8,0,0
 local tapped={}
 local blankReads=2
 local bounceReads=0
+local returns=0
 function print()end
 function keepCapture()end
 local function signature(index)
@@ -24,7 +25,8 @@ function _soloGarageUi(fast)
   for i=1,6 do
     local number=offset+i
     cards[i]={index=i,x=280+math.floor((i-1)/2)*474,y=i%2==1 and 308 or 550,
-      signature=signature(number),score=fast and '' or tostring(5900-number),model=scenario=='model' and 'CCXR' or ''}
+      signature=signature(number),score=fast and '' or tostring(5900-number),model=scenario=='model' and 'CCXR' or '',
+      availability=number==12 and (scenario=='locked' or scenario=='locked-only') and 'locked' or 'unknown'}
   end
   local atStart=offset==0 and bounceReads==0
   local left=atStart and 97 or offset==0 and 376 or 200
@@ -53,12 +55,22 @@ function _soloEventUi()
   return {scene='car',soloScore=tostring(5900-chosen+((scenario=='mismatch' or scenario=='model') and 1 or 0)),
     soloName=scenario=='model' and 'Koenigsegg CCXR' or 'Test car'}
 end
-utils.carFuel=function()return 2,_soloEventUi()end
+utils.carFuel=function()
+  if scenario=='locked-detail' and chosen==12 then return 'vehicleLocked' end
+  return 2,_soloEventUi()
+end
+utils.backToGarage=function()returns=returns+1 end
 function test()
   if scenario=='stuck' or scenario=='mismatch' then
     local ok,message=pcall(utils.chooseCarCup,utils.taskCars())
     assert(not ok and message:find(scenario=='stuck' and '最左起点' or '性能分不一致'),message)
     assert((scenario=='stuck' and #tapped==0) or (scenario=='mismatch' and tapped[1]==12 and not utils.verifiedDailyCar))
+  elseif scenario=='locked-only' then
+    assert(utils.chooseCarCup({12})=='vehicleLocked' and #tapped==0 and returns==0)
+  elseif scenario=='locked' or scenario=='locked-detail' then
+    assert(utils.chooseCarCup(utils.taskCars()) and utils.verifiedDailyCar.score=='5878')
+    assert(table.concat(tapped,',')==(scenario=='locked' and '22' or '12,22'))
+    assert(returns==(scenario=='locked' and 0 or 1))
   else
     assert(utils.chooseCarCup(utils.taskCars()) and utils.verifiedDailyCar.score=='5888')
     if scenario=='large' then assert(resets>30,'A large garage must not stop after 30 drags') end

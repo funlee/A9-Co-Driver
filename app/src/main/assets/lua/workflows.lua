@@ -104,7 +104,8 @@ function run.project()
         dailyCup.confirmChallenge(screen)
         if tickCount()-utils.soloStartAt>=120000 then error('已点击开始，但未确认进入比赛，保留当前任务') end
       elseif allowRace and scene=='lockedCar' then
-        return 'vehicleLocked'
+        if not daily or #utils.taskCars()==1 then return 'vehicleLocked' end
+        utils.backToGarage()
       elseif allowRace and scene=='car' then
         ret=carHandler()
         if ret~=nil then goto lbl_129 end

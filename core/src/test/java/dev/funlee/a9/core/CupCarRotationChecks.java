@@ -52,7 +52,8 @@ final class CupCarRotationChecks {
         try(var input=CupCarRotationChecks.class.getResourceAsStream("/daily-car-grid.lua")){
             fixture=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
         }
-        for(String scenario:List.of("ordered","stuck","mismatch","model","large"))try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
+        for(String scenario:List.of("ordered","stuck","mismatch","model","large","locked","locked-only","locked-detail"))
+                try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
             lua.set("scenario",scenario);
             lua.load("utilities",Files.readString(assets.resolve("lua/utilities.lua")));
             lua.load("grid",Files.readString(assets.resolve("lua/multiplayer_current.lua")));
@@ -66,6 +67,8 @@ final class CupCarRotationChecks {
             int left=97+column*474;
             for(int top:new int[]{195,439}){
                 int color=column==0?0xffb40b1c:0xffefdfab;
+                for(int y=top+170;y<=top+217;y++)for(int x=left+10;x<=left+215;x++)
+                    pixels[x*720+719-y]=column==0?0xff101829:0xff286fbe;
                 for(int y=top;y<top+220;y++)pixels[left*720+719-y]=color;
                 for(int x=left;x<left+120;x++)pixels[x*720+719-top]=color;
             }
@@ -75,11 +78,13 @@ final class CupCarRotationChecks {
                 Map.of("x",720,"y",578,"text","99,999")),16.0/9);
         var cards=(List<?>)page.get("cards");
         if(!Boolean.TRUE.equals(page.get("start"))||cards.size()!=4||
-                !"4998".equals(((Map<?,?>)cards.get(3)).get("score")))
+                !"4998".equals(((Map<?,?>)cards.get(3)).get("score"))||
+                !"locked".equals(((Map<?,?>)cards.get(0)).get("availability"))||
+                "locked".equals(((Map<?,?>)cards.get(2)).get("availability")))
             throw new AssertionError("Daily garage counts red and gold tiles and reads the expected lower card");
         for(int x=46;x<87;x++)for(int y=195;y<670;y++)pixels[x*720+719-y]=0xff963815;
         if(Boolean.TRUE.equals(MultiplayerGarage.soloSlots(new PixelFrame(720,1280,pixels),List.of(),16.0/9).get("start")))
             throw new AssertionError("A clipped preceding card cannot be counted as the origin");
-        return 7;
+        return 10;
     }
 }

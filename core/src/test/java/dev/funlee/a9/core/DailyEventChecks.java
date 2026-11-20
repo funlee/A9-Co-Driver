@@ -35,6 +35,8 @@ final class DailyEventChecks {
             throw new AssertionError("Vehicle attributes upgrade and the racing car detail are distinct");
         if(!DailyEventUi.classifySolo("筛进条件 已拥有 排序方式 性能分 完成").equals("garageFilter"))
             throw new AssertionError("Garage filter is distinguishable from the car list during task resume");
+        if(!DailyEventUi.classifySolo("ASTON MARTIN V12 SPEEDSTER 獲得該車輛的圖紙以解鎖 獲取圖紙").equals("lockedCar"))
+            throw new AssertionError("Locked detail should be recognized without a fuel indicator");
         String avatar="恭喜！你已解锁新的档案头像！稍后查看 前往";
         if(!MultiplayerUi.classify(avatar).equals("profileUnlock")||!RecoveryReadiness.ready(avatar)||VehicleUnlockGuard.prompt(avatar))
             throw new AssertionError("Profile popup is actionable after recovery without conflating vehicle unlocks");
@@ -97,6 +99,6 @@ final class DailyEventChecks {
         for(int y=639;y<=657;y++)button[1170*720+719-y]=0xff263e45;
         if(DailyEventUi.zeroTicketStart(vehicle,mixedIcon,new PixelFrame(720,1280,button)))
             throw new AssertionError("An additional digit cannot pass the zero-cost check");
-        return scenes.length+cases.size()+9;
+        return scenes.length+cases.size()+10;
     }
 }

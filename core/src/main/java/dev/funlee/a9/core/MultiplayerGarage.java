@@ -232,6 +232,7 @@ public final class MultiplayerGarage {
                 boolean clipped=edge+width>right;
                 cards.add(Map.of("index",2*column+row+1,"x",edge+(wide?145:190),"y",y+113,"left",edge,"top",y,
                         "signature",thumbnail(frame,edge,y),"clipped",clipped,
+                        "availability",!clipped&&soloLocked(frame,edge,y)?"locked":"unknown",
                         "score",scoreIn(words,edge+12,edge+169,y+27,y+78),
                         "model",modelIn(words,edge+width*2/3,edge+width-5,y+132,y+180)));
             }
@@ -239,6 +240,23 @@ public final class MultiplayerGarage {
         boolean leadingClear=left>=87&&soloOriginGutter(frame,left,top,rowPitch);
         return Map.of("left",left,"start",leadingClear&&left<=132,"leadingClear",leadingClear,
                 "cards",cards,"pitch",pitch);
+    }
+
+    private static boolean soloLocked(PixelFrame frame,int left,int top){
+        // Locked cards have the same dark background under both the fuel area
+        // and the artwork. Unlocked cards keep their colored background.
+        return darkCardPatch(frame,left+12,left+69,top+186,top+215)&&
+                darkCardPatch(frame,left+96,left+199,top+190,top+215);
+    }
+
+    private static boolean darkCardPatch(PixelFrame frame,int left,int right,int top,int bottom){
+        int dark=0,total=0;
+        for(int y=top;y<=bottom;y+=3)for(int x=left;x<=right;x+=3){
+            int c=frame.pixel(719-y,x),r=c>>16&255,g=c>>8&255,b=c&255;
+            if(r<45&&g<55&&b<80)dark++;
+            total++;
+        }
+        return dark*10>=total*9;
     }
 
     private static boolean soloOriginGutter(PixelFrame frame,int left,int top,int rowPitch){

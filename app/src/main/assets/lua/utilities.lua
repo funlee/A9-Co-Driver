@@ -1575,20 +1575,25 @@ function utils.chooseCarCup(carList)
       if not car or car==0 then error('车辆序号无效，保留当前任务') end
       if data['超时状态'] then error('选车超时，保留当前任务') end
       if not empty[car] and not unavailable[car] and not locked[car] and (not rotate or data['用车次数']['car'..j]~=1) then
-        local retryX,retryY,slot
+        local retryX,retryY,slot,fuel,detail
         if clickMode then utils.clickChoose(car,lastCar)
         elseif dailyGrid then
           if car<1 or car%1~=0 then error('滑动选车需要正整数车辆序号') end
           origin=origin or vehicleGrid.soloOrigin()
           slot=vehicleGrid.soloCar(origin,car)
           origin=nil
-          local focused=_soloGarageScore and _soloGarageScore(slot.left,slot.top)
-          if focused and focused~='' then slot.score=focused end
-          if (not slot.score or slot.score=='') and #(slot.model or '')<3 then
-            error('未读到每日战利品第 '..car..' 辆车的性能分或车型，已保留任务进度')
+          if slot.availability=='locked' then
+            fuel='vehicleLocked'
+            print('每日战利品第 '..car..' 辆车未解锁，已在列表跳过')
+          else
+            local focused=_soloGarageScore and _soloGarageScore(slot.left,slot.top)
+            if focused and focused~='' then slot.score=focused end
+            if (not slot.score or slot.score=='') and #(slot.model or '')<3 then
+              error('未读到每日战利品第 '..car..' 辆车的性能分或车型，已保留任务进度')
+            end
+            tapUiWord(slot)
+            sleep(1200)
           end
-          tapUiWord(slot)
-          sleep(1200)
         else
           local slot=utils.getCarHL(car);local previous=utils.getCarHL(lastCar)
           utils.carSwipe(slot[2],previous[2]);keepCapture()
@@ -1609,7 +1614,7 @@ function utils.chooseCarCup(carList)
           sleep(1500)
         end
         lastCar=car
-        local fuel,detail=utils.carFuel(not clickMode)
+        if not fuel then fuel,detail=utils.carFuel(not clickMode) end
         if fuel==nil and retryX then
           -- A second tap is allowed only while the original garage is still visible.
           tap(retryX,retryY)
@@ -1631,10 +1636,12 @@ function utils.chooseCarCup(carList)
           print('每日战利品已核验第 '..car..' 辆：'..(detail.soloName or '')..' · 性能分 '..(detail.soloScore or slot.score or '未识别'))
         end
         if fuel=='vehicleLocked' then
-          if not wide or #carList==1 then return fuel end
+          if (not dailyGrid and not wide) or #carList==1 then return fuel end
           locked[car]=true
-          print('配置车辆 '..car..' 未解锁，尝试下一辆配置车辆')
-          utils.backToGarage(wide)
+          if not (slot and slot.availability=='locked') then
+            print('配置车辆 '..car..' 未解锁，尝试下一辆配置车辆')
+            if not clickMode then utils.backToGarage(wide) end
+          end
         elseif fuel==nil then
           unavailable[car]=true
           print('配置车辆 '..car..' 未打开详情，尝试下一辆配置车辆')

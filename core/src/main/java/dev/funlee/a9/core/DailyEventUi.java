@@ -77,13 +77,15 @@ public final class DailyEventUi {
         String scene=classify(text);
         if(!scene.equals("unknown"))return scene;
         String t=MapMatcher.normalize(text).replace('賽','赛').replace('擇','择')
-                .replace('紙','纸').replace('鎖','锁');
+                .replace('圖','图').replace('紙','纸').replace('鎖','锁').replace('獲','获')
+                .replace('該','该').replace('車','车').replace('輛','辆');
         if((t.contains("筛选条件")||t.contains("筛进条件"))&&t.contains("已拥有")&&
                 t.contains("排序方式")&&t.contains("完成"))return "garageFilter";
         if(t.contains("性能分")&&t.contains("最大速度")&&t.contains("操控性")&&t.contains("氮气")&&
                 (t.contains("仓库")||t.contains("倉庫"))&&
                 (t.contains("阶段")||t.contains("升級")||t.contains("升级"))&&
                 !t.toUpperCase(java.util.Locale.ROOT).contains("TOUCHDRIVE"))return "vehicleUpgrade";
+        if(t.contains("获取图纸")&&t.contains("图纸以解锁"))return "lockedCar";
         if(t.contains("性能分")&&t.contains("取图纸")&&
                 (t.contains("立刻获取")||t.contains("图纸以解锁")))return "lockedCar";
         if(t.contains("性能分")&&t.contains("获取钥匙")&&t.contains("车钥匙以解锁"))return "lockedCar";
