@@ -8,6 +8,7 @@ import java.util.*;
 import dev.funlee.a9.core.*;
 
 public final class LocalStore {
+    static final int DEFAULT_RACE_TIMEOUT_SECONDS = 300;
     public static final String[] MODES={"多人上","多人下","杯赛","特殊赛事","车联","每日战利品"};
     private static final String[] RETIRED_GLOBAL_OPTIONS={
         "coinAD","cupTicketAD","spCupTicketAD","dsTicketAD","onceAD","dsCupAD","AdTime","coinADNum",
@@ -61,7 +62,7 @@ public final class LocalStore {
         if(!config.has("rotation")) config.put("rotation",90);
         if(!config.has("accuracy")) config.put("accuracy",80);
         if(!config.has("delay")) config.put("delay",0);
-        if(!config.has("raceTimeout")) config.put("raceTimeout",900);
+        if(!config.has("raceTimeout")) config.put("raceTimeout",DEFAULT_RACE_TIMEOUT_SECONDS);
         if(!config.has("driverMode")) config.put("driverMode",1);
     }
     /** Also runs on a saved session so resuming cannot reactivate retired options. */

@@ -71,7 +71,22 @@ function _multiplayerUi(_,__,pixelsOnly)
       s.garage.cards[#s.garage.cards+1]={index=i,x=400+i*10,y=300,signature=thumbnail(n),availability=scenario=='locked27' and n==27 and 'locked' or fuel==0 and 'empty' or 'ready'}
     end
   end
-  if scenario=='targetMoved' and fullPageReads>0 then s.garage.left=s.garage.left+50 end
+  if scenario=='clippedOverlap' or scenario=='lockedOverlap' then
+    if visible==18 then
+      s.garage.cards[6]=nil;s.garage.cards[5]=nil
+      s.garage.cards[3].clipped=scenario=='clippedOverlap';s.garage.cards[4].clipped=scenario=='clippedOverlap'
+      local state=scenario=='clippedOverlap' and 'unknown' or 'locked'
+      s.garage.cards[3].availability=state;s.garage.cards[4].availability=state
+      s.garage.cards[3].signature='00000000010000000111000000010100100000100100000100001000000001000010100100010011'
+      s.garage.cards[4].signature='00000000000000000010000000100000010001000000000100000000000000000010000000000000'
+    elseif visible==20 then
+      s.garage.cards[1].availability='locked';s.garage.cards[2].availability='locked'
+      s.garage.cards[1].signature='00000000010000000111000000011100000000100000000100001000000000000010000100000001'
+      s.garage.cards[2].signature='00000000000000000010000000100000011000100001100110000000000000000010000010000000'
+    end
+  end
+  if scenario=='targetMoved' and fullPageReads>0 then s.garage.left=s.garage.left+50*(1+fullPageReads%2) end
+  if scenario=='targetSettled' and fullPageReads>0 then s.garage.left=s.garage.left+50 end
   return s
 end
 function test()

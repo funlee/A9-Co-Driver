@@ -17,7 +17,9 @@ local config = {
 function spCup.tutorialButton(screen)
   if not screen or screen.scene~='unknown' then return nil end
   local text=(screen.text or ''):gsub('%s','')
-  if not text:find('不甘落后',1,true) or not text:find('氮气',1,true) or not text:find('滑流',1,true) then return nil end
+  local slipstream=text:find('不甘落后',1,true) and text:find('氮气',1,true) and text:find('滑流',1,true)
+  local obstacles=text:find('新游戏机制',1,true) and text:find('360度旋转',1,true) and text:find('赛道上的物品',1,true)
+  if not slipstream and not obstacles then return nil end
   for _,word in ipairs(screen.words or {}) do
     if word.text:gsub('%s','')=='开始' and word.x>=980 and word.y>=560 then return word end
   end

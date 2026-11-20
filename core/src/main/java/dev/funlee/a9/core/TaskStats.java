@@ -24,6 +24,7 @@ public final class TaskStats {
     public synchronized boolean isMatching(){return matchingSeconds>=0;}
     public synchronized void recovered(){restarts++;active=false;resultRecorded=false;returnRecorded=false;matchingSeconds=-1;operation="重启后继续剩余任务";}
     public synchronized int restartCount(){return restarts;}
+    public synchronized boolean masterSeries(){return modeKey.equals("多人下");}
     public synchronized long elapsedMillis(){return elapsed;}
     public synchronized Map<String,Object> snapshot(){
         Map<String,Object> m=new LinkedHashMap<>();

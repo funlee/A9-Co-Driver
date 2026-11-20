@@ -489,7 +489,7 @@ public final class CoreChecks {
             },List.of("_multiplayerUi","_sessionProject","tap","swipe","_hud","print"))) {
                 r.set("data",Map.of("项目","多人上","多人",0));r.set("run",Map.of("data",Map.of("次数","30")));
                 r.load("helpers","utils={defultCfg=function(v,d) return v or d end}");r.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));r.start("currentMultiplayer.run");
-                try{for(int n=0;n<8&&taps.isEmpty();n++)r.step(n*2000L);}catch(RuntimeException e){if(!e.getMessage().contains("绝不自动解锁车辆"))throw e;stopped=true;}
+                try{for(int n=0;n<8&&taps.isEmpty();n++)r.step(n*2000L);}catch(RuntimeException e){if(!e.getMessage().contains("车辆提示未能确认稍后查看"))throw e;stopped=true;}
             }
             check(later?taps.equals(List.of("99,440"))&&!stopped:taps.isEmpty()&&stopped,"Unlock prompt allows only Later; missing Later stops before any fallback: "+later);
         }

@@ -1,5 +1,7 @@
 package dev.funlee.a9.core;
 
+import java.util.List;
+
 /** Semantic guards for the current Chinese multiplayer menus. Unknown screens never trigger Start. */
 public final class MultiplayerUi {
     public static boolean raceEnded(String scene) {
@@ -14,6 +16,12 @@ public final class MultiplayerUi {
         String t=MapMatcher.normalize(text).replace('賽','赛').replace('傳','传').replace('銷','销');
         return (t.contains("传奇促销")||t.contains("赛道制霸"))
                 &&(t.contains("限时发售")||t.contains("一举成名"));
+    }
+    public static String classify(String text,List<?> words) {
+        String scene=classify(text);
+        String menu=MainMenuUi.classify(text,words);
+        // The multiplayer series cards are shown above the same bottom navigation.
+        return menu.isEmpty()||(menu.equals("home")&&scene.equals("series"))?scene:menu;
     }
     public static String classify(String text) {
         String t=MapMatcher.normalize(text).replace('賽','赛').replace('擇','择').toUpperCase(java.util.Locale.ROOT);
@@ -40,6 +48,7 @@ public final class MultiplayerUi {
                 (t.contains("限时抢购")&&t.contains("立即入手"))||limitedSalePromo(text))return "promo";
         if((t.contains("倾斜转弯")||t.contains("键盘操作")||t.contains("智能操作"))&&(t.contains("继续")||t.contains("确定"))&&!t.contains("升级"))return "tutorial";
         if((t.contains("车辆选择")||t.contains("车輛选择")||t.contains("车辅选择"))&&t.contains("选择参与"))return "cars";
+        if(VehicleUnlockGuard.pendingDetail(text))return "car";
         if(t.contains("TOUCHDRIVE")&&(t.contains("升级")||t.contains("升級")||t.contains("性能分"))&&(t.contains("开始")||t.contains("跳过")))return "car";
         if(t.contains("世界系列赛")&&t.contains("大师系列赛"))return "series";
         if(t.contains("开始")&&((t.contains("排行榜")&&t.contains("里程碑"))||

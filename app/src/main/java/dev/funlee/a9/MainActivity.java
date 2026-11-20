@@ -717,7 +717,9 @@ public final class MainActivity extends Activity {
     private void taskPreferences(){
         LinearLayout preferences=settingsGroup("运行规则");
         gameSelector(preferences);
-        settingRow(preferences,"单局时间上限","超过时限后停止当前任务",durationLabel(store.config.optInt("raceTimeout",900)),()->numberSetting("单局时间上限","raceTimeout",60,1800,"秒",900));
+        settingRow(preferences,"单局时间上限","超过时限后停止当前任务",
+                durationLabel(store.config.optInt("raceTimeout",LocalStore.DEFAULT_RACE_TIMEOUT_SECONDS)),
+                ()->numberSetting("单局时间上限","raceTimeout",60,1800,"秒",LocalStore.DEFAULT_RACE_TIMEOUT_SECONDS));
         body.addView(preferences);
         LinearLayout rewards=settingsGroup("奖励领取");
         rewards.addView(label("每轮任务编排开始前检查一次。\n所有启用的任务执行一遍后，下轮再检查。",DETAIL));

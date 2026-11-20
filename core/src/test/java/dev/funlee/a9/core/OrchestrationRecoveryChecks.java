@@ -38,6 +38,9 @@ final class OrchestrationRecoveryChecks {
         script(assets,List.of("special"),"data={};local reads=0;local taps=0;local routes=0;utils={taskRouteAuto=function()return false end,prepareTaskRoute=function()routes=routes+1 end};"+
             "function print()end;function tap()taps=taps+1 end;function _soloEventUi()reads=reads+1;return {scene=reads<5 and 'unknown' or 'race'} end;"+
             "function test()spCup.operation[1][2]();assert(reads==5 and taps==1 and routes==1,'Teaching must wait through loading');done=true end");
+        script(assets,List.of("special"),"local start={text='开始',x=1128,y=652};local ignore={text='不再提示',x=120,y=652};"+
+            "local screen={scene='unknown',text='新游戏机制 年破障碍 进行氮气爆发或360度旋转击破赛道上的物品',words={ignore,start}};"+
+            "function test()assert(spCup.tutorialButton(screen)==start);screen.text='360度旋转';assert(not spCup.tutorialButton(screen));done=true end");
         script(assets,List.of("special"),"data={};utils={taskRouteAuto=function()return false end,prepareTaskRoute=function()end};function print()end;function tap()end;function _soloEventUi()return {scene='unknown'} end;"+
             "function test()local ok=pcall(spCup.operation[1][2]);assert(not ok,'Unconfirmed start cannot advance task');done=true end");
         script(assets,List.of("workflows"),"data={['项目']='特殊赛事',['特赛']=0};run.data={['次数']='1'};utils={};local completed=0;"+
@@ -54,6 +57,9 @@ final class OrchestrationRecoveryChecks {
         script(assets,List.of("daily"),"data={};function print()end;function tap()error('Unconfirmed car page clicked')end;"+
             "function _soloEventUi()return {scene='car',words={{text='开始',x=1100,y=650}}}end;"+
             "function test()assert(not pcall(function()dailyCup.settle('特殊赛事',_soloEventUi)end),'Car without result must not consume quota');done=true end");
+        script(assets,List.of("daily"),"data={};local reads=0;function print()end;function tap()error('Ranking lobby must not start another race')end;"+
+            "function _soloEventUi()reads=reads+1;return {scene=reads==1 and 'results' or 'specialRanking',words={{text='开始40',x=1100,y=665}}}end;"+
+            "function test()assert(dailyCup.settle('特殊赛事',_soloEventUi)==0);done=true end");
         script(assets,List.of("multiplayer_current"),"data={['项目']='多人上'};run={data={['次数']='1'}};utils={defultCfg=function(v,d)return v or d end};local reads=0;local taps=0;function _sessionProject()return 0 end;function _hud()end;function print()end;"+
             "function _multiplayerUi()reads=reads+1;if reads>1 then done=true;sleep(999999)end;return {scene='options',text='',words={}} end;"+
             "function tap(x,y)assert(x==690 and y==38,'Options must use Back, never Exit');taps=taps+1;assert(taps==1) end;function test()currentMultiplayer.run()end");
@@ -97,6 +103,25 @@ final class OrchestrationRecoveryChecks {
             "local screen={scene='missionRewards',words={badge,{text='继续',x=1060,y=655}}};"+
             "function test()assert(utils.specialMissionContinue(screen));badge.text='阶段21';assert(not utils.specialMissionContinue(screen));"+
             "badge.text='1阶段21';badge.x=800;assert(not utils.specialMissionContinue(screen));done=true end");
+        if(!DailyEventUi.classifySolo("N VISION 74 |阶段1 进入前30%即有领笑资 排行榜 T尖排名 开始令0").equals("specialRanking"))
+            throw new AssertionError("Ranking stage has a separate Start action");
+        script(assets,List.of("utilities"),"run={data={['特殊赛事阶段']='1'}};local badge={text='|阶段1',x=195,y=112};"+
+            "local start={text='开始令0',x=1100,y=650};local screen={scene='specialRanking',words={badge,start}};"+
+            "function test()assert(utils.specialMissionContinue(screen)==start);badge.text='|阶段2';assert(not utils.specialMissionContinue(screen));done=true end");
+        script(assets,List.of("utilities"),"data={};run={data={['特殊赛事位置']='2',['称霸模式']='0',['称霸位置']='1',['特殊赛事阶段']='1'}};"+
+            "utils.openHomeTab=function()end;utils.mySwipe=function()end;function keepCapture()end;function cmpColor()return 0 end;function cmpColorEx()return 0 end;"+
+            "function _findColorTriple()return -1,-1,-1 end;function print()end;local reads,swipes=0,0;local entered=false;"+
+            "function tap(x,y)if x==481 and y==355 then entered=true end end;function swipe(x1,y1,x2,y2)assert(y2>y1);swipes=swipes+1 end;"+
+            "function _soloEventUi()reads=reads+1;if entered then return {scene='car'} end;if reads==2 then return {scene='unknown'} end;"+
+            "return {scene='unknown',words={{text='章节1',x=165,y=250},{text=swipes==0 and '阶段2' or '阶段1',x=355,y=238}}} end;"+
+            "function test()assert(utils.intoSpecial({})==1 and swipes==1 and entered);done=true end");
+        script(assets,List.of("utilities"),"data={};local frame,taps=0,0;local fuel=-1;local star=false;utils.mycolor=function()return 1 end;function print()end;"+
+            "function _soloEventUi()frame=frame+1;return {scene='car',text='免费试驾',fuel=fuel,starUpPending=star,frameId=frame,words={{text='开始0',x=1100,y=650}}}end;"+
+            "function tap(x,y)assert(x==69 and y==1100);taps=taps+1 end;function test()"+
+            "for _,mode in ipairs({'杯赛','特殊赛事'}) do data['项目']=mode;assert(utils.startRace()==1) end;"+
+            "data['项目']='多人上';assert(not pcall(utils.startRace));data['项目']='杯赛';fuel=0;assert(utils.startRace()=='fuelEmpty');"+
+            "star=true;fuel=6;for _,mode in ipairs({'杯赛','特殊赛事','每日战利品','车联'}) do data['项目']=mode;assert(utils.startRace()=='fuelEmpty') end;"+
+            "assert(taps==2);done=true end");
         script(assets,List.of("daily"),"data={};local reads,taps=0,0;function print()end;"+
             "function tap(x,y)assert(x==109 and y==450);taps=taps+1 end;"+
             "function _soloEventUi()reads=reads+1;if reads==1 then return {scene='results'} end;"+
@@ -105,7 +130,7 @@ final class OrchestrationRecoveryChecks {
         script(assets,List.of("utilities"),"data={};function _soloEventUi()return {scene='unknown',text='世界系列賽 試驾挑战 大师系列赛 对决'} end;"+
                 "function toast()end;function tap()error('Series selector already on home')end;function test()utils.backToMain();done=true end");
         int fuelScenarios=0;
-        for(String project:List.of("多人上","多人下"))for(String scenario:List.of("mixed","allEmpty","detailEmpty","rotate","detailOcr","wrongCar","lateRewards","blockedRewards")){
+        for(String project:List.of("多人上","多人下"))for(String scenario:List.of("mixed","allEmpty","detailEmpty","starCard","starDetail","rotate","detailOcr","wrongCar","lateRewards","blockedRewards")){
             String series=project.equals("多人上")?"世界系列赛":"大师系列赛";
             script(assets,List.of("multiplayer_current"),
                 "local scenario='"+scenario+"';local series='"+series+"';local count=scenario=='rotate' and 2 or 1;"+
@@ -116,13 +141,13 @@ final class OrchestrationRecoveryChecks {
                 "function tap(y,x)y=719-y;if x==350 and y==450 then phase='event' elseif x==1100 and y==650 then if phase=='event' then phase='cars' elseif phase=='car' then phase='race' elseif phase=='result' then phase=(scenario=='lateRewards' or scenario=='blockedRewards') and 'reward' or 'returned' elseif phase=='reward' then phase='rewardLeaving';exitAt=tickCount();rewardTaps=rewardTaps+1 end elseif x==410 and (y==305 or y==542)then selected=y==305 and 1 or 2;choices[#choices+1]=selected;phase='car' elseif x==38 and y==29 then phase='cars' end end;"+
                 "function _multiplayerUi()frame=frame+2000;local s={scene=phase,text=series,frameId=frame,words={}};"+
                 "if phase=='series' then s.text='世界系列赛 大师系列赛';s.words={{text=series,x=350,y=450}} " +
-                "elseif phase=='event' or phase=='car' then s.words={{text='开始',x=1100,y=650}};s.carDetail={name='LANCER',performance=((scenario=='detailOcr' and #choices==1) or scenario=='wrongCar') and '1/9' or '1/2'};s.fuel=scenario=='detailEmpty' and selected==1 and 0 or 3 " +
-                "elseif phase=='cars' then s.garage={start=true,key='origin',rank='青铜',cards={}};for i=1,2 do s.garage.cards[i]={index=i,x=410,y=i==1 and 305 or 542,availability=(scenario=='allEmpty' or scenario=='mixed' and i==1)and 'empty' or 'ready'}end " +
+                "elseif phase=='event' or phase=='car' then s.words={{text='开始',x=1100,y=650}};s.carDetail={name='LANCER',performance=((scenario=='detailOcr' and #choices==1) or scenario=='wrongCar') and '1/9' or '1/2'};s.fuel=scenario=='detailEmpty' and selected==1 and 0 or 3;s.starUpPending=scenario=='starDetail' and selected==1 " +
+                "elseif phase=='cars' then s.garage={start=true,key='origin',rank='青铜',cards={}};for i=1,2 do s.garage.cards[i]={index=i,x=410,y=i==1 and 305 or 542,availability=(scenario=='allEmpty' or scenario=='mixed' and i==1)and 'empty' or scenario=='starCard' and i==1 and 'starUp' or 'ready'}end " +
                 "elseif phase=='race' then phase='result' elseif phase=='result' then s.text='你的排名';s.words={{text='继续',x=1100,y=650}} elseif phase=='reward' or phase=='rewardLeaving' then rewardSince=rewardSince or tickCount();s.scene='result';s.rewardPage=true;s.rewardCanContinue=phase=='reward' and scenario=='lateRewards' and tickCount()-rewardSince>=14000;s.rewardReady=true;s.words={{text='继续',x=1100,y=650}};if phase=='rewardLeaving' and tickCount()-exitAt>=10000 then phase='returned' end elseif phase=='returned' then s.scene='event' end;return s end;"+
-                "function test()local ok,result=pcall(currentMultiplayer.run);if scenario=='blockedRewards' then assert(not ok and finished==0 and rewardTaps==0,'Unusable reward exit still times out');done=true;return end;assert(ok,result);if scenario=='lateRewards' then assert(finished==1 and rewardTaps==1,'Late-ready reward gets a separate exit transition window');elseif scenario=='detailOcr' or scenario=='wrongCar' then assert(finished==1 and table.concat(choices,',')=='1','Start the unlocked fueled slot without reading detail text');elseif scenario=='allEmpty' then assert(result=='fuelEmpty' and finished==0 and #choices==0) elseif scenario=='rotate' then assert(finished==2 and table.concat(choices,',')=='1,2') elseif scenario=='detailEmpty' then assert(finished==1 and table.concat(choices,',')=='1,2') else assert(finished==1 and table.concat(choices,',')=='2')end;done=true end");
+                "function test()local ok,result=pcall(currentMultiplayer.run);if scenario=='blockedRewards' then assert(not ok and finished==0 and rewardTaps==0,'Unusable reward exit still times out');done=true;return end;assert(ok,result);if scenario=='lateRewards' then assert(finished==1 and rewardTaps==1,'Late-ready reward gets a separate exit transition window');elseif scenario=='detailOcr' or scenario=='wrongCar' then assert(finished==1 and table.concat(choices,',')=='1','Start the unlocked fueled slot without reading detail text');elseif scenario=='allEmpty' then assert(result=='fuelEmpty' and finished==0 and #choices==0) elseif scenario=='rotate' then assert(finished==2 and table.concat(choices,',')=='1,2') elseif scenario=='detailEmpty' or scenario=='starDetail' then assert(finished==1 and table.concat(choices,',')=='1,2') else assert(finished==1 and table.concat(choices,',')=='2')end;done=true end");
             fuelScenarios++;
         }
-        return 42+fuelScenarios+wideHome(assets);
+        return 48+fuelScenarios+wideHome(assets);
     }
     private static int wideHome(Path assets)throws Exception{
         List<Object> tabs=List.of(Map.of("text","每日","x",593,"y",626),Map.of("text","多人","x",787,"y",626),
@@ -130,6 +155,10 @@ final class OrchestrationRecoveryChecks {
         if(!MainMenuUi.classify("周五 挑战限时 赛事 探索赛事",tabs).equals("home"))throw new AssertionError("Xiaomi home with split tab labels");
         if(!MainMenuUi.classify("确定退出游戏吗？ 来九游领取更多福利 再玩一会 退出游戏",tabs).equals("exitGame"))
             throw new AssertionError("Exit prompt takes priority over visible background tabs");
+        String seriesMenu="幽灵滑流赛 世界系列賽 试驾挑战 大师系列赛 对决";
+        if(!MultiplayerUi.classify(seriesMenu,tabs).equals("series")||
+                !MultiplayerUi.classify("确定退出游戏吗？ "+seriesMenu,tabs).equals("exitGame"))
+            throw new AssertionError("Series cards take priority over shared bottom tabs while Exit stays protected");
         script(assets,List.of("utilities"),"data={};local phase=0;"+
                 "function _soloEventUi()if phase==0 then return {scene='exitGame',words={{text='退出游戏',x=779,y=518},{text='再玩一会',x=568,y=532}}} end;"+
                 "return {scene='home',text=phase>=2 and '每周五挑战限时赛事' or '赛季赛事',words={{text='每日',x=593,y=626},{text='採索赛事',x=1024,y=510}}} end;"+
@@ -177,7 +206,7 @@ final class OrchestrationRecoveryChecks {
                 "function _soloEventUi()return {scene='unknown'}end;"+
                 "function tap(x,y)taps=taps+1;assert(x==210 and y==1025,'Open the selected Daily hero directly')end;function print()end;"+
                 "function test()utils.openHomeTab({scene='home',text='挑战限时',dailyExplore={x=1025,y=509},words={{text='每日',x=592,y=628},{text='探索骞事',x=1025,y=509}}},'daily');assert(taps==1);done=true end");
-        return 10;
+        return 11;
     }
     private static void script(Path assets,List<String> modules,String fixture)throws Exception {
         try(LuaRuntime lua=new LuaRuntime((n,l)->0,List.of())) {

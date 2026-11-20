@@ -21,6 +21,7 @@ public final class DailyEventUi {
         if(ProfileUnlockUi.prompt(text))return "profileUnlock";
         if(DynamicRewards.prompt(text))return "rewardChoice";
         if(t.contains("立即购买")||t.contains("立即入手"))return "unknown";
+        if(VehicleUnlockGuard.pendingDetail(text))return "car";
         if(t.toUpperCase(java.util.Locale.ROOT).contains("TOUCHDRIVE")&&t.contains("性能分")&&
                 (t.contains("开始")||t.contains("跳过")))return "car";
         if(t.contains("比赛结果")&&t.contains("你的用时")&&(t.contains("排名")||t.contains("车名")))return "results";
@@ -49,6 +50,8 @@ public final class DailyEventUi {
         if((t.contains("车辆选择")||t.contains("车辅选择"))&&
                 t.contains("选择参与此赛事的车辆"))return "cars";
         if((t.contains("门票不足")||t.contains("门票已用完")||t.contains("没有足够的门票")))return "noTicket";
+        if(t.matches(".*阶段[0-9]+.*")&&t.contains("排行榜")&&t.contains("进入前")&&
+                t.contains("开始"))return "specialRanking";
         // Credit cups and car hunts can have only a solo rewards tab.
         boolean timedEvent=t.contains("最佳用时")||
                 (t.contains("寻车赛事")&&t.contains("打破比赛用时纪录"));

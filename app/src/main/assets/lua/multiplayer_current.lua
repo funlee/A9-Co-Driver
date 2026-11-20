@@ -49,7 +49,7 @@ local function lowerConfiguredLeague(current)
 end
 -- Track ordinal positions through overlapping identified cards after each short drag.
 -- A gesture alone never advances the index, including when it is cancelled or overshoots.
-local function sameCard(a,b,tolerance)
+local function sameCard(a,b,tolerance,minContrast)
   local first,second=a.signature,b.signature
   if not first or not second or #first~=#second then return false end
   local differences,contrast=0,0
@@ -58,7 +58,7 @@ local function sameCard(a,b,tolerance)
     if first:byte(i)~=second:byte(i) then differences=differences+1 end
     if differences>(tolerance or 6) then return false end
   end
-  return contrast>=8 and contrast<=#first-8
+  return contrast>=(minContrast or 8) and contrast<=#first-8
 end
 -- The game often reopens on the previous car. Only reuse that page if two artworks
 -- agree on one column shift in the same league.
@@ -75,27 +75,45 @@ local function rememberedOffset(saved,garage)
   end
   if matches>=2 then return offset end
 end
+local function confirmCar(screen,card,index,position)
+  local garage=screen.garage
+  local anchor={offset=position.offset,cards=garage.cards}
+  local lastSlot,lastLeft,lastOffset,lastFrame
+  for retry=1,5 do
+    local full=_multiplayerUi(false,false)
+    if full.scene~='cars' then error('目标车位已离开车库，停止选车') end
+    if full.frameId~=screen.frameId and full.frameId~=lastFrame then
+      local current=full.garage
+      local left=current.left
+      local samePage=math.abs(left-garage.left)<=3
+      local offset=samePage and position.offset or rememberedOffset(anchor,current)
+      local candidate
+      for _,slot in ipairs(current.cards or {}) do
+        if offset and slot.index+offset==index and not slot.clipped then
+          if samePage and sameCard(card,slot,12) then return slot,full end
+          if not samePage and lastSlot and offset==lastOffset and math.abs(left-lastLeft)<=3 and sameCard(lastSlot,slot,12) then
+            position.offset=offset
+            return slot,full
+          end
+          candidate=slot
+          break
+        end
+      end
+      lastSlot=candidate;lastLeft=left;lastOffset=offset;lastFrame=full.frameId
+    end
+    sleep(150)
+  end
+  error('目标车位仍在移动，未选择车辆')
+end
 local function locateCar(screen,index,position)
   local garage=screen.garage
   local attempts=0
   while true do
     for _,card in ipairs(garage.cards or {}) do
-      if card.index+position.offset==index then
+      if card.index+position.offset==index and not card.clipped then
         if screen.gridOnly then
           -- Only the destination needs full menu OCR; the intervening columns use pixels.
-          local confirmed=nil
-          for retry=1,3 do
-            local full=_multiplayerUi(false,false)
-            if full.scene~='cars' then error('目标车位已离开车库，停止选车') end
-            if full.frameId~=screen.frameId and math.abs(full.garage.left-garage.left)<=3 then
-              for _,slot in ipairs(full.garage.cards or {}) do
-                if slot.index==card.index and sameCard(card,slot,12) then confirmed=slot;break end
-              end
-            end
-            if confirmed then card=confirmed;screen=full;break end
-            sleep(100)
-          end
-          if not confirmed then error('目标车位仍在移动，未选择车辆') end
+          card,screen=confirmCar(screen,card,index,position)
         end
         local result={}
         for k,v in pairs(card) do result[k]=v end
@@ -129,13 +147,21 @@ local function locateCar(screen,index,position)
               local delta=old.index-new.index
               local moved=(tonumber(previous.left) or 0)-(tonumber(nextGarage.left) or 0)
               local shifted=delta*direction>0 or moved*direction>=20
-              if position.offset+delta>=0 and delta*direction>=0 and delta%2==0 and shifted and sameCard(old,new,12) then
-                candidates[delta]=(candidates[delta] or 0)+(sameCard(old,new) and 2 or 1)
+              if position.offset+delta>=0 and delta*direction>=0 and delta%2==0 and shifted then
+                local match=sameCard(old,new,12)
+                local lowContrast=old.clipped or new.clipped or
+                  (old.availability=='locked' and new.availability=='locked')
+                if match or (lowContrast and sameCard(old,new,8,5)) then
+                  local evidence=candidates[delta] or {matches=0,confirmed=false}
+                  evidence.matches=evidence.matches+(match and sameCard(old,new) and 2 or 1)
+                  evidence.confirmed=evidence.confirmed or match
+                  candidates[delta]=evidence
+                end
               end
             end
           end
-          for delta,matches in pairs(candidates) do
-            if matches>=2 then
+          for delta,evidence in pairs(candidates) do
+            if evidence.confirmed and evidence.matches>=2 then
               if offset then offset=nil;break end
               offset=position.offset+delta
             end
@@ -251,11 +277,11 @@ function currentMultiplayer.run()
       elseif scene=='vehicleUnlock' then
         -- Highest priority: never dispatch a close-X, Back, Continue or unlock action here.
         if screen.unlockLater and screen.unlockLater.x<640 and screen.unlockLater.y>=500 then
-          unlockMisses=0;status('发现新车可解锁，仅点击稍后查看')
+          unlockMisses=0;status('车辆提示：稍后查看')
           click(screen.unlockLater.x,screen.unlockLater.y);sleep(1200);changed=tickCount()
         else
-          unlockMisses=unlockMisses+1;status('新车解锁保护：等待确认稍后查看')
-          if unlockMisses>=3 then error('新车提示未能确认稍后查看；已停止，请由玩家处理，绝不自动解锁车辆') end
+          unlockMisses=unlockMisses+1;status('车辆提示保护：等待确认稍后查看')
+          if unlockMisses>=3 then error('车辆提示未能确认稍后查看，已停止，请由玩家处理') end
         end
       elseif scene=='milestoneLater' then
         local later=word(screen,'稍后领取',530)
@@ -525,7 +551,8 @@ function currentMultiplayer.run()
                   print('切换并核验'..targetLeague..'车库');click(tab.x,tab.y);sleep(1200)
                 else print('等待识别'..targetLeague..'段位标签');sleep(500) end
               else sleep(500) end
-            elseif not targetLeague and (not alignSwipeFrame or (not garage.start and screen.frameId-alignSwipeFrame>=6000)) then
+            elseif not targetLeague and ((not alignSwipeFrame and (world or garage.rank~=series)) or
+                (not garage.start and (not alignSwipeFrame or screen.frameId-alignSwipeFrame>=6000))) then
               alignAttempts=alignAttempts+1;alignSwipeFrame=screen.frameId;alignFrames=0;alignKey=nil
               print('校验选车列表起点 '..alignAttempts..'/12 · '..(garage.key or '未确认'))
               swipe(419,300,419,1100,600);sleep(1800)
@@ -572,12 +599,14 @@ function currentMultiplayer.run()
             end
             if emptyCars[index] then exhausted=exhausted+1
             elseif card then
-                if card.availability=='empty' or card.availability=='locked' then emptyCars[index]=true;exhausted=exhausted+1
+                if card.availability=='empty' or card.availability=='locked' or card.availability=='starUp' then
+                  emptyCars[index]=true;exhausted=exhausted+1
+                  if card.availability=='starUp' then print('车辆 '..index..' 待升星，尝试下一辆配置车辆') end
                 elseif card.availability=='ready' then
                   usedCars[rankKey][entry]=true
                   lastPage={rank=rankKey,index=index,offset=position.offset,cards=garage.cards}
                   selectedCar=card;carPressedAt=tickCount();chosen=true
-                  status('选择车辆序号 '..index..'：已解锁且有油')
+                  status('选择车辆序号 '..index..(world and '：已解锁且有油' or '：可出赛'))
                   click(card.x,card.y);sleep(1800);break
                 end
             end
@@ -594,10 +623,10 @@ function currentMultiplayer.run()
             if configured==exhausted and (world or configured>0) then
               local lower=world and lowerConfiguredLeague(rankKey)
               if not lower then
-                local reason=world and '当前及更低段位均无配置车可出赛' or '已配置车辆均未解锁或无油'
+                local reason=world and '当前及更低段位均无配置车可出赛' or '已配置车辆均不可出赛'
                 status(reason..'，跳过本轮'..series..'；保留已完成局数');return 'fuelEmpty'
               end
-              status(rankKey..(configured==0 and '未配置车辆' or '配置车辆均未解锁或无油')..'，改用'..lower..'配置')
+              status(rankKey..(configured==0 and '未配置车辆' or '配置车辆均不可出赛')..'，改用'..lower..'配置')
               targetLeague=lower;emptyCars={};carRetries=0;originRetries=0
               carListAligned=false;verifiedKey=nil;alignKey=nil;alignFrames=0;alignAttempts=0
               alignFrame=screen.frameId;alignSwipeFrame=nil
@@ -607,11 +636,11 @@ function currentMultiplayer.run()
         end
       elseif scene=='car' and not started then
         if not selectedCar then error('未经过列表起点及序号校验，禁止直接开始比赛') end
-        if screen.fuel==0 then
+        if screen.fuel==0 or screen.starUpPending then
           if screen.frameId~=emptyDetailFrame then emptyDetailFrames=emptyDetailFrames+1;emptyDetailFrame=screen.frameId end
           if emptyDetailFrames>=2 then
             emptyCars[selectedCar.index]=true
-            status('车辆 '..selectedCar.index..' 详情确认无油，返回列表尝试下一辆')
+            status('车辆 '..selectedCar.index..(screen.starUpPending and ' 待升星' or ' 详情确认无油')..'，返回列表尝试下一辆')
             if screen.homeButton then keyPress('back') else click(38,29) end
             sleep(1200)
             carPressedAt=nil;selectedCar=nil

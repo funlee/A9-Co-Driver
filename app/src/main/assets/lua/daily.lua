@@ -157,7 +157,7 @@ function dailyCup.settle(label,readScreen)
   end
   while tickCount()-started<90000 do
     local screen=readScreen();local scene=screen.scene
-    if scene=="event" or scene=="car" then
+    if scene=="event" or scene=="car" or (label=='特殊赛事' and scene=='specialRanking') then
       eventFrames=eventFrames+1
       eventSince=eventSince or tickCount()
       lastEvent=tickCount()
@@ -186,6 +186,7 @@ function dailyCup.settle(label,readScreen)
     elseif scene=="conversion" then
       seen=true;advance(screen,"确定")
     elseif scene=="vehicleUnlock" and screen.unlockLater then
+      seen=true;print('车辆提示：稍后查看')
       tap(719-math.floor(screen.unlockLater.y),math.floor(screen.unlockLater.x));sleep(800)
     elseif seen and scene=="unknown" and (screen.text or ''):find('里程碑',1,true) then
       -- Club milestones interrupt settlement. Defer the claim to stay in the race flow.

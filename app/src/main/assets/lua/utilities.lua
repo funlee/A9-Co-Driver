@@ -240,21 +240,29 @@ end
 local function tapUiWord(word)
   tap(719-math.floor(word.y),math.floor(word.x))
 end
+local function startButton(screen)
+  for _,word in ipairs(screen.words or {}) do
+    local label=word.text:gsub('%s','')
+    if label:sub(1,#'开始')=='开始' and word.x>950 and word.y>590 then return word end
+  end
+end
 function utils.specialMissionContinue(screen)
-  if screen.scene~='missionRewards' then return end
+  local ranking=screen.scene=='specialRanking'
+  if not ranking and screen.scene~='missionRewards' then return end
   local stage=tonumber(run.data['特殊赛事阶段']) or 1
   -- Keep OCR line boundaries: the next reward count can start with a digit.
   local digits=(screen.stageLabel or ''):match('阶%s*段%s*(%d+)')
   if not digits then
     for _,word in ipairs(screen.words or {}) do
-      if word.x<=230 and word.y>=140 and word.y<=420 then
-        local badge=word.text:gsub('%s','')
+      if word.x<=(ranking and 360 or 230) and word.y>=(ranking and 65 or 140) and word.y<=420 then
+        local badge=word.text:gsub('[%s|]','')
         digits=badge:match('^阶段(%d+)$') or badge:match('^1阶段(%d+)1$')
         if digits then break end
       end
     end
   end
   if tonumber(digits)~=stage then return end
+  if ranking then return startButton(screen) end
   return findUiWord(screen,{['继续']=true,['继绩']=true},900,1265,570,710)
 end
 function utils.continueSpecialMission(screen)
@@ -374,6 +382,12 @@ function utils.backToMain()
       sleep(500)
     elseif screen.scene=='profileUnlock' and dailyCup and dailyCup.dismissProfile then
       dailyCup.dismissProfile(screen)
+    elseif screen.scene=='vehicleUnlock' then
+      if screen.unlockLater then
+        print('车辆提示：稍后查看')
+        tapUiWord(screen.unlockLater)
+      end
+      sleep(800)
     elseif screen.scene=='limitedSalePromo' then
       if screen.closeX then tapUiWord(screen.closeX) end
       sleep(1200)
@@ -1306,26 +1320,35 @@ function utils.screenFreeze(isBack)
     return 0
   end
 end
+local function ticketedTrial(screen)
+  local project=data['项目']
+  return (project=='杯赛' or project=='特殊赛事') and screen.scene=='car' and screen.fuel==-1 and not screen.starUpPending
+    and (screen.text or ''):gsub('%s',''):find('免费试驾',1,true) and startButton(screen)
+end
 function utils.startRace()
   local fuel=utils.carFuel()
   if fuel=='vehicleLocked' then return fuel end
+  if fuel=='starUp' then
+    print('车辆待升星，跳过本车')
+    return 'fuelEmpty'
+  end
   if fuel==0 then return 'fuelEmpty' end
   data['信息']='开始跑图'
   for i=1,4 do
     local screen=_soloEventUi()
     if screen.scene=='car' then
-      if screen.fuel==0 then return 'fuelEmpty' end
+      if screen.starUpPending or screen.fuel==0 then return 'fuelEmpty' end
+      if fuel=='trial' and not ticketedTrial(screen) then return 'fuelEmpty' end
       if utils.mycolor(50,830,'12FBC3-101010')~=1 then
         tap(50,830);print('打开TouchDrive');sleep(1000)
       else
-        for _,word in ipairs(screen.words or {}) do
-          local label=string.gsub(word.text,'%s','')
-          if string.sub(label,1,#'开始')=='开始' and word.x>950 and word.y>590 then
-            tap(719-math.floor(word.y),math.floor(word.x));sleep(2000)
-            -- Loading is not a race; the host shows the panel after detecting the race HUD.
-            if _racePanel then _racePanel(false) end
-            return 1
-          end
+        local button=startButton(screen)
+        if button then
+          if fuel=='trial' then print('使用赛事提供的免费试驾车辆') end
+          tapUiWord(button);sleep(2000)
+          -- Loading is not a race; the host shows the panel after detecting the race HUD.
+          if _racePanel then _racePanel(false) end
+          return 1
         end
       end
     end
@@ -1401,9 +1424,12 @@ function utils.carFuel(allowGarage)
     else
       garageFrame=nil;stillInGarage=false
     end
-    if screen.scene=='car' and screen.fuel and screen.fuel>=0 then
-      if screen.frameId~=frame and previous==screen.fuel then return screen.fuel end
-      previous=screen.fuel;frame=screen.frameId
+    local availability=screen.scene=='car' and screen.starUpPending and 'starUp'
+      or screen.scene=='car' and screen.fuel and screen.fuel>=0 and screen.fuel
+      or ticketedTrial(screen) and 'trial'
+    if availability then
+      if screen.frameId~=frame and previous==availability then return availability end
+      previous=availability;frame=screen.frameId
     else previous=nil end
     sleep(500)
   end
@@ -1485,14 +1511,14 @@ function utils.chooseCarCup(carList)
         elseif fuel==nil then
           unavailable[car]=true
           print('配置车辆 '..car..' 未打开详情，尝试下一辆配置车辆')
-        elseif fuel>0 then
+        elseif fuel=='trial' or (type(fuel)=='number' and fuel>0) then
           data['用车次数']['car'..j]=1
           utils.selectNextTaskCar=false
-          data['信息']='使用配置车辆 '..car..'，剩余燃油 '..fuel
+          data['信息']='使用配置车辆 '..car..(fuel=='trial' and '（免费试驾）' or '，剩余燃油 '..fuel)
           print(data['信息']);return true
         else
           empty[car]=true
-          data['信息']='配置车辆 '..car..' 已无油，尝试下一辆';print(data['信息'])
+          data['信息']='配置车辆 '..car..(fuel=='starUp' and ' 待升星' or ' 已无油')..'，尝试下一辆';print(data['信息'])
           if not clickMode then utils.backToGarage(wide) end
         end
       end
@@ -1958,39 +1984,58 @@ function utils.intoSpecial(screen)
     local chapter=tonumber(run.data["称霸位置"]) or 1
     local function numberedWord(screen,label,number,minX,maxX)
       for _,word in ipairs(screen.words or {}) do
-        local digits=word.text:gsub('%s',''):match(label..'(%d+)')
+        local digits=word.text:gsub('[ \t\r\n]',''):match(label..'(%d+)')
         if tonumber(digits)==number and word.x>=minX and word.x<=maxX then return word end
       end
     end
-    local tab=numberedWord(_soloEventUi(),'章节',chapter,0,370)
+    local tab
+    for attempt=1,4 do
+      tab=numberedWord(_soloEventUi(),'章节',chapter,0,370)
+      if tab then break end
+      sleep(500)
+    end
     if not tab then error('未找到称霸章节 '..chapter) end
     tapUiWord(tab)
     sleep(900)
-    for attempt=1,8 do
+    for attempt=1,12 do
       local screen=_soloEventUi()
-      if not numberedWord(screen,'章节',chapter,0,370) then error('已离开称霸章节选择页') end
-      local stage=numberedWord(screen,'阶段',spStage,300,1279)
-      if not stage then
-        -- On white badges OCR can append the right border as a digit 1.
-        -- Accept that reading only between independently recognized adjacent stages.
-        local badge=numberedWord(screen,'阶段',spStage*10+1,300,1279)
-        local before=numberedWord(screen,'阶段',spStage-1,300,1279)
-        local after=numberedWord(screen,'阶段',spStage+1,300,1279)
-        if badge and ((before and before.x<badge.x) or (after and after.x>badge.x)) then stage=badge end
-      end
-      if stage then
-        tapUiWord(stage)
-        sleep(1000)
-        for check=1,4 do
-          if utils.specialMissionContinue(_soloEventUi()) then
-            print('已确认称霸章节 '..chapter..'，阶段 '..spStage)
-            return 1
-          end
-          sleep(400)
+      if numberedWord(screen,'章节',chapter,0,370) then
+        local stage=numberedWord(screen,'阶段',spStage,300,1279)
+        if not stage then
+          -- On white badges OCR can append the right border as a digit 1.
+          -- Accept that reading only between independently recognized adjacent stages.
+          local badge=numberedWord(screen,'阶段',spStage*10+1,300,1279)
+          local before=numberedWord(screen,'阶段',spStage-1,300,1279)
+          local after=numberedWord(screen,'阶段',spStage+1,300,1279)
+          if badge and ((before and before.x<badge.x) or (after and after.x>badge.x)) then stage=badge end
         end
-        error('无法进入称霸阶段 '..spStage..'，请检查解锁条件')
+        if stage then
+          tapUiWord(stage)
+          local deadline=tickCount()+15000
+          repeat
+            sleep(500)
+            local current=_soloEventUi()
+            if utils.specialMissionContinue(current) or current.scene=='car' or current.scene=='cars' then
+              print('已确认称霸章节 '..chapter..'，阶段 '..spStage)
+              return 1
+            end
+          until tickCount()>=deadline
+          error('未能确认进入称霸阶段 '..spStage..'，已保留当前任务')
+        end
+        local firstVisible=nil
+        for _,word in ipairs(screen.words or {}) do
+          if word.x>=300 and word.y>=160 and word.y<=340 then
+            local number=tonumber(word.text:gsub('%s',''):match('阶段(%d+)'))
+            if number then firstVisible=math.min(firstVisible or number,number) end
+          end
+        end
+        -- The game can reopen the chapter at a later stage after a race.
+        if firstVisible and spStage<firstVisible then
+          swipe(290,550,290,1050,450)
+        elseif firstVisible then
+          swipe(290,1050,290,550,450)
+        end
       end
-      swipe(290,1050,290,550,450)
       sleep(500)
     end
     error('当前章节未找到阶段 '..spStage)

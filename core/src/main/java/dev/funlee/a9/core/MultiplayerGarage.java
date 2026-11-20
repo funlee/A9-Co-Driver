@@ -125,52 +125,85 @@ public final class MultiplayerGarage {
 
     /** Number physical row pairs, including unavailable cars. No labels are needed to locate a slot. */
     public static Map<String,Object> slots(PixelFrame frame,List<?> words,String rank,double aspect){
+        return slots(frame,words,rank,aspect,false);
+    }
+    public static Map<String,Object> slots(PixelFrame frame,List<?> words,String rank,double aspect,boolean master){
         boolean wide=aspect>2.07,medium=aspect>=2.0&&!wide;
         int top=wide?215:medium?206:195,rowPitch=wide?231:medium?233:237;
         int pitch=wide?359:medium?405:464,width=wide?348:medium?393:450;
-        String league=league(frame,words,rank,wide,medium);
+        String league=master?(masterRail(frame,words)?"大师系列赛":""):league(frame,words,rank,wide,medium);
         int left=-1;
         for(int x=wide?18:4;x<650;x++){
-            if(slotEdge(frame,x,top)&&slotEdge(frame,x,top+rowPitch)){left=x;break;}
+            if(slotEdge(frame,x,top,master)&&slotEdge(frame,x,top+rowPitch,master)){left=x;break;}
         }
         boolean origin=!league.isEmpty()&&left>=(wide?215:202)&&left<=(wide?233:220);
         List<Object> cards=new ArrayList<>();
         for(int column=0;left>=0&&column<3;column++){
             int x=left+column*pitch;
-            if(x+width>(wide?1260:1280))break;
+            int right=wide?1260:1280;
+            if(x+190>right)break;
+            boolean clipped=x+width>right;
             for(int row=0;row<2;row++){
                 int y=top+row*rowPitch;
                 boolean bordered=false;
-                for(int dx=-3;dx<=3&&!bordered;dx++)bordered=slotEdge(frame,x+dx,y);
+                for(int dx=-3;dx<=3&&!bordered;dx++)bordered=slotEdge(frame,x+dx,y,master);
                 if(!bordered)continue;
                 cards.add(Map.of("index",2*column+row+1,"x",x+cardCenterOffset(aspect),"y",y+110,
-                        "signature",thumbnail(frame,x,y),"availability",availability(frame,x,y,words)));
+                        "signature",thumbnail(frame,x,y),"clipped",clipped,
+                        "availability",clipped?"unknown":availability(frame,x,y,words)));
             }
         }
         return Map.of("left",left,"start",origin,"rank",league,"key",origin?league:"","cards",cards,"pitch",pitch);
     }
 
-    private static boolean borderColor(int c){
-        int r=(c>>16)&255,g=(c>>8)&255,b=c&255;
-        return (r<60&&b>=80&&b>g+24)||(g>140&&b>105&&r<105)||(r>145&&g>155&&b<170)||(r>=95&&g<85&&b>40&&r>g+65);
+    private static boolean masterRail(PixelFrame frame,List<?> words){
+        for(Object value:words){
+            Map<?,?> word=(Map<?,?>)value;
+            if(pos(word,"x")>=95&&pos(word,"x")<=185&&pos(word,"y")>=370&&pos(word,"y")<=480&&
+                    MapMatcher.normalize(word.get("text").toString()).equals("小白"))return true;
+        }
+        int gold=0;
+        for(int y=365;y<495;y+=2)for(int x=100;x<190;x+=2){
+            int c=frame.pixel(719-y,x),r=c>>16&255,g=c>>8&255,b=c&255;
+            if(r>=165&&g>=110&&g<=225&&r-g>=10&&g-b>=22)gold++;
+        }
+        return gold>=105;
     }
-    private static boolean slotEdge(PixelFrame frame,int x,int top){
+
+    private static boolean borderColor(int c,boolean master){
+        int r=(c>>16)&255,g=(c>>8)&255,b=c&255;
+        return (r<60&&b>=80&&b>g+24)||(g>140&&b>105&&r<105)||(r>145&&g>155&&b<170)||(r>=95&&g<85&&b>40&&r>g+65)
+                ||(master&&Math.min(r,Math.min(g,b))>=180&&Math.max(r,Math.max(g,b))-Math.min(r,Math.min(g,b))<=40);
+    }
+    private static boolean slotEdge(PixelFrame frame,int x,int top,boolean master){
         // The horizontal line must begin here. A right border or a clipped card has no such corner.
         boolean corner=false;
         for(int y=top-4;y<=top+5&&!corner;y++)
-            corner=borderColor(frame.pixel(719-y,x+2))&&borderColor(frame.pixel(719-y,x+5))
-                    &&borderColor(frame.pixel(719-y,x+10))&&borderColor(frame.pixel(719-y,x+76))
-                    &&!borderColor(frame.pixel(719-y,x-5));
+            corner=borderColor(frame.pixel(719-y,x+2),master)&&borderColor(frame.pixel(719-y,x+5),master)
+                    &&borderColor(frame.pixel(719-y,x+10),master)&&borderColor(frame.pixel(719-y,x+76),master)
+                    &&!borderColor(frame.pixel(719-y,x-5),master);
         if(!corner)return false;
         int hits=0;
         for(int y=top+14;y<top+204;y+=4){
             int gap=frame.pixel(719-y,x-5);
-            if((gap>>16&255)<24&&(gap>>8&255)<50&&(gap&255)<80&&borderColor(frame.pixel(719-y,x)))hits++;
+            if((gap>>16&255)<24&&(gap>>8&255)<50&&(gap&255)<80&&borderColor(frame.pixel(719-y,x),master))hits++;
         }
         return hits>=36;
     }
 
     private static String availability(PixelFrame frame,int left,int top,List<?> words){
+        int starBanner=0;
+        for(int y=top+5;y<=top+22;y+=3)for(int x=left+12;x<=left+154;x+=7){
+            int c=frame.pixel(719-y,x),r=c>>16&255,g=c>>8&255,b=c&255;
+            if(r>=195&&g>=140&&g<=225&&r-g>=16&&b<80)starBanner++;
+        }
+        if(starBanner>=70)return "starUp";
+        for(Object word:words){
+            Map<?,?> w=(Map<?,?>)word;
+            int x=pos(w,"x")-left,y=pos(w,"y")-top;
+            String text=VehicleUnlockGuard.normalize(w.get("text").toString());
+            if(x>=30&&x<=205&&y>=0&&y<=35&&text.equals("升星就绪"))return "starUp";
+        }
         int green=0,pink=0,dark=0,samples=0;
         for(int y=top+191;y<=top+207;y+=2)for(int x=left+12;x<=left+46;x+=2){
             int c=frame.pixel(719-y,x),r=c>>16&255,g=c>>8&255,b=c&255;

@@ -71,8 +71,33 @@ final class MultiplayerGarageChecks {
                 Map<?,?> slot=(Map<?,?>)cards.get(j);
                 require(slot.get("index").equals(j+1)&&slot.get("availability").equals(states.get(j)),"Preserve column order and fuel badge state");
             }
-            checks+=6;
+            for(int dx=12;dx<=154;dx++)for(int dy=5;dy<=22;dy++)grid[(x+dx)*720+719-top-dy]=0xfff3bb05;
+            var pending=MultiplayerGarage.slots(new PixelFrame(720,1280,grid),List.of(),"青铜",aspect);
+            require(((Map<?,?>)((List<?>)pending.get("cards")).get(0)).get("availability").equals("starUp"),
+                    "Star-up ribbon is recognized without OCR even on a fuelled card");
+            checks+=7;
         }
+        int[] clippedGrid=new int[720*1280];
+        for(int left:new int[]{391,855})for(int top:new int[]{195,432}){
+            for(int dx=0;dx<=100;dx++)clippedGrid[(left+dx)*720+719-top]=0xff0079cd;
+            for(int dy=0;dy<=210;dy++)clippedGrid[left*720+719-top-dy]=0xff0079cd;
+        }
+        var clippedPage=MultiplayerGarage.slots(new PixelFrame(720,1280,clippedGrid),List.of(),"",16.0/9);
+        var clippedCards=(List<?>)clippedPage.get("cards");
+        require(clippedCards.size()==4&&Boolean.TRUE.equals(((Map<?,?>)clippedCards.get(2)).get("clipped")),
+                "Right-edge cards retain tracking signatures while remaining ineligible for taps");checks++;
+        int[] masterGrid=new int[720*1280];
+        for(int left:new int[]{211,675})for(int top:new int[]{195,432}){
+            for(int dx=0;dx<=100;dx++)masterGrid[(left+dx)*720+719-top]=0xfffbf8f7;
+            for(int dy=0;dy<=210;dy++)masterGrid[left*720+719-top-dy]=0xfffbf8f7;
+            for(int dx=10;dx<=50;dx++)for(int dy=190;dy<=209;dy++)masterGrid[(left+dx)*720+719-top-dy]=0xffc0fa14;
+        }
+        var masterFrame=new PixelFrame(720,1280,masterGrid);
+        var masterPage=MultiplayerGarage.slots(masterFrame,List.of(word("小白",141,409)),"",16.0/9,true);
+        require(Boolean.TRUE.equals(masterPage.get("start"))&&((List<?>)masterPage.get("cards")).size()==4,
+                "Master rank rail and white trial-card borders establish the first car");checks++;
+        require(Boolean.FALSE.equals(MultiplayerGarage.slots(masterFrame,List.of(),"",16.0/9,true).get("start")),
+                "White borders alone cannot establish Master garage origin");checks++;
         checks+=leagueSelection(assets);
         String fallbackCases;
         try(var input=MultiplayerGarageChecks.class.getResourceAsStream("/world-league-fallback.lua")){
@@ -92,7 +117,7 @@ final class MultiplayerGarageChecks {
         try(var input=MultiplayerGarageChecks.class.getResourceAsStream("/world-car-pagination.lua")){
             paginationCases=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
         }
-        for(String scenario:List.of("car27","empty27","locked27","remembered","reversePage","differentPage","emptyBoth","delayedPage","missingBottom","slowPagination","fuzzyName","sameColumnShift","overshoot","targetMoved","stuckPage")){
+        for(String scenario:List.of("car27","empty27","locked27","remembered","reversePage","differentPage","emptyBoth","delayedPage","missingBottom","slowPagination","fuzzyName","sameColumnShift","clippedOverlap","lockedOverlap","overshoot","targetMoved","targetSettled","stuckPage")){
             try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
                 lua.set("scenario",scenario);
                 lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));

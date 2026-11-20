@@ -191,8 +191,9 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         if(SessionState.overlayMode(result,menu))capture.awaitFrameAfter(before);
     }
     private Map<String,Object> multiplayerUi(boolean readSeriesScore,boolean raceExpected,boolean sampleGrid) throws Exception {
+        boolean master=SessionState.stats.masterSeries();
         capture();
-        if(sampleGrid&&lastUiScene.equals("cars")){
+        if(sampleGrid&&!master&&lastUiScene.equals("cars")){
             Map<String,Object> garage=MultiplayerGarage.slots(frame,List.of(),"",viewportAspect());
             if(!((List<?>)garage.get("cards")).isEmpty()&&!MultiplayerGarage.leagueTabs(frame).isEmpty())
                 return Map.of("frameId",capture.frameId(),"scene","cars","garage",garage,"gridOnly",true);
@@ -231,8 +232,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             snapshot(new File(root,"multiplayer-empty.png").getAbsolutePath(),0,0,719,1279);
             SessionState.log("界面文字为空，已保存当前截屏用于排查");
         }
-        String menu=MainMenuUi.classify(text,words);
-        String scene=menu.isEmpty()?MultiplayerUi.classify(text):menu;
+        String scene=MultiplayerUi.classify(text,words);
         if(touch!=null){
             touch.unlockGuard.observe(VehicleUnlockGuard.prompt(text),laterBounds,!scene.equals("unknown")&&!scene.equals("vehicleUnlock"));
             if(touch.unlockGuard.active()){
@@ -312,18 +312,21 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         if(scene.equals("cars")){
             boolean wide=ultrawideViewport();
             double aspect=viewportAspect();
-            Map<String,Object> garage=MultiplayerGarage.slots(frame,words,"",aspect);
+            Map<String,Object> garage=MultiplayerGarage.slots(frame,words,"",aspect,master);
             int left=(int)garage.get("left");
-            if(garage.get("rank").equals("")&&left>=(wide?215:202)&&left<=(wide?233:220)){
+            if(!master&&garage.get("rank").equals("")&&left>=(wide?215:202)&&left<=(wide?233:220)){
                 String rank=wide?text(262,126,305,185,4):text(250,90,335,200,3);
                 garage=MultiplayerGarage.slots(frame,words,rank,aspect);
             }
             out.put("garage",garage);
-            out.put("leagueTabs",MultiplayerGarage.leagueTabs(frame));
+            out.put("leagueTabs",master?Map.of():MultiplayerGarage.leagueTabs(frame));
             if(((List<?>)garage.get("cards")).isEmpty())
                 snapshot(new File(root,"multiplayer-garage-unconfirmed.png").getAbsolutePath(),0,0,719,1279);
         }
-        if(scene.equals("car"))out.put("fuel",FuelAvailability.detail(words));
+        if(scene.equals("car")){
+            out.put("fuel",FuelAvailability.detail(words));
+            out.put("starUpPending",VehicleUnlockGuard.pendingDetail(text));
+        }
         if(loadingCandidate){
             out.put("mapText",MapMatcher.loadingTitle(header,focusedTitle));
             MapMatcher.Match match=store.matcher.matchLoadingTitle(header,focusedTitle);
@@ -382,7 +385,10 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             }
             if(solo)addWideHomeButton(out);
             out.put("words",words);
-            if(scene.equals("car"))out.put("fuel",FuelAvailability.detail(words));
+            if(scene.equals("car")){
+                out.put("fuel",FuelAvailability.detail(words));
+                out.put("starUpPending",VehicleUnlockGuard.pendingDetail(full.getText()));
+            }
             if(scene.equals("unknown")||scene.equals("limitedSalePromo")){
                 int[] close=scene.equals("limitedSalePromo")?PopupCloseDetector.findLimitedSale(frame):PopupCloseDetector.find(frame);
                 if(close!=null)out.put("closeX",Map.of("x",close[0],"y",close[1]));
@@ -604,7 +610,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                     int p=progress.accept(store.digits.progress(frame(),store.config.optInt("accuracy",80)/100.0,viewportAspect()));
                     if(p>lastProgress){lastProgress=p;lastProgressTime=clock;}
                     if(clock-lastProgressTime>90_000)throw failure("划动选路进度 90 秒未前进，请检查游戏画面");
-                    if(clock-driverStart>1000L*store.config.optInt("raceTimeout",900))throw failure("划动选路超过单局时限");
+                    if(clock-driverStart>1000L*store.config.optInt("raceTimeout",LocalStore.DEFAULT_RACE_TIMEOUT_SECONDS))throw failure("划动选路超过单局时限");
                     if(p>=0&&p>=lastLoggedProgress+10){lastLoggedProgress=p;SessionState.log("划动选路进度 "+p+"%");}
                     SessionState.stats.progress(p,-1,0);return result(l,p);
                 }
@@ -660,7 +666,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         }
         if(!driverFallback&&clock-lastDigitTime>12_000)throw failure("12 秒未能确认进度，请检查游戏画面是否被遮挡");
         if(clock-lastProgressTime>90_000)throw failure("比赛进度 90 秒未前进，请检查游戏是否卡住或暂停");
-        if(clock-driverStart>1000L*store.config.optInt("raceTimeout",900))throw failure("单局跑图超时，可在任务偏好中调整单局时间上限");
+        if(clock-driverStart>1000L*store.config.optInt("raceTimeout",LocalStore.DEFAULT_RACE_TIMEOUT_SECONDS))throw failure("单局跑图超时，可在任务偏好中调整单局时间上限");
         if(driverFallback){
             if(p<99&&clock-lastPulse>=700){touch.tap(1,236,1100);touch.swipe(288,840,288,440,50);lastPulse=clock;}
             SessionState.stats.progress(p,-1,0);SessionState.stats.operation("暂无有效跑法，左划兜底");

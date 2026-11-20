@@ -30,7 +30,7 @@ function cup.openRaceGarage(screen, eventName)
 end
 
 function cup.isSettlement(scene)
-  return scene=='results' or scene=='rewards' or scene=='cards' or scene=='missionRewards' or scene=='conversion'
+  return scene=='results' or scene=='rewards' or scene=='cards' or scene=='missionRewards' or scene=='conversion' or scene=='vehicleUnlock'
 end
 
 -- Recognize the map on the cup loading screen, using the existing OCR region.

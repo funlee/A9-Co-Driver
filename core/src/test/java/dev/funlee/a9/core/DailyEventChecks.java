@@ -19,12 +19,20 @@ final class DailyEventChecks {
             {"比赛奖励 你的用时 名人堂 继续","unknown"},
             {"名人堂 特殊卡牌 立即购买 继续","unknown"},
             {"红币 多余的图纸或奖励将被兑换为红币 确定","conversion"},
+            {"你有定够的图纸来提升车库了! 恭喜! 升星就绪! 新车辆性能分上限 稍后査看 升星","vehicleUnlock"},
+            {"你有足够的图纸来提升车库了! 恭喜! 升呈就绪! 新车辆性能分上限 稍后查看 升星","vehicleUnlock"},
+            {"车库 车辆升星 稍后查看","unknown"},
             {"比赛奖励 你的用时 总金币 3200 +100 继续","rewards"},
             {"你的用时 继续","unknown"},{"限时赛事 购买优惠 立即购买","unknown"}};
         for(String[] c:scenes)if(!DailyEventUi.classify(c[0]).equals(c[1]))throw new AssertionError(c[0]);
         String avatar="恭喜！你已解锁新的档案头像！稍后查看 前往";
         if(!MultiplayerUi.classify(avatar).equals("profileUnlock")||!RecoveryReadiness.ready(avatar)||VehicleUnlockGuard.prompt(avatar))
             throw new AssertionError("Profile popup is actionable after recovery without conflating vehicle unlocks");
+        if(!MultiplayerUi.classify("升星就绪 新车辆性能分上限 稍后査看 升星").equals("vehicleUnlock")||
+                !MultiplayerUi.classify("车辆选择 选择参与此赛事的车辆 升星就绪 30/30").equals("cars")||
+                !VehicleUnlockGuard.laterLabel("稍后査看",380,625,500,665)||
+                VehicleUnlockGuard.laterLabel("升星",800,625,880,665))
+            throw new AssertionError("Star-up prompt must share the vehicle protection and authorize only Later");
         String setup="data={};run={data={}};utils={getMapName=function(k)data['多人地图']=k;data['线路']='route' end};"+
             "function keepCapture()end;function cmpColorEx(s)assert(s~=nil,'nil color pattern');return 0 end;function print()end;"+
             "taps=0;rewards=0;function tap(x,y)assert(x>=0 and y>=0);taps=taps+1 end;"+
@@ -42,6 +50,7 @@ final class DailyEventChecks {
             "screens={{scene='cards',words={}},{scene='event'},{scene='unknown'},{scene='event'},{scene='event'}};local reads=0;_dailyEventUi=function()reads=reads+1;assert(reads<=5,'brief OCR miss restarted full grace period');return screens[reads] end;assert(dailyCup.settle()==0)",
             "screens={{scene='cards',words={}},{scene='unknown',closeX={x=1115,y=140},words={{text='购买赛季通行证',x=900,y=550}}},{scene='event'}};tap=function(x,y)assert(x==579 and y==1115);taps=taps+1 end;assert(dailyCup.settle()==0 and taps==1)",
             "screens={{scene='vehicleUnlock',closeX={x=1115,y=140},words={}}};assert(not pcall(dailyCup.settle));assert(taps==0)",
+            "screens={{scene='vehicleUnlock',unlockLater={x=438,y=645},words={{text='升星',x=841,y=645}}},{scene='event'}};tap=function(x,y)assert(x==74 and y==438,'Wrong star-up action');taps=taps+1 end;assert(dailyCup.settle()==0 and taps==1)",
             "UIconfig={cupTicketAD=''};utils.defultCfg=function(v,d)return v or d end;function keyPress()end;function toast()end;assert(dailyCup.operation[6][2]()=='noTicket')",
             "screens={{scene='results',"+continueButton+"},{scene='cards',"+continueButton+"},{scene='conversion',words={{text='确定',x=1100,y=650}}},{scene='event'},{scene='event'}};assert(dailyCup.operation[8][2]()==0);assert(taps==3 and rewards==0)",
             "screens={{scene='rewards',rewardCanContinue=true,rewardReady=true,rewardCoins=3200,rewardFame=100,"+continueButton+"},{scene='rewards',rewardCanContinue=true,"+continueButton+"},{scene='event'},{scene='event'}};assert(dailyCup.settle()==0);assert(rewards==1 and coins==3200 and fame==100)",
@@ -60,6 +69,6 @@ final class DailyEventChecks {
             if(alive)throw new AssertionError("Daily flow did not terminate");
         }
         if(DailyEventUi.rewardExit("观看广告",1100,650)||DailyEventUi.rewardExit("错失机会",1100,400)||!DailyEventUi.rewardExit("错失机会",1100,650))throw new AssertionError("Ad exit guard");
-        return scenes.length+cases.size()+2;
+        return scenes.length+cases.size()+3;
     }
 }
