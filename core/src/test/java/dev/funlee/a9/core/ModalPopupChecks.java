@@ -57,6 +57,24 @@ final class ModalPopupChecks {
         expect(action(outside, List.of()).isEmpty(), "An X outside the panel is not used");
         count += 11;
 
+        int[] conversion = panel(0, 0, 1279, 719, 0x0b1832);
+        fill(conversion, 84, 54, 89, 80, 0xf20c5c);
+        fill(conversion, 966, 622, 1245, 695, 0xbcff00);
+        var conversionTitle = word("「紅幣", 117, 67);
+        var conversionBody = word("多餘的圖紙或獎勵將被兌換為紅幣", 302, 128);
+        var confirm = word("確定", 1105, 660);
+        expect(ModalPopup.possibleRedCoinConversion(new PixelFrame(720, 1280, conversion)),
+                "Full-screen reward needs OCR even without a centered modal");
+        expect(Map.of("x", 1105, "y", 660, "label", "红币兑换确定").equals(action(conversion,
+                List.of(conversionTitle, conversionBody, word("不再提示", 160, 660), confirm))),
+                "Only the conversion page's visible Confirm button is used");
+        expect(action(conversion, List.of(conversionTitle, word("使用红币购买礼包", 302, 128), confirm)) == null,
+                "A currency purchase cannot use conversion confirmation");
+        fill(conversion, 966, 622, 1245, 695, 0x43531c);
+        expect(Map.of().equals(action(conversion, List.of(conversionTitle, conversionBody, confirm))),
+                "Wait for confirmation to become enabled");
+        count += 4;
+
         String fixtures;
         try (var input = ModalPopupChecks.class.getResourceAsStream("/modal-popup.lua")) {
             fixtures = new String(input.readAllBytes(), StandardCharsets.UTF_8);

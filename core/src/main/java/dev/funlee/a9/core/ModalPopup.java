@@ -73,6 +73,8 @@ public final class ModalPopup {
 
     /** Null delegates to the normal workflow. An empty map means no safe dismissal is visible yet. */
     public static Map<String, Object> dismiss(PixelFrame frame, Panel panel, List<?> words, double aspect) {
+        Map<String, Object> conversion = redCoinConversion(frame, words);
+        if (conversion != null) return conversion;
         if (panel == null) return null;
         StringBuilder text = new StringBuilder();
         List<Map<String, Object>> later = new ArrayList<>();
@@ -106,6 +108,52 @@ public final class ModalPopup {
         if (later.size() == 1) return later.get(0);
         if (later.isEmpty() && next.size() == 1 && body && !GUARDED.matcher(content).find()) return next.get(0);
         return content.contains("新手狂欢礼") ? null : Map.of();
+    }
+
+    // This reward is a full screen; the central card is artwork rather than a modal.
+    private static Map<String, Object> redCoinConversion(PixelFrame frame, List<?> words) {
+        boolean title = false;
+        StringBuilder explanation = new StringBuilder();
+        List<Map<String, Object>> candidates = new ArrayList<>();
+        for (Object value : words) {
+            Map<?, ?> word = (Map<?, ?>) value;
+            int x = ((Number) word.get("x")).intValue(), y = ((Number) word.get("y")).intValue();
+            String label = normalize(word.get("text").toString())
+                    .replace('紅', '红').replace('幣', '币').replace('餘', '余')
+                    .replace('換', '换').replace('爲', '为').replace('為', '为')
+                    .replace('紙', '纸').replace('輛', '辆').replace('獎', '奖').replace('勵', '励')
+                    .replace('額', '额').replace('複', '复');
+            if (x >= 50 && x <= 265 && y >= 34 && y <= 122 && label.equals("红币")) title = true;
+            if (x >= 100 && x <= 880 && y >= 80 && y <= 205) explanation.append(label);
+            if (x >= 930 && x <= 1205 && y >= 575 && y <= 695 &&
+                    (label.equals("确定") || label.equals("确认")) && limeButton(frame, x, y)) {
+                candidates.add(Map.of("x", x, "y", y, "label", "红币兑换确定"));
+            }
+        }
+        String body = explanation.toString();
+        if (!title || !(body.contains("多余") && body.contains("兑换为红币") ||
+                body.contains("满级车辆") && body.contains("额外图纸") && body.contains("重复"))) return null;
+        return candidates.size() == 1 ? candidates.get(0) : Map.of();
+    }
+
+    /** Cheap precheck for callers that otherwise use pixel-only menu recognition. */
+    public static boolean possibleRedCoinConversion(PixelFrame frame) {
+        if (frame.width != 720 || frame.height != 1280 || !limeButton(frame, 1100, 650)) return false;
+        int red = 0;
+        for (int x = 45; x <= 155; x += 3) for (int y = 45; y <= 95; y += 3) {
+            int c = pixel(frame, x, y), r = c >> 16 & 255, g = c >> 8 & 255, b = c & 255;
+            if (r >= 175 && r - g >= 95 && r - b >= 20) red++;
+        }
+        return red >= 7;
+    }
+
+    private static boolean limeButton(PixelFrame frame, int x, int y) {
+        int hits = 0;
+        for (int dx : new int[]{-46, 46}) for (int dy : new int[]{-14, 0, 14}) {
+            int c = pixel(frame, x + dx, y + dy), r = c >> 16 & 255, g = c >> 8 & 255, b = c & 255;
+            if (r >= 145 && g >= 207 && g >= r - 12 && b <= 92) hits++;
+        }
+        return hits >= 5;
     }
 
     private static String normalize(String text) {

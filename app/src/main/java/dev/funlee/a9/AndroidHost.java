@@ -194,7 +194,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         if(SessionState.overlayMode(result,menu))capture.awaitFrameAfter(before);
     }
     private boolean addInterruptingPopup(Map<String,Object> screen,ModalPopup.Panel panel,List<?> words) {
-        if(panel==null||(touch!=null&&touch.unlockGuard.active()))return false;
+        if(touch!=null&&touch.unlockGuard.active())return false;
         Map<String,Object> action=ModalPopup.dismiss(frame,panel,words,viewportAspect());
         if(action==null)return false;
         screen.put("scene","interruptingPopup");
@@ -202,7 +202,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         return true;
     }
     private Map<String,Object> popupOverPixelMenu()throws Exception{
-        if(ModalPopup.locate(frame())==null)return Map.of();
+        if(ModalPopup.locate(frame())==null&&!ModalPopup.possibleRedCoinConversion(frame))return Map.of();
         Map<String,Object> screen=dailyEventUi(true);
         return "interruptingPopup".equals(screen.get("scene"))?screen:Map.of();
     }

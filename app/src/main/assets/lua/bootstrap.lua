@@ -42,7 +42,7 @@ local function withPopupRecovery(read)
         print('关闭游戏弹窗：'..action.label)
         tap(719-action.y,action.x)
         clicks=clicks+1;previous=nil
-        sleep(1);sleep(850)
+        sleep(1);sleep(action.label=='红币兑换确定' and 1600 or 850)
       else
         previous=screen
         sleep(1);sleep(250)
