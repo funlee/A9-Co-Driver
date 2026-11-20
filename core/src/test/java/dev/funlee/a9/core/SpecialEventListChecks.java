@@ -8,7 +8,7 @@ import java.util.Map;
 final class SpecialEventListChecks {
     static int run(Path assets) throws Exception {
         int[] origin = seasonTab();
-        tile(origin, 73, 268, 0x16a3c0);
+        tile(origin, 88, 268, 0x16a3c0);
         tile(origin, 281, 477, 0x635451);
         tile(origin, 490, 572, 0xb90010);
         Map<String, Object> top = SpecialEventList.read(new PixelFrame(720, 1280, origin), false);
@@ -42,7 +42,7 @@ final class SpecialEventListChecks {
                 lua.load("utilities", utilities);
                 lua.load("special-entry", fixture);
                 lua.start("test");
-                for (int i = 0; i < 180; i++) if (!lua.step(i * 1000L)) break;
+                for (int i = 0; i < 260; i++) if (!lua.step(i * 250L)) break;
                 lua.load("verify", "assert(done,scenario)");
             }
         }

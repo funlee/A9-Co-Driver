@@ -40,7 +40,8 @@ public final class SpecialEventList {
             int spacing = (int) cards.get(i).get("top") - (int) cards.get(i - 1).get("top");
             if (spacing < fullHeight - 16 || spacing > fullHeight + 30) return Map.of();
         }
-        boolean aligned = !cards.isEmpty() && (int) cards.get(0).get("top") <= top + 12;
+        boolean aligned = !cards.isEmpty() && !((List<?>)cards.get(0).get("artwork")).isEmpty()
+                && (int) cards.get(0).get("top") <= top + 18;
         return Map.of("aligned", aligned, "cards", cards);
     }
 

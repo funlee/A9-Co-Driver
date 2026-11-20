@@ -2050,16 +2050,6 @@ function utils.findCup(cupAddr)
     y1
   }
 end
-local function specialListPage(previous)
-  local deadline=tickCount()+5000
-  repeat
-    local page=_specialEventList()
-    if page.cards and #page.cards>0 and (not previous or page.frameId~=previous.frameId) then return page end
-    sleep(250)
-  until tickCount()>=deadline
-  error('未识别特殊赛事入口列表，已保留当前任务')
-end
-
 local function sameSpecialCard(a,b)
   if #a.artwork==0 or #a.artwork~=#b.artwork then return false end
   local matches=0
@@ -2072,14 +2062,28 @@ local function sameSpecialCard(a,b)
   return matches*4>=#a.artwork*3
 end
 
-local function sameSpecialOrigin(a,b)
-  if not a.aligned or not b.aligned or #a.cards~=#b.cards then return false end
+local function sameSpecialPage(a,b)
+  if a.aligned~=b.aligned or #a.cards~=#b.cards then return false end
   for i,card in ipairs(a.cards) do
     local previous=b.cards[i]
     if math.abs(card.top-previous.top)>3 or
         (#card.artwork>0 or #previous.artwork>0) and not sameSpecialCard(card,previous) then return false end
   end
   return true
+end
+
+local function specialListPage()
+  local deadline=tickCount()+5000
+  local previous
+  repeat
+    local page=_specialEventList()
+    if page.cards and #page.cards>0 then
+      if previous and sameSpecialPage(page,previous) then return page end
+      previous=page
+    else previous=nil end
+    sleep(250)
+  until tickCount()>=deadline
+  error('未识别特殊赛事入口列表，已保留当前任务')
 end
 
 function utils.openSpecialEntry(screen,position)
@@ -2089,12 +2093,12 @@ function utils.openSpecialEntry(screen,position)
   local atOrigin=false
   data['信息']='向下拉取特殊赛事入口列表'
   for attempt=1,8 do
-    -- Stay inside the left rail and let the drag end without a second tap or fling.
-    swipe(550,220,200,220,460,160)
+    -- Use a short confirmation pull when the leading tile is already visible.
+    swipe(page.aligned and 405 or 550,220,200,220,page.aligned and 540 or 460,160)
     sleep(500)
     local previous=page
-    page=specialListPage(previous)
-    if sameSpecialOrigin(page,previous) then
+    page=specialListPage()
+    if page.aligned and sameSpecialPage(page,previous) then
       atOrigin=true
       print('特殊赛事入口列表已回顶，确认了第 1 张赛事卡')
       break
@@ -2107,7 +2111,7 @@ function utils.openSpecialEntry(screen,position)
     local previous=page
     swipe(230,220,405,220,470,160)
     sleep(500)
-    page=specialListPage(previous)
+    page=specialListPage()
     -- Keep an overlap with the previous page, so a drag cannot skip a position.
     local advanced
     for i,before in ipairs(previous.cards) do

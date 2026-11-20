@@ -1,6 +1,7 @@
 data={}
 local down,up,frame=0,0,0
 local taps={}
+local bounce=0
 local position=scenario=='fourth' and 4 or scenario=='third' and 3 or 1
 local function card(y,color)
   return {x=220,y=y,top=y-90,artwork=color and {color,color,color,color} or {}}
@@ -9,6 +10,11 @@ function print()end
 function utils.openHomeTab(_,name) assert(name=='season') end
 function _specialEventList()
   frame=frame+1
+  if bounce>0 then
+    bounce=bounce-1
+    if bounce%2==0 then return {frameId=frame,cards={}} end
+    return {frameId=frame,aligned=false,cards={card(284,0x16a3c0),card(490,0x635451)}}
+  end
   if down==0 or scenario=='noOrigin' then
     return {frameId=frame,aligned=false,cards={card(210,0x635451),card(416,0xb90010)}}
   end
@@ -18,8 +24,11 @@ function _specialEventList()
   return {frameId=frame,aligned=true,cards={card(174,0x16a3c0),card(380,0x635451),card(531)}}
 end
 function swipe(from,x,to,endX)
-  assert(x==220 and endX==220 and #taps==0)
-  if from>to then down=down+1 else assert(down==2);up=up+1 end
+  assert(x==220 and endX==220 and #taps==0 and bounce==0)
+  if from>to then
+    if scenario~='noOrigin' and down==1 then assert(from==405,'Use a short pull at the top') end
+    down=down+1;bounce=5
+  else assert(down==2);up=up+1 end
 end
 function _soloEventUi()
   assert(#taps==1)
