@@ -137,6 +137,9 @@ public final class TaskStats {
         return first.startsWith("领奖：")?first.substring(3):first;
     }
     private String rewardValue(long total,int reads){return finished>0&&reads==0?"未识别":String.valueOf(total);}
+    private String overlayReward(long total,int reads){
+        return reads>0&&reads<finished?"≥"+total:rewardValue(total,reads);
+    }
     public synchronized String compact(){
         String rate=ranked==0?"—":String.format(Locale.ROOT,"%.1f%%",100.0*topThree/ranked);
         String route=fallback?"左划兜底 · "+fallbackReason:operation.contains("右划")?"右划选路":operation.contains("左划")?"左划选路":eventCount>0?"本地跑法":"等待选路";
@@ -176,7 +179,8 @@ public final class TaskStats {
             "\n路程："+progress+"% · 指令："+actions+"/"+eventCount+
             "\n多人："+multi+"，杯赛："+cups+"，特赛："+special+
             "\n前三："+rate+"（"+topThree+"/"+ranked+"）· 待定："+(multi-ranked)+
-            "\n运行："+String.format(Locale.ROOT,"%02d:%02d:%02d",seconds/3600,seconds/60%60,seconds%60)+" · 重启："+restarts;
+            "\n运行："+String.format(Locale.ROOT,"%02d:%02d:%02d",seconds/3600,seconds/60%60,seconds%60)+" · 重启："+restarts+
+            "\n金币："+overlayReward(coins,coinRaces)+" · 经验值："+overlayReward(fame,fameRaces);
     }
     public synchronized String panel(String phase){
         String first=phase==null?"":phase.split("\\n",2)[0];

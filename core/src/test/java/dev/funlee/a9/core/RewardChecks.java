@@ -16,6 +16,8 @@ final class RewardChecks {
         for(String s:List.of("90%","+90%","+25%","18小时38分","+189 90%","+189 +207","+1O9","+999999999","+189\n+207"))check(RaceRewards.amount(s,true)==-1,"Ambiguous/boost fame rejected: "+s);
         for(String s:List.of("4,80","金币4800","4800\n4800","-1","+4800","88,888 金币"))check(RaceRewards.amount(s,false)==-1,"Invalid/merged coin crop rejected: "+s);
         check(RaceRewards.amount("0",false)==0&&RaceRewards.amount("+0",true)==0,"Confirmed zero is distinct from unknown");
+        check(RaceRewards.settlementAmount("99,999",false)==99999&&RaceRewards.settlementAmount("+999",true)==999,"Maximum race earnings fit both fields");
+        check(RaceRewards.settlementAmount("100,000",false)==-1&&RaceRewards.settlementAmount("+1,000",true)==-1&&RaceRewards.amount("100,000",false)==100000,"Only settlement values have per-race caps");
         RaceRewards.Stable stable=new RaceRewards.Stable();RaceRewards r=new RaceRewards(4800,189);
         check(stable.observe(r,1,0).coins<0,"First reward frame cannot commit");stable.observe(r,2,500);
         check(stable.observe(r,2,10000).coins<0,"Old screenshot cannot become stable merely by waiting");
@@ -34,6 +36,7 @@ final class RewardChecks {
         check(restore.coins()==7680&&restore.fame()==396,"New race after recovery accumulates once across modes");
         restore.begin("",true);restore.result();restore.returned();
         check(restore.compact().contains("金币 1 场 / 经验值 1 场")&&restore.panel("").contains("最近一局：金币 未识别"),"Missing rewards remain visible, not fake zeros");
+        check(restore.overlayFullText().contains("金币：≥7680 · 经验值：≥396"),"Partial reward coverage is marked on the race overlay");
         Map<String,Object> old=new LinkedHashMap<>(s.snapshot());for(String k:List.of("coins","fame","coinRaces","fameRaces","lastCoins","lastFame","fallback","fallbackReason"))old.remove(k);
         check(TaskStats.restore(old).compact().contains("金币：未识别"),"Old resume files migrate without inventing historical rewards");
         Map<String,Object> invalid=new LinkedHashMap<>(s.snapshot());invalid.put("coinRaces",4294967296L);boolean rejected=false;try{TaskStats.restore(invalid);}catch(IllegalArgumentException e){rejected=true;}check(rejected,"Corrupted coverage cannot overflow to zero");
@@ -53,10 +56,13 @@ final class RewardChecks {
         check(mixed.panel("").contains("杯赛 2 · 特赛 1 · 其他 0")&&!mixed.overlayText("").contains("生涯"),"Detailed and compact panels keep the same separate cup/special totals");
         mixed.cycle(3);
         check(!mixed.overlayFullText().contains("轮")&&!mixed.compact().contains("轮")&&!mixed.panel("比赛中").contains("轮"),"User-facing stats omit queue cycle numbers");
-        check(mixed.overlayFullText().split("\n").length==5,"Race overlay uses five statistics rows");
+        check(mixed.overlayFullText().split("\n").length==6,"Race overlay includes the earnings row");
         check(mixed.overlayFullText().startsWith("地图：")&&!mixed.overlayFullText().contains("操作："),"Race statistics omit transient activity");
         check(!mixed.overlayFullText().contains("本局：")&&!mixed.overlayFullText().contains("收益覆盖")&&!mixed.overlayFullText().contains("上局")&&!mixed.overlayFullText().contains("累计指令"),"Race overlay omits removed detail rows");
-        check(!mixed.overlayFullText().contains("金币")&&!mixed.overlayFullText().contains("经验值"),"Race overlay excludes earnings");
+        check(mixed.overlayFullText().contains("金币："+expectedCoins+" · 经验值："+expectedFame),"Race overlay shows observed earnings across configured task modes");
+        check(TaskStats.restore(mixed.snapshot()).overlayFullText().contains("金币："+expectedCoins+" · 经验值："+expectedFame),"Restored overlay keeps the same earnings without double counting");
+        check(TaskStats.restore(old).overlayFullText().contains("金币：未识别 · 经验值：未识别"),"Missing historical earnings stay unknown in the overlay");
+        check(zero.overlayFullText().contains("金币：0 · 经验值：0"),"Confirmed zero earnings remain visible in the overlay");
         TaskStats fallback=new TaskStats();fallback.begin("",true);check(fallback.phase("地图识别失败，左划兜底").equals("比赛中"),"Fallback isn't a stopped task");check(!fallback.compact().contains("unknown")&&fallback.compact().contains("左划兜底"),"Compact view uses human-readable route state");
         check(fallback.currentActivity("正在领取免费包").equals("正在领取免费包"),"Live reward activity overrides stale race stats in compact panel");
         check(fallback.currentActivity("正在领取每日奖励\nold map 58%").equals("正在领取每日奖励"),"Compact activity uses the latest workflow line only");

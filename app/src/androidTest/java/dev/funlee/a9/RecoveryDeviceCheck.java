@@ -41,6 +41,7 @@ public final class RecoveryDeviceCheck extends Instrumentation {
             else if(mode.equals("home-replay")||mode.equals("home-clean"))homeReplay(report,mode.equals("home-clean"));
             else if(mode.equals("capture-resources"))CaptureResourceDeviceCheck.run(this,report);
             else if(mode.equals("world-score"))GaragePageDeviceCheck.run(this,report,"score");
+            else if(mode.equals("wide-reward-earnings"))GaragePageDeviceCheck.run(this,report,"wideFame");
             else if(mode.equals("reward-footer"))GaragePageDeviceCheck.run(this,report,"reward");
             else if(mode.equals("multiplayer-finish"))GaragePageDeviceCheck.run(this,report,"finish");
             else if(mode.equals("garage-current-detail"))GaragePageDeviceCheck.run(this,report,true);

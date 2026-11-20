@@ -71,12 +71,7 @@ public final class MultiplayerGarage {
     }
     public static Map<String,Object> read(PixelFrame f,List<?> words,String rank,double aspect){
         boolean wide=aspect>2.07,layout18By9=aspect>=2.0&&!wide;
-        StringBuilder rail=new StringBuilder(rank);
-        for(Object o:words){Map<?,?> w=(Map<?,?>)o;if(pos(w,"x")>=90&&pos(w,"x")<=180&&pos(w,"y")>=350&&pos(w,"y")<=480)rail.append(w.get("text"));}
-        // Observed OCR substitution on the small bronze shield, only inside the origin rail.
-        rank=rail.toString().replace("青洞","青铜").replace("青銅","青铜").replace("吉铜","青铜").replace("铂金","白金");
-        String league="";for(String s:LEAGUES)if(rank.contains(s))league=s;
-        if((wide||layout18By9)&&league.isEmpty()&&bronzeShield(f,layout18By9))league="青铜";
+        String league=league(f,words,rank,wide,layout18By9);
         int left=-1;
         int top=wide?215:layout18By9?206:195;
         int rowPitch=wide?231:layout18By9?233:237;
@@ -117,6 +112,103 @@ public final class MultiplayerGarage {
         return Map.of("left",left,"start",start,"rank",league,"key",start?league+":"+first.get("performance"):"","cards",cards,"pitch",columnPitch);
         }
         return Map.of("left",-1,"start",false,"rank",league,"key","","cards",List.of(),"pitch",columnPitch);
+    }
+    private static String league(PixelFrame f,List<?> words,String rank,boolean wide,boolean layout18By9){
+        StringBuilder rail=new StringBuilder(rank);
+        for(Object o:words){Map<?,?> w=(Map<?,?>)o;if(pos(w,"x")>=90&&pos(w,"x")<=180&&pos(w,"y")>=350&&pos(w,"y")<=480)rail.append(w.get("text"));}
+        // Observed OCR substitution on the small bronze shield, only inside the origin rail.
+        rank=rail.toString().replace("青洞","青铜").replace("青銅","青铜").replace("吉铜","青铜").replace("铂金","白金");
+        String league="";for(String s:LEAGUES)if(rank.contains(s))league=s;
+        if((wide||layout18By9)&&league.isEmpty()&&bronzeShield(f,layout18By9))league="青铜";
+        return league;
+    }
+
+    /** Number physical row pairs, including unavailable cars. No labels are needed to locate a slot. */
+    public static Map<String,Object> slots(PixelFrame frame,List<?> words,String rank,double aspect){
+        boolean wide=aspect>2.07,medium=aspect>=2.0&&!wide;
+        int top=wide?215:medium?206:195,rowPitch=wide?231:medium?233:237;
+        int pitch=wide?359:medium?405:464,width=wide?348:medium?393:450;
+        String league=league(frame,words,rank,wide,medium);
+        int left=-1;
+        for(int x=wide?18:4;x<650;x++){
+            if(slotEdge(frame,x,top)&&slotEdge(frame,x,top+rowPitch)){left=x;break;}
+        }
+        boolean origin=!league.isEmpty()&&left>=(wide?215:202)&&left<=(wide?233:220);
+        List<Object> cards=new ArrayList<>();
+        for(int column=0;left>=0&&column<3;column++){
+            int x=left+column*pitch;
+            if(x+width>(wide?1260:1280))break;
+            for(int row=0;row<2;row++){
+                int y=top+row*rowPitch;
+                boolean bordered=false;
+                for(int dx=-3;dx<=3&&!bordered;dx++)bordered=slotEdge(frame,x+dx,y);
+                if(!bordered)continue;
+                cards.add(Map.of("index",2*column+row+1,"x",x+cardCenterOffset(aspect),"y",y+110,
+                        "signature",thumbnail(frame,x,y),"availability",availability(frame,x,y,words)));
+            }
+        }
+        return Map.of("left",left,"start",origin,"rank",league,"key",origin?league:"","cards",cards,"pitch",pitch);
+    }
+
+    private static boolean borderColor(int c){
+        int r=(c>>16)&255,g=(c>>8)&255,b=c&255;
+        return (r<60&&b>=80&&b>g+24)||(g>140&&b>105&&r<105)||(r>145&&g>155&&b<170)||(r>=95&&g<85&&b>40&&r>g+65);
+    }
+    private static boolean slotEdge(PixelFrame frame,int x,int top){
+        // The horizontal line must begin here. A right border or a clipped card has no such corner.
+        boolean corner=false;
+        for(int y=top-4;y<=top+5&&!corner;y++)
+            corner=borderColor(frame.pixel(719-y,x+2))&&borderColor(frame.pixel(719-y,x+5))
+                    &&borderColor(frame.pixel(719-y,x+10))&&borderColor(frame.pixel(719-y,x+76))
+                    &&!borderColor(frame.pixel(719-y,x-5));
+        if(!corner)return false;
+        int hits=0;
+        for(int y=top+14;y<top+204;y+=4){
+            int gap=frame.pixel(719-y,x-5);
+            if((gap>>16&255)<24&&(gap>>8&255)<50&&(gap&255)<80&&borderColor(frame.pixel(719-y,x)))hits++;
+        }
+        return hits>=36;
+    }
+
+    private static String availability(PixelFrame frame,int left,int top,List<?> words){
+        int green=0,pink=0,dark=0,samples=0;
+        for(int y=top+191;y<=top+207;y+=2)for(int x=left+12;x<=left+46;x+=2){
+            int c=frame.pixel(719-y,x),r=c>>16&255,g=c>>8&255,b=c&255;
+            if(g>=155&&r>=90&&g>r+15&&b<95)green++;
+            if(r>=195&&g<=75&&b>=50&&b<=185)pink++;
+            if(r<38&&g<53&&b<75)dark++;
+            samples++;
+        }
+        if(pink>=samples/3)return "empty";
+        if(green>=samples/3){
+            for(Object word:words){
+                Map<?,?> w=(Map<?,?>)word;
+                int x=pos(w,"x")-left,y=pos(w,"y")-top;
+                if(x>0&&x<100&&y>=174&&y<=223&&pair(w.get("text").toString()).matches("0/[1-9]"))return "empty";
+            }
+            return "ready";
+        }
+        return dark>=samples*95/100?"locked":"unknown";
+    }
+
+    // Local contrasts on the car artwork allow consecutive pages to be aligned without reading text.
+    private static String thumbnail(PixelFrame frame,int left,int top){
+        StringBuilder bits=new StringBuilder(80);
+        for(int y=top+80;y<=top+164;y+=12){
+            for(int x=left+22;x<=left+166;x+=16){
+                int a=luma(frame,x,y),b=luma(frame,x+10,y);
+                bits.append(a>b+7?'1':'0');
+            }
+        }
+        return bits.toString();
+    }
+    private static int luma(PixelFrame frame,int x,int y){
+        int total=0;
+        for(int dy=-3;dy<=3;dy++)for(int dx=-3;dx<=3;dx++){
+            int c=frame.pixel(719-y-dy,x+dx);
+            total+=((c>>16&255)*3+(c>>8&255)*6+(c&255))/10;
+        }
+        return total/49;
     }
     private static boolean bronzeShield(PixelFrame frame,boolean layout18By9){
         int bronze=0;

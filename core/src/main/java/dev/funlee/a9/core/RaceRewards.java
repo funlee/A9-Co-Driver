@@ -21,6 +21,10 @@ public final class RaceRewards {
         if(!s.matches("(?:0|[1-9][0-9]{0,7}|[1-9][0-9]{0,2}(?:,[0-9]{3}){1,2})"))return -1;
         try{long n=Long.parseLong(s.replace(",",""));return n<=99_999_999?n:-1;}catch(NumberFormatException e){return -1;}
     }
+    public static long settlementAmount(String text,boolean experience){
+        long value=amount(text,experience);
+        return value>(experience?999:99_999)?-1:value;
+    }
     /** Independent fields survive a missing crop; samples must be fresh and stable over time. */
     public static final class Stable {
         private long started=-1,lastFrame=-1,coinSince=-1,fameSince=-1,coin=-1,fame=-1,sampleAt=-1;

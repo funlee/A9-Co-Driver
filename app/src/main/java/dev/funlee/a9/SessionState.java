@@ -19,6 +19,7 @@ public final class SessionState {
     public static volatile boolean resultOverlay;
     public static volatile boolean overlayMenuCompact;
     public static volatile boolean racePanelVisible;
+    static volatile long lastScreenChange;
     public static void racePanel(boolean visible) {
         if(racePanelVisible==visible)return;
         racePanelVisible=visible;

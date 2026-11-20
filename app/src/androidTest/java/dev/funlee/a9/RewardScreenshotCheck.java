@@ -29,13 +29,44 @@ final class RewardScreenshotCheck {
                     android.util.Log.i("A9RewardCheck",files[i]+" "+result+" OCR="+full.getText());
                     if(rewards.coins!=expected[i][0]||rewards.fame!=expected[i][1])throw new AssertionError(files[i]+" "+result);
                     report.putString(files[i],result);
+                    if(i==0)checkMaximum(ocr,image,false,false);
+
                     Bitmap masked=image.copy(Bitmap.Config.ARGB_8888,true);Canvas canvas=new Canvas(masked);Paint paint=new Paint();paint.setColor(Color.BLACK);canvas.drawRect(95,530,260,585,paint);
                     RaceRewards missing=RewardOcr.read(ocr,masked,full);if(missing.coins!=-1||missing.fame!=expected[i][1])throw new AssertionError("Unreadable coins must not become zero or contaminate fame");masked.recycle();
                 }finally{image.recycle();}
             }
+            try(InputStream input=test.getContext().getAssets().open("daily-rewards-live.png")){
+                Bitmap solo=BitmapFactory.decodeStream(input);
+                try{checkMaximum(ocr,solo,false,true);}finally{solo.recycle();}
+            }
+            report.putString("maxima","99,999 coins / +999 fame in both standard layouts");
             preview(test,report);
             report.putString("result","PASS: production reward OCR, standard 4800/189 and paid 2880/207; no game input");
         }finally{ocr.close();}
+    }
+    /** Boundary replay on a receipt, retaining the real currency icon, boost and help badge. */
+    static void checkMaximum(TextRecognizer ocr,Bitmap receipt,boolean wide,boolean solo)throws Exception{
+        Bitmap sample=receipt.copy(Bitmap.Config.ARGB_8888,true);
+        try{
+            Canvas canvas=new Canvas(sample);
+            Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
+            paint.setTypeface(Typeface.create("sans-serif-condensed",Typeface.BOLD));
+            int goldX=wide?(solo?125:118):(solo?114:99);
+            int goldY=wide?558:(solo?586:564);
+            int xpRight=wide?1168:1187,xpY=wide?136:114;
+            paint.setColor(0xff112233);
+            canvas.drawRect(goldX-1,goldY-42,goldX+174,goldY+8,paint);
+            canvas.drawRect(xpRight-92,xpY-35,xpRight+2,xpY+4,paint);
+            paint.setColor(Color.WHITE);paint.setTextSize(solo?50:40);
+            paint.setTextScaleX((solo?163f:136f)/paint.measureText("99,999"));
+            canvas.drawText("99,999",goldX,goldY,paint);
+            paint.setTextScaleX(1);paint.setTextSize(36);paint.setTextAlign(Paint.Align.RIGHT);
+            canvas.drawText("+999",xpRight,xpY,paint);
+            Text full=Tasks.await(ocr.process(InputImage.fromBitmap(sample,0)),12,TimeUnit.SECONDS);
+            RaceRewards amounts=RewardOcr.read(ocr,sample,full,solo,wide);
+            if(amounts.coins!=99999||amounts.fame!=999)
+                throw new AssertionError("Boundary receipt "+(wide?"wide":"standard")+"/"+solo+": "+amounts.coins+"/"+amounts.fame);
+        }finally{sample.recycle();}
     }
     private static void preview(Instrumentation test,Bundle report)throws Exception{
         final WindowManager[] window={null};final TaskPanelView[] panel={null};final TextView[] heading={null};

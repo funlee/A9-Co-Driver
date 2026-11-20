@@ -102,6 +102,8 @@ final class OrchestrationRecoveryChecks {
             "function _soloEventUi()reads=reads+1;if reads==1 then return {scene='results'} end;"+
             "if reads<=3 then return {scene='unknown',frameId=5000,text='你的俱乐部达成了该里程碑!',words={{text='前往领奖',x=830,y=610},{text='稍后领取',x=450,y=610}}} end;return {scene='car'} end;"+
             "function test()assert(dailyCup.settle('特殊赛事',_soloEventUi)==0 and taps==1);done=true end");
+        script(assets,List.of("utilities"),"data={};function _soloEventUi()return {scene='unknown',text='世界系列賽 試驾挑战 大师系列赛 对决'} end;"+
+                "function toast()end;function tap()error('Series selector already on home')end;function test()utils.backToMain();done=true end");
         int fuelScenarios=0;
         for(String project:List.of("多人上","多人下"))for(String scenario:List.of("mixed","allEmpty","detailEmpty","rotate","detailOcr","wrongCar","lateRewards","blockedRewards")){
             String series=project.equals("多人上")?"世界系列赛":"大师系列赛";
@@ -115,12 +117,12 @@ final class OrchestrationRecoveryChecks {
                 "function _multiplayerUi()frame=frame+2000;local s={scene=phase,text=series,frameId=frame,words={}};"+
                 "if phase=='series' then s.text='世界系列赛 大师系列赛';s.words={{text=series,x=350,y=450}} " +
                 "elseif phase=='event' or phase=='car' then s.words={{text='开始',x=1100,y=650}};s.carDetail={name='LANCER',performance=((scenario=='detailOcr' and #choices==1) or scenario=='wrongCar') and '1/9' or '1/2'};s.fuel=scenario=='detailEmpty' and selected==1 and 0 or 3 " +
-                "elseif phase=='cars' then s.garage={start=true,key='origin',rank='青铜',cards={}};for i=1,2 do s.garage.cards[i]={index=i,x=410,y=i==1 and 305 or 542,performance='1/2',tokens={'LANCER'},fuel=(scenario=='allEmpty' or scenario=='mixed' and i==1)and 0 or 3,capacity=3}end " +
+                "elseif phase=='cars' then s.garage={start=true,key='origin',rank='青铜',cards={}};for i=1,2 do s.garage.cards[i]={index=i,x=410,y=i==1 and 305 or 542,availability=(scenario=='allEmpty' or scenario=='mixed' and i==1)and 'empty' or 'ready'}end " +
                 "elseif phase=='race' then phase='result' elseif phase=='result' then s.text='你的排名';s.words={{text='继续',x=1100,y=650}} elseif phase=='reward' or phase=='rewardLeaving' then rewardSince=rewardSince or tickCount();s.scene='result';s.rewardPage=true;s.rewardCanContinue=phase=='reward' and scenario=='lateRewards' and tickCount()-rewardSince>=14000;s.rewardReady=true;s.words={{text='继续',x=1100,y=650}};if phase=='rewardLeaving' and tickCount()-exitAt>=10000 then phase='returned' end elseif phase=='returned' then s.scene='event' end;return s end;"+
-                "function test()local ok,result=pcall(currentMultiplayer.run);if scenario=='blockedRewards' then assert(not ok and finished==0 and rewardTaps==0,'Unusable reward exit still times out');done=true;return end;if scenario=='wrongCar' then assert(not ok and finished==0 and #choices==3,'Never start a mismatched car after bounded rechecks');done=true;return end;assert(ok,result);if scenario=='lateRewards' then assert(finished==1 and rewardTaps==1,'Late-ready reward gets a separate exit transition window');elseif scenario=='detailOcr' then assert(finished==1 and table.concat(choices,',')=='1,1','Recheck same entry without consuming rotation');elseif scenario=='allEmpty' then assert(result=='fuelEmpty' and finished==0 and #choices==0) elseif scenario=='rotate' then assert(finished==2 and table.concat(choices,',')=='1,2') elseif scenario=='detailEmpty' then assert(finished==1 and table.concat(choices,',')=='1,2') else assert(finished==1 and table.concat(choices,',')=='2')end;done=true end");
+                "function test()local ok,result=pcall(currentMultiplayer.run);if scenario=='blockedRewards' then assert(not ok and finished==0 and rewardTaps==0,'Unusable reward exit still times out');done=true;return end;assert(ok,result);if scenario=='lateRewards' then assert(finished==1 and rewardTaps==1,'Late-ready reward gets a separate exit transition window');elseif scenario=='detailOcr' or scenario=='wrongCar' then assert(finished==1 and table.concat(choices,',')=='1','Start the unlocked fueled slot without reading detail text');elseif scenario=='allEmpty' then assert(result=='fuelEmpty' and finished==0 and #choices==0) elseif scenario=='rotate' then assert(finished==2 and table.concat(choices,',')=='1,2') elseif scenario=='detailEmpty' then assert(finished==1 and table.concat(choices,',')=='1,2') else assert(finished==1 and table.concat(choices,',')=='2')end;done=true end");
             fuelScenarios++;
         }
-        return 41+fuelScenarios+wideHome(assets);
+        return 42+fuelScenarios+wideHome(assets);
     }
     private static int wideHome(Path assets)throws Exception{
         List<Object> tabs=List.of(Map.of("text","每日","x",593,"y",626),Map.of("text","多人","x",787,"y",626),

@@ -62,7 +62,7 @@ public final class TouchService extends AccessibilityService implements RouteEng
     @Override protected void onServiceConnected() {
         instance=this;
         if(activityHint==null)activityHint=new GameActivityHint(this,main,
-                ()->armed&&SessionState.running&&controlButton!=null&&!SessionState.controlsOpen&&!SessionState.racePanelVisible);
+                ()->armed&&SessionState.running&&controlButton!=null&&!SessionState.inputPaused()&&!SessionState.racePanelVisible);
         AccessibilityButtonController controller=getAccessibilityButtonController();
         controller.unregisterAccessibilityButtonCallback(shortcutCallback);
         controller.registerAccessibilityButtonCallback(shortcutCallback,main);
@@ -367,6 +367,12 @@ public final class TouchService extends AccessibilityService implements RouteEng
     }
     public void swipe(int x1,int y1,int x2,int y2,long duration) {
         down(9,x1,y1);change(9,transform(x2,y2),true,Math.max(16,Math.min(2000,duration)));
+    }
+    public void dragColumn(int x1,int y1,int x2,int y2,long duration,long hold){
+        down(9,x1,y1);
+        change(9,transform(x2,y2),false,Math.max(16,Math.min(2000,duration)));
+        // Let the carousel stop under the finger before release to avoid a fling.
+        change(9,null,true,Math.max(16,Math.min(300,hold)));
     }
     public void key(String key) {
         unlockGuard.requireOtherGesture();

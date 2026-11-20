@@ -190,8 +190,13 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         long before=SystemClock.elapsedRealtime();
         if(SessionState.overlayMode(result,menu))capture.awaitFrameAfter(before);
     }
-    private Map<String,Object> multiplayerUi(boolean readSeriesScore, boolean raceExpected) throws Exception {
+    private Map<String,Object> multiplayerUi(boolean readSeriesScore,boolean raceExpected,boolean sampleGrid) throws Exception {
         capture();
+        if(sampleGrid&&lastUiScene.equals("cars")){
+            Map<String,Object> garage=MultiplayerGarage.slots(frame,List.of(),"",viewportAspect());
+            if(!((List<?>)garage.get("cards")).isEmpty()&&!MultiplayerGarage.leagueTabs(frame).isEmpty())
+                return Map.of("frameId",capture.frameId(),"scene","cars","garage",garage,"gridOnly",true);
+        }
         Map<String,Object> out=new LinkedHashMap<>();out.put("frameId",capture.frameId());
         // Menu transitions may look like the wide race HUD before verified vehicle Start.
         if(raceExpected&&(touch==null||!touch.unlockGuard.active())&&RaceHud.visible(frame,wideViewport())) {
@@ -268,7 +273,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         boolean resultScene=scene.equals("result")||scene.equals("rewardChoice")||(scene.equals("unknown")&&SessionState.resultOverlay),menuScene=scene.equals("cars")||scene.equals("car")||scene.equals("rewardChoice");
         if(resultScene!=SessionState.resultOverlay||menuScene!=SessionState.overlayMenuCompact){
             prepareOverlay(resultScene,menuScene);
-            return multiplayerUi(readSeriesScore,raceExpected); // Re-read uncovered fields before input.
+            return multiplayerUi(readSeriesScore,raceExpected,false); // Re-read uncovered fields before input.
         }
         if(scene.equals("result")){
             Bitmap rankSide=Bitmap.createBitmap(frame.copyPixels(),720,1280,Bitmap.Config.ARGB_8888);
@@ -306,28 +311,19 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         String focusedTitle=loadingCandidate?text(529,80,684,550,2):"";
         if(scene.equals("cars")){
             boolean wide=ultrawideViewport();
-            String rank=wide?text(262,126,305,185,4):text(250,90,335,200,3);out.put("rankText",rank);
-            out.put("emptyFuelSlots",wideViewport()?List.of():FuelAvailability.emptySlots(frame));
-            Map<String,Object> garage=GarageOcr.read(recognizer,frame,words,rank,viewportAspect());out.put("garage",garage);
+            double aspect=viewportAspect();
+            Map<String,Object> garage=MultiplayerGarage.slots(frame,words,"",aspect);
+            int left=(int)garage.get("left");
+            if(garage.get("rank").equals("")&&left>=(wide?215:202)&&left<=(wide?233:220)){
+                String rank=wide?text(262,126,305,185,4):text(250,90,335,200,3);
+                garage=MultiplayerGarage.slots(frame,words,rank,aspect);
+            }
+            out.put("garage",garage);
             out.put("leagueTabs",MultiplayerGarage.leagueTabs(frame));
-            if(!Boolean.TRUE.equals(garage.get("start"))){
-                SessionState.log("选车起点尚未稳定："+garage);
+            if(((List<?>)garage.get("cards")).isEmpty())
                 snapshot(new File(root,"multiplayer-garage-unconfirmed.png").getAbsolutePath(),0,0,719,1279);
-            }
         }
-        if(scene.equals("car")){
-            Map<String,Object> detail=MultiplayerGarage.detail(words);
-            if(excluded==null||!Rect.intersects(excluded,new Rect(150,75,1061,206))){
-                Map<String,Object> focused=GarageOcr.detail(recognizer,frame,ultrawideViewport());
-                String performance=focused.get("performance").toString();
-                String fullPerformance=detail.get("performance").toString();
-                boolean complete=performance.replaceAll("[^0-9]","").length()>=fullPerformance.replaceAll("[^0-9]","").length();
-                detail=Map.of("name",detail.get("name")+" "+focused.get("name"),
-                        "performance",complete&&performance.matches("[0-9]{2,}/[0-9]{3,}")?performance:fullPerformance);
-            }
-            out.put("carDetail",detail);out.put("fuel",FuelAvailability.detail(words));
-            android.util.Log.d("A9CarDetail",detail.toString());
-        }
+        if(scene.equals("car"))out.put("fuel",FuelAvailability.detail(words));
         if(loadingCandidate){
             out.put("mapText",MapMatcher.loadingTitle(header,focusedTitle));
             MapMatcher.Match match=store.matcher.matchLoadingTitle(header,focusedTitle);
@@ -514,7 +510,10 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 case "touchDown": touch.down(n(l,1),n(l,2),n(l,3));return 0;
                 case "touchMove": touch.move(n(l,1),n(l,2),n(l,3));return 0;
                 case "touchUp": touch.up(n(l,1));return 0;
-                case "swipe": touch.swipe(n(l,1),n(l,2),n(l,3),n(l,4),n(l,5));return 0;
+                case "swipe":
+                    if(!l.isNoneOrNil(6))touch.dragColumn(n(l,1),n(l,2),n(l,3),n(l,4),n(l,5),n(l,6));
+                    else touch.swipe(n(l,1),n(l,2),n(l,3),n(l,4),n(l,5));
+                    return 0;
                 case "cmpColorEx":{
                     String pattern=s(l,1);
                     boolean raceCheck=RaceHud.PATTERN.equals(pattern)||"680|50|FFFFFF,660|70|FFFFFF".equals(pattern);
@@ -553,7 +552,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 case "_jsonEncode":return result(l,toJson(l.toObject(1)).toString());
                 case "_jsonDecode":return result(l,LocalStore.javaValue(new JSONTokener(s(l,1)).nextValue()));
                 case "_textOcr":return result(l,text(n(l,1),n(l,2),n(l,3),n(l,4)));
-                case "_multiplayerUi":return result(l,multiplayerUi(l.toBoolean(1),l.toBoolean(2)));
+                case "_multiplayerUi":return result(l,multiplayerUi(l.toBoolean(1),l.toBoolean(2),l.toBoolean(3)));
                 case "_recoverEventStart":
                     recoveryReason=GameRecovery.Reason.EVENT_START_TIMEOUT;
                     throw new IllegalStateException("点击赛事开始后未确认进入选车页面");
@@ -648,7 +647,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         if(rawProgress<0&&clock-lastDigitTime>=2500&&clock-lastDriverResultCheck>=2500){
             lastDriverResultCheck=clock;
             prepareOverlay(true,false);
-            Map<String,Object> observed=legacyRaceSeen?dailyEventUi(true):multiplayerUi(false,false);
+            Map<String,Object> observed=legacyRaceSeen?dailyEventUi(true):multiplayerUi(false,false,false);
             String scene=(String)observed.get("scene");
             boolean settlement=scene.equals("results")||scene.equals("rewards");
             if(legacyRaceSeen?settlement:MultiplayerUi.raceEnded(scene)){

@@ -85,7 +85,13 @@ public final class AccessibilityButtonCheck extends Instrumentation {
     }
     private void checkActivityHint(TouchService service)throws Exception{
         await(()->service.activityHintBounds(SystemClock.elapsedRealtime())==null);
+        SessionState.lastScreenChange=SystemClock.elapsedRealtime();
         service.offerActivityHint("正在选择车辆");
+        Thread.sleep(GameActivityHint.STILL_MS-500);
+        if(service.activityHintBounds(SystemClock.elapsedRealtime())!=null)throw new AssertionError("Transient step displayed a hint");
+        SessionState.lastScreenChange=SystemClock.elapsedRealtime();
+        Thread.sleep(GameActivityHint.STILL_MS-500);
+        if(service.activityHintBounds(SystemClock.elapsedRealtime())!=null)throw new AssertionError("Moving page displayed a hint");
         await(()->service.activityHintBounds(SystemClock.elapsedRealtime())!=null);
         long visibleAt=SystemClock.elapsedRealtime();
         var hintField=TouchService.class.getDeclaredField("activityHint");

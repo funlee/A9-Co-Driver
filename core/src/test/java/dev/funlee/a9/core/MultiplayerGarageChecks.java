@@ -16,7 +16,7 @@ final class MultiplayerGarageChecks {
                     if(x>left&&x<left+120&&y>top+170&&y<top+225){String t=w.get("text").toString();if(t.matches("[0-9]+/[1-9]")){String[] p=t.split("/");int n=Integer.parseInt(p[0]),d=Integer.parseInt(p[1]);if(n<=d){fuel=n;capacity=d;}}}
                 }
                 if(((List<?>)s.getOrDefault("emptyFuelSlots",List.of())).contains(i)){fuel=0;capacity=6;}
-                cards.add(Map.of("index",i,"x",Math.min(left+200,1240),"y",top+110,"performance","467/1094","tokens",List.of("LANCER","EVOLUTION"),"fuel",fuel,"capacity",capacity));
+                cards.add(Map.of("index",i,"x",Math.min(left+200,1240),"y",top+110,"availability",fuel<0?"unknown":fuel==0?"empty":"ready"));
             }
             s.put("garage",Map.of("start",true,"rank","青铜","key","青铜:467/1094:LANCER","cards",cards));
         }
@@ -42,6 +42,37 @@ final class MultiplayerGarageChecks {
                 word("1,868/1,868",270,225),word("5/6",240,390),word("R1",580,350)),"青铜");
         require(shortModel.get("start").equals(true)&&((List<?>)((Map<?,?>)((List<?>)shortModel.get("cards")).get(0)).get("tokens")).contains("R1"),
                 "Short alphanumeric model names retain their identity token");checks++;
+        for(double aspect:new double[]{16.0/9,2.0,20.0/9}){
+            boolean wide=aspect>2.07,medium=aspect>=2.0&&!wide;
+            int x=wide?222:210,top=wide?215:medium?206:195;
+            int pitch=wide?359:medium?405:464,rowPitch=wide?231:medium?233:237;
+            int[] grid=new int[720*1280];
+            for(int slot=0;slot<4;slot++){
+                int left=x+slot/2*pitch,y=top+slot%2*rowPitch;
+                for(int dx=0;dx<=100;dx++)grid[(left+dx)*720+719-y]=0xff0079cd;
+                for(int dy=0;dy<=210;dy++)grid[left*720+719-y-dy]=0xff0079cd;
+                int badge=new int[]{0xff0e1829,0xffc0fa14,0xffff0054,0xff6a787f}[slot];
+                for(int dx=10;dx<=50;dx++)for(int dy=190;dy<=209;dy++)grid[(left+dx)*720+719-y-dy]=badge;
+            }
+            // A clipped card drawing can resemble two corners, but has artwork in its left gutter.
+            for(int y:new int[]{top,top+rowPitch}){
+                for(int dx=0;dx<=90;dx++)grid[(60+dx)*720+719-y]=0xff0079cd;
+                for(int dy=1;dy<210;dy++){
+                    grid[60*720+719-y-dy]=0xff0079cd;
+                    grid[55*720+719-y-dy]=0xff99aacc;
+                }
+            }
+            var page=MultiplayerGarage.slots(new PixelFrame(720,1280,grid),List.of(),"青铜",aspect);
+            require(Boolean.TRUE.equals(page.get("start")),"Paired column borders and league rail verify the origin");
+            List<?> cards=(List<?>)page.get("cards");
+            require(cards.size()==4,"Count all slots without model or performance text");
+            List<String> states=List.of("locked","ready","empty","unknown");
+            for(int j=0;j<cards.size();j++){
+                Map<?,?> slot=(Map<?,?>)cards.get(j);
+                require(slot.get("index").equals(j+1)&&slot.get("availability").equals(states.get(j)),"Preserve column order and fuel badge state");
+            }
+            checks+=6;
+        }
         checks+=leagueSelection(assets);
         String fallbackCases;
         try(var input=MultiplayerGarageChecks.class.getResourceAsStream("/world-league-fallback.lua")){
@@ -61,7 +92,7 @@ final class MultiplayerGarageChecks {
         try(var input=MultiplayerGarageChecks.class.getResourceAsStream("/world-car-pagination.lua")){
             paginationCases=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
         }
-        for(String scenario:List.of("car27","empty27","emptyBoth","delayedPage","missingBottom","slowPagination","fuzzyName","sameColumnShift","overshoot","stuckPage")){
+        for(String scenario:List.of("car27","empty27","locked27","remembered","reversePage","differentPage","emptyBoth","delayedPage","missingBottom","slowPagination","fuzzyName","sameColumnShift","overshoot","targetMoved","stuckPage")){
             try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
                 lua.set("scenario",scenario);
                 lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));
@@ -120,9 +151,9 @@ final class MultiplayerGarageChecks {
             }
             require(events[0]==1,mode+": event Start must never be retried into new page");checks++;
             require(cardTaps[0]<=1,mode+": vehicle card must never be tapped twice");checks++;
-            require(startTaps[0]==((mode.equals("slow")||mode.equals("ocrGlitch"))?1:0),mode+": race requires verified origin and matching fresh detail frames "+failure[0]);checks++;
+            require(startTaps[0]==((mode.equals("slow")||mode.equals("ocrGlitch")||mode.equals("wrongDetail"))?1:0),mode+": verified fueled slot starts regardless of detail text "+failure[0]);checks++;
             if(mode.equals("noOrigin")||mode.equals("stale")||mode.equals("originLost")){require(cardTaps[0]==0,mode+": no ordinal selection without origin evidence");checks++;}
-            if(mode.equals("stuckEvent")||mode.equals("stuckCars")||mode.equals("wrongDetail")){require(!failure[0].isEmpty(),mode+": fail closed instead of retrying click");checks++;}
+            if(mode.equals("stuckEvent")||mode.equals("stuckCars")){require(!failure[0].isEmpty(),mode+": fail closed instead of retrying click");checks++;}
         }
         return checks;
     }
@@ -140,7 +171,7 @@ final class MultiplayerGarageChecks {
                         List<Object> cards=new ArrayList<>();
                         for(Object item:(List<?>)garage.get("cards")) {
                             Map<String,Object> card=new HashMap<>((Map<String,Object>)item);
-                            card.put("fuel",6);card.put("capacity",6);cards.add(card);
+                            card.put("availability","ready");cards.add(card);
                         }
                         garage.put("cards",cards);screen.put("garage",garage);
                     }

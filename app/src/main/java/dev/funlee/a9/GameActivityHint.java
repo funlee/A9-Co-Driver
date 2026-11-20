@@ -12,16 +12,17 @@ import android.view.WindowManager;
 import android.widget.TextView;
 import java.util.function.BooleanSupplier;
 
-/** A non-touchable game message with one visible second and a short gap between messages. */
+/** A non-touchable game message shown once when work continues on a still screen. */
 final class GameActivityHint {
-    private static final long SHOW_MS=1000, GAP_MS=1000;
+    static final long STILL_MS=8000;
+    private static final long SHOW_MS=1000;
     private final Context context;
     private final Handler main;
     private final WindowManager windows;
     private final BooleanSupplier canShow;
     private TextView view;
     private String last="",pending="";
-    private long nextShow;
+    private long pendingSince,shownForScreen=-1;
     private final Runnable showPending=this::showPending;
     private final Runnable dismiss=this::hide;
     private static final class FrameArea {
@@ -39,13 +40,20 @@ final class GameActivityHint {
     void offer(String message){
         if(message.isEmpty()||message.equals("nil")||message.equals(last)||!canShow.getAsBoolean())return;
         last=message;
+        if(pending.isEmpty()){
+            pendingSince=SystemClock.elapsedRealtime();
+            main.postDelayed(showPending,STILL_MS);
+        }
         pending=message;
-        main.removeCallbacks(showPending);
-        main.postAtTime(showPending,Math.max(SystemClock.uptimeMillis(),nextShow));
     }
 
     private void showPending(){
-        if(!canShow.getAsBoolean()||pending.isEmpty())return;
+        if(!canShow.getAsBoolean()||pending.isEmpty()){pending="";return;}
+        long changed=SessionState.lastScreenChange;
+        long wait=Math.max(changed,pendingSince)+STILL_MS-SystemClock.elapsedRealtime();
+        if(wait>0){main.postDelayed(showPending,wait);return;}
+        if(shownForScreen==changed){pending="";return;}
+        shownForScreen=changed;
         TextView label=new TextView(context);
         label.setText(pending);
         pending="";
@@ -77,7 +85,6 @@ final class GameActivityHint {
         try{
             windows.addView(label,params);
             view=label;
-            nextShow=SystemClock.uptimeMillis()+SHOW_MS+GAP_MS;
             main.postDelayed(dismiss,SHOW_MS);
         }catch(WindowManager.BadTokenException|SecurityException e){
             SessionState.log("无法显示当前操作提示："+e.getMessage());
@@ -98,7 +105,7 @@ final class GameActivityHint {
         main.removeCallbacks(dismiss);
         hide();
         pending=last="";
-        nextShow=0;
+        pendingSince=0;shownForScreen=-1;
     }
 
     Rect boundsAt(long frameTime){

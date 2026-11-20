@@ -17,7 +17,7 @@ final class GaragePageDeviceCheck {
     static void run(Instrumentation test,Bundle report,boolean detail)throws Exception {run(test,report,detail?"detail":"page");}
     static void run(Instrumentation test,Bundle report,String mode)throws Exception {
         boolean detail=mode.equals("detail"),finish=mode.equals("finish"),reward=mode.equals("reward"),score=mode.equals("score");
-        File source=new File(test.getTargetContext().getFilesDir(),score?"runtime/multiplayer-event.png":reward?"runtime/daily-rewards.png":finish?"runtime/diagnostic.png":detail?"runtime/multiplayer-car.png":"runtime/multiplayer-garage-unconfirmed.png");
+        File source=new File(test.getTargetContext().getFilesDir(),mode.equals("wideFame")?"wide-reward-test.png":score?"runtime/multiplayer-event.png":reward?"runtime/daily-rewards.png":finish?"runtime/diagnostic.png":detail?"runtime/multiplayer-car.png":"runtime/multiplayer-garage-unconfirmed.png");
         Bitmap side=BitmapFactory.decodeFile(source.getAbsolutePath());
         int[] pixels=new int[720*1280];side.getPixels(pixels,0,720,0,0,720,1280);
         PixelFrame frame=new PixelFrame(720,1280,pixels);
@@ -39,6 +39,13 @@ final class GaragePageDeviceCheck {
                     if(dev.funlee.a9.core.RaceRewards.amount(value,false)!=1053)throw new AssertionError("Wide score crop clips the digits or includes the label");
                     report.putString("result","PASS: live wide World Series score recognized");return;
                 }finally{enlarged.recycle();}
+            }
+            if(mode.equals("wideFame")){
+                var amounts=RewardOcr.read(recognizer,upright,read,false,true);
+                if(amounts.coins!=3200||amounts.fame!=105)throw new AssertionError("Wide reward replay: "+amounts.coins+"/"+amounts.fame);
+                RewardScreenshotCheck.checkMaximum(recognizer,upright,true,false);
+                RewardScreenshotCheck.checkMaximum(recognizer,upright,true,true);
+                report.putString("result","PASS: actual 3200/+105 and boundary 99,999/+999 for wide multiplayer and solo");return;
             }
             if(reward){
                 report.putString("text",read.getText());
@@ -68,7 +75,7 @@ final class GaragePageDeviceCheck {
                     throw new AssertionError("Full and focused vehicle performance disagree");
                 report.putString("result","PASS: full and focused vehicle performance agree");return;
             }
-            var garage=GarageOcr.read(recognizer,frame,words,"",20.0/9);
+            var garage=dev.funlee.a9.core.MultiplayerGarage.slots(frame,words,"",20.0/9);
             report.putString("garage",garage.toString());report.putString("words",words.toString());
             if(((List<?>)garage.get("cards")).size()<2)throw new AssertionError("Could not identify visible garage page: "+garage);
             report.putString("result","PASS: scrolled garage cards recognized");

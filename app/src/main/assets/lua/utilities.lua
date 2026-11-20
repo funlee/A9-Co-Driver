@@ -347,7 +347,10 @@ function utils.backToMain()
       (text:find('登录中',1,true) or text:find('加载中',1,true) or text:find('检查游戏更新',1,true)
         or text:find('健康游戏忠告',1,true) or text:find('适龄提示',1,true))
     if not loading and tickCount()>=navigationDeadline then attempts=attempts+1 end
-    if screen.scene=='home' then
+    local seriesMenu=text:gsub('賽','赛')
+    local onMultiplayerTab=screen.scene=='unknown' and seriesMenu:find('世界系列赛',1,true)
+      and seriesMenu:find('大师系列赛',1,true) and seriesMenu:find('对决',1,true)
+    if screen.scene=='home' or onMultiplayerTab then
       toast("到达游戏主界面")
       return
     end

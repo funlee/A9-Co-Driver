@@ -13,13 +13,13 @@ import dev.funlee.a9.core.TaskStats;
 @android.annotation.SuppressLint("ViewConstructor")
 final class TaskPanelView extends LinearLayout {
     static final int WIDTH=200,HEIGHT=161,COMPACT_HEIGHT=64;
-    private static final int RACE_STATS_WIDTH=232,RACE_STATS_HEIGHT=142;
+    private static final int RACE_STATS_WIDTH=232,RACE_STATS_HEIGHT=164;
     private static final int MATCHING_HEIGHT=33;
     private final TextView title;
     private final LinearLayout information;
     private final LinearLayout actions;
     private boolean compact;
-    private final TextView[] rows=new TextView[5];
+    private final TextView[] rows=new TextView[6];
     private final float scale;
     private TaskPanelView(Context context,TextView heading,Button pause,Button stop){
         super(context);
@@ -79,7 +79,7 @@ final class TaskPanelView extends LinearLayout {
         title.setContentDescription(title.getText());
         String[] lines=(inspect?diagnostic:stats.overlayFullText()).split("\n",-1);
         for(int i=0;i<rows.length;i++){
-            String line=i<lines.length?lines[i]:"";rows[i].setText(line);
+            String line=i<lines.length?lines[i]:"";rows[i].setVisibility(i<lines.length?VISIBLE:GONE);rows[i].setText(line);
             rows[i].setTextColor(line.contains("兜底")&&stats.fallbackCount()>0||line.contains("未识别")?0xffffd28a:0xfff0f4f8);
         }
     }

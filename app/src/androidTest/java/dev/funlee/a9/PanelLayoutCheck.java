@@ -42,10 +42,21 @@ final class PanelLayoutCheck {
                 if(button(panel,"详情")!=null||button(panel,"精简")!=null||button(panel,"展开")!=null)
                     throw new AssertionError("Fold controls still present");
                 panel.update(stats,"比赛中",false,"",false);save(context,panel,pause,stop,width,"panel-default.png");
+                panel.showRaceStatsOnly();panel.setCompact(false);panel.update(stats,"比赛中",false,"",false);
+                int scale=Math.max(metrics.widthPixels,metrics.heightPixels);
+                int raceWidth=scale*panel.panelWidth()/1280,raceHeight=scale*panel.panelHeight()/1280;
+                panel.measure(View.MeasureSpec.makeMeasureSpec(raceWidth,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(raceHeight,View.MeasureSpec.EXACTLY));
+                panel.layout(0,0,raceWidth,raceHeight);checkTextFits(panel);
+                java.util.ArrayList<View> earnings=new java.util.ArrayList<>();panel.findViewsWithText(earnings,"金币：14400 · 经验值：504",View.FIND_VIEWS_WITH_TEXT);
+                if(earnings.size()!=1||!visible(earnings.get(0)))throw new AssertionError("Race earnings row missing");
+                TextView earningsRow=(TextView)earnings.get(0);
+                if(earningsRow.getLayout().getEllipsisCount(0)>0)throw new AssertionError("Race earnings row truncated");
+                Bitmap race=Bitmap.createBitmap(raceWidth,raceHeight,Bitmap.Config.ARGB_8888);panel.draw(new Canvas(race));
+                try(FileOutputStream out=new FileOutputStream(new File(context.getFilesDir(),"panel-race-earnings.png"))){race.compress(Bitmap.CompressFormat.PNG,100,out);}finally{race.recycle();}
             } catch(Throwable e){error[0]=e;}
         });
         if(error[0]!=null)throw new AssertionError("Panel render failed",error[0]);
-        report.putString("result","PASS: full/compact panels rendered across startup/rewards/recovery/selection/matching/race/pause/result; pause/stop callbacks available; no game input");
+        report.putString("result","PASS: full/compact panels rendered across startup/rewards/recovery/selection/matching/race/pause/result; pause/stop callbacks available; unclipped coin/experience row in the production race panel; no game input");
     }
     private static Button button(View view,String label){
         if(view instanceof Button&&label.contentEquals(((Button)view).getText()))return (Button)view;

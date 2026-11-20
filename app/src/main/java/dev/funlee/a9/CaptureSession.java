@@ -30,7 +30,9 @@ public final class CaptureSession implements AutoCloseable {
     private final HandlerThread thread=new HandlerThread("a9-capture");
     private Bitmap latest;
     private Bitmap beforeResize;
-    private long frameTime,lastReadFrame;
+    private long frameTime,lastReadFrame,lastMotionSample;
+    private final int[] motionReference=new int[12*8],motionSample=new int[12*8];
+
     public volatile int width,height;
     private final int density;
     private final DisplayManager displays;
@@ -75,12 +77,29 @@ public final class CaptureSession implements AutoCloseable {
                 try(Image image=r.acquireLatestImage()) {
                     if(image==null)return;
                     Bitmap frame=copyImage(image);
-                    if(latest!=null)latest.recycle();latest=frame;frameTime=SystemClock.elapsedRealtime();notifyAll();
+                    if(latest!=null)latest.recycle();latest=frame;frameTime=SystemClock.elapsedRealtime();observeMotion(frame,frameTime);notifyAll();
                     if(beforeResize!=null){beforeResize.recycle();beforeResize=null;}
                 } catch(Exception e) { SessionState.log("截屏失败："+e.getMessage()); }
             }
         },handler);
         return next;
+    }
+    private void observeMotion(Bitmap frame,long now){
+        if(now-lastMotionSample<500)return;
+        // Exclude the top counters and bottom activity hint from the motion sample.
+        int changed=0;
+        for(int i=0;i<motionSample.length;i++){
+            int x=(2*(i%12)+1)*frame.getWidth()/24,y=(i/12+2)*frame.getHeight()/13;
+            int c=frame.getPixel(x,y),old=motionReference[i];
+            motionSample[i]=c;
+            if(Math.abs(Color.red(c)-Color.red(old))+Math.abs(Color.green(c)-Color.green(old))
+                    +Math.abs(Color.blue(c)-Color.blue(old))>75)changed++;
+        }
+        if(lastMotionSample==0||changed>=4){
+            System.arraycopy(motionSample,0,motionReference,0,motionSample.length);
+            SessionState.lastScreenChange=now;
+        }
+        lastMotionSample=now;
     }
     static ImageReader createReader(int w,int h) {
         if(Build.VERSION.SDK_INT>=33)return ImageReader.newInstance(w,h,PixelFormat.RGBA_8888,3,

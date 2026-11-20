@@ -35,7 +35,7 @@ function _multiplayerUi()
       local fuel=fuelRead
       if rank==bronze and scenario~='allEmpty' or rank==silver and
           (scenario=='detailEmpty' or scenario=='silverFueled') then fuel=3 end
-      s.garage.cards[i]={index=i,x=410,y=300+100*i,performance='1/2',tokens={'LANCER'},fuel=fuel,capacity=3}
+      s.garage.cards[i]={index=i,x=410,y=300+100*i,availability=fuel<0 and 'unknown' or fuel==0 and 'empty' or 'ready'}
     end
   end
   return s
