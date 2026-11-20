@@ -11,9 +11,7 @@ public final class MultiplayerGarage {
     private static final int[] BADGE_COLORS={0xd88560,0x96b2d4,0xf0ca30,0xb18eff,0x65c6a5,0x21a9ff,0xc0569f,0xc85059,0xf5e2a4};
 
     public static String leagueBadge(String text) {
-        String normalized=MapMatcher.normalize(text).replace('銅','铜').replace('銀','银')
-                .replace('鑽','钻').replace('傳','传').replace('黃','黄').replace('鉑','铂')
-                .replace("铂金","白金");
+        String normalized=leagueText(text);
         String found="";
         for(String league:LEAGUES)if(normalized.contains(league)){
             if(!found.isEmpty())return "";
@@ -22,9 +20,52 @@ public final class MultiplayerGarage {
         return found;
     }
 
+    private static String leagueText(String text) {
+        return MapMatcher.normalize(text).replace('銅','铜').replace('銀','银')
+                .replace('鑽','钻').replace('傳','传').replace('黃','黄').replace('鉑','铂')
+                .replace('聯','联').replace('賽','赛').replace('師','师')
+                .replace("铂金","白金");
+    }
+
+    /** Locate text on the animated event banner, including glyphs split at its panel seam. */
+    public static String eventLeagueBanner(List<?> words) {
+        Set<String> candidates=new HashSet<>();
+        List<Map<?,?>> letters=new ArrayList<>();
+        for(Object item:words){
+            Map<?,?> word=(Map<?,?>)item;
+            int x=pos(word,"x"),y=pos(word,"y");
+            if(x<425||x>1065||y<77||y>292)continue;
+            String label=leagueText(word.get("text").toString()).replace("|","").replace("丨","");
+            if(label.endsWith("联赛"))label=label.substring(0,label.length()-2);
+            if(LEAGUES.contains(label))candidates.add(label);
+            if(label.length()==1)letters.add(Map.of("text",label,"x",x,"y",y));
+        }
+        for(Map<?,?> left:letters)for(Map<?,?> right:letters){
+            int dx=pos(right,"x")-pos(left,"x");
+            if(dx<18||dx>185||Math.abs(pos(right,"y")-pos(left,"y"))>35)continue;
+            String combined=leagueText(left.get("text").toString()+right.get("text"));
+            if(LEAGUES.contains(combined))candidates.add(combined);
+        }
+        return candidates.size()==1?candidates.iterator().next():"";
+    }
+
     /** Read the saturated center stripe of the event's small rating emblem, not the garage tabs. */
     public static String eventLeagueIcon(PixelFrame frame) {
         return leagueStripe(frame,77,307,115,320);
+    }
+
+    /** Locate the shield beside the rating number across different event layouts. */
+    public static String eventLeagueIcon(PixelFrame frame,List<?> words,boolean wide) {
+        for(Object item:words){
+            Map<?,?> word=(Map<?,?>)item;
+            int x=pos(word,"x"),y=pos(word,"y");
+            String label=leagueText(word.get("text").toString());
+            if(x<103||x>265||y<267||y>390||!label.matches("[0-9]{3,4}"))continue;
+            int left=wide?69:75,right=wide?117:116;
+            String badge=leagueStripe(frame,left,y-1,right,y+13);
+            if(!badge.isEmpty())return badge;
+        }
+        return wide?"":eventLeagueIcon(frame);
     }
 
     private static String leagueStripe(PixelFrame frame,int left,int top,int right,int bottom) {

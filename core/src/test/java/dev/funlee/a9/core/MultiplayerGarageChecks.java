@@ -39,6 +39,12 @@ final class MultiplayerGarageChecks {
             require(recognized.get("start").equals(true)&&recognized.get("rank").equals(league),league+": recognize league on garage rail");checks++;
         }
         require(MultiplayerGarage.leagueBadge("青铜联赛 钻石联赛").isEmpty(),"Ambiguous badge text cannot authorize ranking");checks++;
+        require(MultiplayerGarage.eventLeagueBanner(List.of(word("丨黃",610,87),word("金",717,93),
+                        word("传奇入手",1020,150),word("青铜",160,310))).equals("黄金"),
+                "Read the split Gold banner in the expanded event region");checks++;
+        require(MultiplayerGarage.eventLeagueBanner(List.of(word("黄",620,125),word("金",725,190),
+                        word("传奇促销",1010,92))).isEmpty(),
+                "Ignore unrelated text and letters on different rows");checks++;
         int[] emblem=new int[720*1280];
         for(int x=79;x<113;x++)for(int y=304;y<320;y++)emblem[x*720+719-y]=0xff22a8ee;
         require(MultiplayerGarage.eventLeagueIcon(new PixelFrame(720,1280,emblem)).equals("钻石"),
@@ -46,6 +52,11 @@ final class MultiplayerGarageChecks {
         for(int x=79;x<96;x++)for(int y=304;y<320;y++)emblem[x*720+719-y]=0xffcb3242;
         require(MultiplayerGarage.eventLeagueIcon(new PixelFrame(720,1280,emblem)).isEmpty(),
                 "Conflicting emblem colors do not authorize selecting a league");checks++;
+        int[] wideEmblem=new int[720*1280];
+        for(int x=77;x<115;x++)for(int y=330;y<343;y++)wideEmblem[x*720+719-y]=0xffe4b712;
+        require(MultiplayerGarage.eventLeagueIcon(new PixelFrame(720,1280,wideEmblem),
+                        List.of(word("1,287",166,331),word("34,000",357,590)),true).equals("黄金"),
+                "The rating number locates a shifted Gold icon without OCRing the league text");checks++;
         require(MultiplayerGarage.read(new PixelFrame(720,1280,pixels),words,"铂金").get("rank").equals("白金"),"Legacy platinum OCR uses the current white-gold config key");checks++;
         require(MultiplayerGarage.validPerformance("1,868/1,868")&&!MultiplayerGarage.validPerformance("1,868/1,368"),
                 "Reject impossible OCR performance before replacing a valid card reading");checks++;

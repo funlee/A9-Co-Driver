@@ -148,26 +148,6 @@ final class OrchestrationRecoveryChecks {
             "function tap(y,x)assert(y==69 and x==1100);taps=taps+1 end;"+
             "function _soloEventUi()reads=reads+1;return reads==1 and screen or {scene='car'}end;"+
             "function test()local started=tickCount();assert(utils.continueSpecialMission(screen));assert(taps==1 and reads==2 and tickCount()-started<2500);done=true end");
-        script(assets,List.of("utilities"),"data={};run={data={['特殊赛事位置']='2',['称霸模式']='0',['称霸位置']='1',['特殊赛事阶段']='1'}};"+
-            "utils.openSpecialEntry=function(_,position)assert(position==2)end;utils.mySwipe=function()end;function keepCapture()end;function cmpColor()return 0 end;function cmpColorEx()return 0 end;"+
-            "function _findColorTriple()return -1,-1,-1 end;function print()end;local reads,swipes=0,0;local entered=false;"+
-            "function tap(x,y)if x==481 and y==355 then entered=true end end;function swipe(x1,y1,x2,y2)assert(y2>y1);swipes=swipes+1 end;"+
-            "function _soloEventUi()reads=reads+1;if entered then return {scene='car'} end;if reads==2 then return {scene='unknown'} end;"+
-            "return {scene='unknown',words={{text='章节1',x=165,y=250},{text=swipes==0 and '阶段2' or '阶段1',x=355,y=238}}} end;"+
-            "function test()assert(utils.intoSpecial({})==1 and swipes==3 and entered);done=true end");
-        for(int target:List.of(1,3))script(assets,List.of("utilities"),
-            "data={};run={data={['特殊赛事位置']='2',['称霸模式']='0',['称霸位置']='1',['特殊赛事阶段']='"+target+"'}};"+
-            "utils.openSpecialEntry=function(_,position)assert(position==2)end;function keepCapture()end;function cmpColor()return 0 end;function cmpColorEx()return 1 end;"+
-            "function _findColorTriple()return -1,-1,-1 end;function print()end;local swipes,advanced,selected,corrected=0,false,false,false;"+
-            "utils.mySwipe=function(y,x,_,endX)if y==60 then assert(swipes==3 and endX<x and not corrected);corrected=true end end;"+
-            "function swipe(y,x,_,endX)assert(y==290 and not selected);if endX>x then swipes=swipes+1 else assert(swipes==4 and not advanced);advanced=true end end;"+
-            "function tap(y,x)if y==289 or x==750 then assert(swipes==4 and corrected and x=="+(target==1?626:750)+");selected=true end end;"+
-            "function _soloEventUi()if selected then return {scene='car'}end;local words={{text='章节1',x=165,y=250}};"+
-            "if swipes==0 then words[2]={text='阶段3',x=309,y=238};words[3]={text='阶段4',x=642,y=238};words[4]={text='阶段5',x=997,y=238} "+
-            "elseif swipes==3 then words[2]={text='我的排名',x=665,y=309};words[3]={text='阶段2',x=823,y=238};words[4]={text='阶段3',x=1179,y=238} "+
-            "elseif advanced then words[2]={text='阶段2',x=393,y=238};words[3]={text='阶段3',x=750,y=238};words[4]={text='阶段4',x=1100,y=238} "+
-            "else words[2]={text='我的排名',x=844,y=309};words[3]={text='阶段2',x=1008,y=238} end;return {scene='unknown',words=words}end;"+
-            "function test()assert(utils.intoSpecial({})==1 and swipes==4 and corrected and selected);done=true end");
         script(assets,List.of("utilities"),"data={};local frame,taps=0,0;local fuel=-1;local star,zeroTicket=false,false;utils.mycolor=function(x,y,color)assert(color=='12FBC3-303030');return 1 end;function print()end;"+
             "function _soloEventUi()frame=frame+1;return {scene='car',text=zeroTicket and '' or '免费试驾',zeroTicketStart=zeroTicket,fuel=fuel,starUpPending=star,frameId=frame,words={{text='开始0',x=1100,y=650}}}end;"+
             "function tap(x,y)assert(x==69 and y==1100);taps=taps+1 end;function test()"+

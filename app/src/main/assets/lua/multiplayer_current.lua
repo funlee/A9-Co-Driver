@@ -309,9 +309,10 @@ function currentMultiplayer.run(resumingTutorial)
       local frame=screen.frameId or tickCount()
       local key=phase..':'..label
       if phase=='bonusReward' then
-        for _,heading in ipairs({'名人堂','卡包','赛季','礼物','段位','评级','里程碑','俱乐部'}) do
-          if has(screen.text,heading) then key=key..':'..heading end
-        end
+        -- Successive reward pages can use the same Continue label and heading.
+        -- The reward text distinguishes batches after two matching fresh frames.
+        local rewardText=(screen.text or ''):gsub('%s',''):gsub('賽','赛'):gsub('續','续')
+        key=key..':'..rewardText
       end
       -- OCR and tap dispatch can outlive a page animation. Never repeatedly tap
       -- Continue through a stale reward image into the next menu's Start button.

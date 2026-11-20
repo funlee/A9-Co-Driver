@@ -17,6 +17,12 @@ final class GarageFilterChecks {
             "state.present=false;tap=function()taps=taps+1 end;local ok=pcall(utils.configureGarageFilter,'0');assert(not ok and taps==1 and closed==0)",
             "assert(utils.configureGarageFilter(''));assert(taps==0)",
             "utils.configureGarageFilter('0,1,2');utils.configureGarageFilter('0,1,2');assert(taps==6 and closed==2,'second visit changed selected state')",
+            "state.owned=1;state.rank=1;local columns={};local originalTap=tap;"+
+                "tap=function(x,y)if x==436 then columns[#columns+1]=y;if y~=352 then return end end;originalTap(x,y) end;"+
+                "assert(utils.configureGarageFilter('0,1,2'));assert(table.concat(columns,',')=='328,340,352' and state.descending==1 and closed==1);"+
+                "state.present=true;columns={};assert(utils.configureGarageFilter('0,1'));assert(table.concat(columns,',')=='352' and state.descending==0 and closed==2)",
+            "state.owned=1;state.rank=1;state.descending=1;tap=function()taps=taps+1 end;"+
+                "local ok,message=pcall(utils.configureGarageFilter,'0,1');assert(not ok and message:find('升序',1,true) and taps==3 and closed==0)",
             "state.wide=true;state.owned=1;state.rank=1;tap=function(x,y) if x==134 then state.present=false else assert(x==385 and y==(state.descending==0 and 350 or 330));state.descending=1-state.descending end end;assert(utils.configureGarageFilter('0,1,2'));state.present=true;assert(utils.configureGarageFilter('0,1'));assert(state.descending==0)"
         );
         for(String script:cases)try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())) {

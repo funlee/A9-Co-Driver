@@ -375,21 +375,23 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         if(score>=0)out.put("seriesScore",score);
     }
     private String worldLeague(List<?> words)throws Exception {
-        StringBuilder banners=new StringBuilder();
-        for(Object item:words){
-            Map<?,?> word=(Map<?,?>)item;
-            int x=((Number)word.get("x")).intValue(),y=((Number)word.get("y")).intValue();
-            if(x>=490&&x<=1120&&y>=105&&y<=255)banners.append(word.get("text")).append('\n');
-        }
-        String league=MultiplayerGarage.leagueBadge(banners.toString());
+        String league=MultiplayerGarage.eventLeagueIcon(frame,words,wideViewport());
         if(!league.isEmpty())return league;
-        if(!wideViewport()){
-            league=MultiplayerGarage.eventLeagueIcon(frame);
-            if(!league.isEmpty())return league;
-        }
-        league=MultiplayerGarage.leagueBadge(text(371,65,437,122,5));
+        league=MultiplayerGarage.eventLeagueBanner(words);
         if(!league.isEmpty())return league;
-        return MultiplayerGarage.leagueBadge(text(455,515,604,1115,2));
+        // The banner moves with the camera and can sit higher or farther left in emulators.
+        int left=425,top=75,scale=3;
+        Text banner=readText(422,left,719-top,1065,scale);
+        List<Object> focused=new ArrayList<>();
+        if(banner!=null)for(Text.TextBlock block:banner.getTextBlocks())for(Text.Line line:block.getLines()){
+            Rect bounds=line.getBoundingBox();
+            if(bounds!=null)focused.add(Map.of("text",line.getText(),
+                    "x",left+bounds.centerX()/scale,"y",top+bounds.centerY()/scale));
+        }
+        league=MultiplayerGarage.eventLeagueBanner(focused);
+        if(!league.isEmpty())return league;
+        // Cover the full emblem and leave room for the rating block to move in wide layouts.
+        return MultiplayerGarage.leagueBadge(text(324,53,460,174,4));
     }
     private boolean addLeagueDemotion(Map<String,Object> out,List<?> words)throws Exception {
         if(!MultiplayerUi.leagueDemotionLayout(frame))return false;
@@ -570,8 +572,12 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         return text(x1,y1,x2,y2,1);
     }
     private String text(int x1,int y1,int x2,int y2,int scale) throws Exception {
+        Text result=readText(x1,y1,x2,y2,scale);
+        return result==null?"":result.getText().replace("\n","");
+    }
+    private Text readText(int x1,int y1,int x2,int y2,int scale) throws Exception {
         PixelFrame f=frame(); int x=Math.max(0,x1),y=Math.max(0,y1),w=Math.min(720,x2+1)-x,h=Math.min(1280,y2+1)-y;
-        if(w<=0||h<=0) return "";
+        if(w<=0||h<=0) return null;
         Bitmap all=Bitmap.createBitmap(f.copyPixels(),720,1280,Bitmap.Config.ARGB_8888);
         Bitmap crop=Bitmap.createBitmap(all,x,y,w,h);Matrix m=new Matrix();m.postRotate(270);
         Bitmap rotated=Bitmap.createBitmap(crop,0,0,w,h,m,true);
@@ -580,7 +586,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         Task<Text> task;
         try {task=recognizer.process(InputImage.fromBitmap(upright,0));}catch(Exception e){cleanup.run();throw e;}
         task.addOnCompleteListener(Runnable::run,done->cleanup.run());
-        return Tasks.await(task,12,TimeUnit.SECONDS).getText().replace("\n","");
+        return Tasks.await(task,12,TimeUnit.SECONDS);
     }
     @Override public int call(String name,Lua l) {
         try {
@@ -600,7 +606,25 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                     return result(l,list);
                 }
                 case "_dailyEventUi":return result(l,dailyEventUi());
-                case "_soloEventUi":return result(l,dailyEventUi(true,l.toBoolean(1)));
+                case "_soloEventUi":{
+                    Map<String,Object> ui=dailyEventUi(true,l.toBoolean(1));
+                    if(!l.toBoolean(2)||!"unknown".equals(ui.get("scene")))return result(l,ui);
+                    Map<String,Object> rail=SpecialEventList.stageRail(frame);
+                    if(rail.isEmpty())return result(l,ui);
+                    Map<String,Object> stage=new LinkedHashMap<>(ui);
+                    stage.put("stageRail",rail);
+                    if(Boolean.TRUE.equals(rail.get("clear"))){
+                        int x=(int)rail.get("x");
+                        List<?> words=(List<?>)ui.get("words");
+                        boolean badge=words.stream().map(value->(Map<?,?>)value).anyMatch(word->{
+                            int wx=(int)word.get("x"),wy=(int)word.get("y");
+                            return wx>=x+32&&wx<=x+114&&wy>=185&&wy<=300&&
+                                    MapMatcher.normalize(word.get("text").toString()).replace("|","").equals("阶段1");
+                        });
+                        if(!badge)stage.put("stageFirstLabel",text(445,x+20,519,x+119,3));
+                    }
+                    return result(l,stage);
+                }
                 case "_soloGarageScore":{
                     int left=n(l,1),top=n(l,2);
                     return result(l,MultiplayerGarage.soloScore(text(719-top-77,left+11,719-top-29,left+171,3)));

@@ -1446,32 +1446,37 @@ function utils.configureGarageFilter(selection)
     end
   end
   if not state.present then error("未识别到车库筛选面板，已停止选车") end
-  local wide,layout18By9=state.wide,state.layout18By9
-  local options={{"0","owned",509,340,"已拥有"},{"1","rank",304,340,"性能分"},{"2","descending",436,340,"降序"}}
-  if wide then
-    options={{"0","owned",478,340,"已拥有"},{"1","rank",224,340,"性能分"},{"2","descending",385,350,"降序"}}
-  elseif layout18By9 then
-    options={{"0","owned",494,340,"已拥有"},{"1","rank",262,340,"性能分"},{"2","descending",411,330,"降序"}}
+  local ownedRow,rankRow,sortRow=509,304,436
+  -- Try both arrows and the center of the sort control if the direction stays the same.
+  local sortColumns={[0]={352,340,328},[1]={328,340,352}}
+  if state.wide then
+    ownedRow,rankRow,sortRow=478,224,385
+    sortColumns={[0]={330,340,350},[1]={350,340,330}}
+  elseif state.layout18By9 then
+    ownedRow,rankRow,sortRow=494,262,411
+    sortColumns={[0]={350,340,330},[1]={330,340,350}}
   end
+  local options={{"0","owned",ownedRow,340,"已拥有"},{"1","rank",rankRow,340,"性能分"},
+    {"2","descending",sortRow,sortColumns,"降序"}}
   for _,option in ipairs(options) do
     local wanted=string.find(selection,option[1],1,true) and 1 or 0
+    local sorting=option[2]=='descending'
+    local label=sorting and wanted==0 and '升序' or option[5]
     local attempts=0
     for i=1,16 do
       state=read()
       if not state.present then error("车库筛选面板意外关闭") end
       if state[option[2]]==wanted then break end
       if state[option[2]]==1-wanted and attempts<3 then
-        data["信息"]="设置车库筛选："..option[5]
-        local target=option[4]
-        if option[2]=='descending' and wanted==0 then
-          if wide then target=330 elseif layout18By9 then target=350 end
-        end
+        data["信息"]="设置车库筛选："..label
+        local columns=option[4]
+        local target=sorting and columns[wanted][attempts+1] or columns
         tap(option[3],target);attempts=attempts+1;sleep(700)
       else sleep(300) end
       if data["超时状态"] then error("车库筛选已超时") end
     end
     state=read()
-    if not state.present or state[option[2]]~=wanted then error("无法确认车库筛选："..option[5]) end
+    if not state.present or state[option[2]]~=wanted then error("无法确认车库筛选："..label) end
   end
   -- Confirm the complete combination immediately before applying it.
   for _,option in ipairs(options) do
@@ -2169,31 +2174,8 @@ function utils.intoSpecial(screen)
             and word.y>=(minY or 0) and word.y<=(maxY or 719) then return word end
       end
     end
-    local function stageWord(screen,number)
-      return numberedWord(screen,'阶段',number,300,1240,190,310)
-    end
-    local function firstStage(screen)
-      local first=stageWord(screen,1)
-      if first and first.x>=330 then return first end
-      local second=stageWord(screen,2)
-      if not second then return end
-      local clippedOne=stageWord(screen,11)
-      if clippedOne and clippedOne.x>=330 and clippedOne.x<second.x then return clippedOne end
-      -- When OCR misses the first badge, require the ranking card and the
-      -- second badge at the right edge. A partly visible first card is common.
-      if second.x>=900 and findUiWord(screen,{['我的排名']=true,['我的排各']=true},335,second.x-65,260,405) then
-        return {x=math.floor((300+second.x-55)/2),y=430}
-      end
-    end
-    local function firstVisibleStage(screen)
-      local first
-      for _,word in ipairs(screen.words or {}) do
-        if word.x>=300 and word.y>=160 and word.y<=340 then
-          local number=tonumber(word.text:gsub('%s',''):match('阶段(%d+)'))
-          if number then first=math.min(first or number,number) end
-        end
-      end
-      return first
+    local function stageNumber(text)
+      return tonumber((text or ''):gsub('[%s|]',''):gsub('階','阶'):match('^阶段(%d+)$'))
     end
     local tab
     for attempt=1,4 do
@@ -2204,61 +2186,116 @@ function utils.intoSpecial(screen)
       sleep(500)
     end
     if not tab then error('未找到称霸章节 '..chapter) end
+    if spStage<1 or spStage%1~=0 then error('称霸阶段必须为正整数') end
     tapUiWord(tab)
     sleep(900)
-    local resetApplied=false
-    local originVerified=false
-    for attempt=1,12 do
-      local screen=_soloEventUi()
-      local chapterVisible=numberedWord(screen,'章节',chapter,0,370)
-      local firstVisible=chapterVisible and firstVisibleStage(screen)
-      if not resetApplied and firstVisible then
-        for _=1,3 do
-          swipe(290,377,290,1155,570)
-          sleep(500)
-        end
-        utils.mySwipe(60,600,60,250)
-        resetApplied=true
-        print('称霸阶段列表：右拖三次并左移校正')
-      elseif resetApplied and chapterVisible then
-        local first=(not originVerified or spStage==1) and firstStage(screen)
-        if first then originVerified=true end
-        local stage=originVerified and (spStage==1 and first or stageWord(screen,spStage))
-        if originVerified and not stage then
-          -- On white badges OCR can append the right border as a digit 1.
-          -- Accept that reading only between independently recognized adjacent stages.
-          local badge=stageWord(screen,spStage*10+1)
-          local before=stageWord(screen,spStage-1)
-          local after=stageWord(screen,spStage+1)
-          if badge and ((before and before.x<badge.x) or (after and after.x>badge.x)) then stage=badge end
-        end
-        if stage then
-          tapUiWord(stage)
-          local deadline=tickCount()+15000
-          repeat
-            sleep(500)
-            local current=_soloEventUi()
-            if utils.specialMissionContinue(current) or current.scene=='car' or current.scene=='cars' then
-              print('已确认称霸章节 '..chapter..'，阶段 '..spStage)
-              return 1
-            end
-          until tickCount()>=deadline
-          error('未能确认进入称霸阶段 '..spStage..'，已保留当前任务')
-        end
-        -- The game can reopen the chapter partway through. Re-center before
-        -- using a visible stage, including a target already on the offset page.
-        if not originVerified or firstVisible and spStage<firstVisible then
-          if firstVisible then
-            print('称霸阶段列表向右拉取，确认列表起点')
-            swipe(290,377,290,1155,570)
-          end
-        elseif firstVisible then
-          swipe(290,1050,290,550,450)
+
+    local function stagePage()
+      local screen=_soloEventUi(false,true)
+      local rail=screen.stageRail
+      if not rail or math.abs(rail.y-tab.y)>32 then return end
+      local badges={}
+      local leading
+      for _,word in ipairs(screen.words or {}) do
+        local number=stageNumber(word.text)
+        if number and word.x>=rail.x+15 and word.x<=1240 and word.y>=185 and word.y<=310 then
+          local badge={x=word.x,y=word.y,number=number}
+          badges[number]=badge
+          if not leading or badge.x<leading.x then leading=badge end
         end
       end
-      sleep(500)
+      local first
+      local nearRail=leading and leading.x>=rail.x+32 and leading.x<=rail.x+114
+      if rail.clear and (nearRail and leading.number==1 or stageNumber(screen.stageFirstLabel)==1) then
+        first={x=rail.x+142,y=430}
+      end
+      local target=badges[spStage]
+      if spStage>1 and not target then
+        -- A badge border can add a trailing 1. Keep this fallback tied to a
+        -- neighboring number, and require a stage label on the destination.
+        local badge=badges[spStage*10+1]
+        local before=badges[spStage-1]
+        local after=badges[spStage+1]
+        if badge and ((before and before.x<badge.x) or (after and after.x>badge.x)) then
+          badge.inferred=true
+          target=badge
+        end
+      end
+      return {frame=screen.frameId,rail=rail,leading=leading,first=first,target=target}
     end
-    error('当前章节未找到阶段 '..spStage)
+    local function sameBadge(a,b)
+      if not a or not b then return a==b end
+      return a.number==b.number and math.abs(a.x-b.x)<=5 and math.abs(a.y-b.y)<=5
+    end
+    local function samePage(a,b)
+      return a and b and a.rail.clear==b.rail.clear and math.abs(a.rail.x-b.rail.x)<=3
+        and (a.first~=nil)==(b.first~=nil) and sameBadge(a.leading,b.leading) and sameBadge(a.target,b.target)
+    end
+    local function settledPage()
+      local deadline=tickCount()+6000
+      local previous
+      repeat
+        local page=stagePage()
+        if page and page.frame and previous and previous.frame and page.frame>previous.frame and samePage(page,previous) then
+          return page
+        end
+        if not page or not previous or page.frame and page.frame~=previous.frame then previous=page end
+        sleep(250)
+      until tickCount()>=deadline
+      error('未确认称霸章节 '..chapter..' 的阶段列表，已保留当前任务')
+    end
+
+    local page=settledPage()
+    local deadline=tickCount()+45000
+    local drags,stalled=0,0
+    local atOrigin=false
+    while tickCount()<deadline and stalled<5 do
+      if page.first then
+        -- Verify the same first card after a short right pull and its rebound.
+        swipe(290,405,290,670,520,140)
+      else
+        swipe(290,377,290,1155,330,120)
+      end
+      drags=drags+1
+      sleep(1);sleep(550)
+      local nextPage=settledPage()
+      local unchanged=samePage(page,nextPage)
+      if page.first and nextPage.first and unchanged then
+        atOrigin=true
+        page=nextPage
+        print('称霸阶段列表已确认最左起点（右拖 '..drags..' 次）')
+        break
+      end
+      stalled=unchanged and stalled+1 or 0
+      page=nextPage
+    end
+    if not atOrigin then error('未确认称霸阶段1位于列表最左，已保留当前任务') end
+
+    local stage=spStage==1 and page.first or page.target
+    stalled=0
+    for attempt=1,12 do
+      if stage then break end
+      swipe(290,1050,290,620,450,120)
+      sleep(1);sleep(550)
+      local nextPage=settledPage()
+      stalled=samePage(page,nextPage) and stalled+1 or 0
+      if stalled>=2 then break end
+      page=nextPage
+      stage=page.target
+    end
+    if not stage then error('当前章节未找到阶段 '..spStage..'，已保留当前任务') end
+    tapUiWord(stage)
+    local enterDeadline=tickCount()+15000
+    repeat
+      sleep(500)
+      local current=_soloEventUi()
+      if utils.specialMissionContinue(current) or
+          (not stage.inferred and (current.scene=='car' or current.scene=='cars')) then
+        print('已确认称霸章节 '..chapter..'，阶段 '..spStage)
+        return 1
+      end
+    until tickCount()>=enterDeadline
+    error('未能确认进入称霸阶段 '..spStage..'，已保留当前任务')
   elseif cmpColorEx("580|161|FFFFFF-101010,607|160|FFFFFF-101010,610|1238|000000-101010,634|1229|190F0A-101010", 1) == 1 then
     return 1
   else

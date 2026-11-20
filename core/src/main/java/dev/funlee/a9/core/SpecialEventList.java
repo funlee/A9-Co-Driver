@@ -56,6 +56,43 @@ public final class SpecialEventList {
         return false;
     }
 
+    /** Find the selected chapter's rail and the clear inset next to an unclipped stage card. */
+    public static Map<String, Object> stageRail(PixelFrame frame) {
+        int railX = -1, railY = -1;
+        for (int x = 210; x <= 365; x++) {
+            int start = -1;
+            for (int y = 170; y <= 660; y++) {
+                if (y < 660 && pink(pixel(frame, x, y))) {
+                    if (start < 0) start = y;
+                } else if (start >= 0) {
+                    int height = y - start, center = start + height / 2;
+                    if (height >= 48 && height <= 138 && selectedChapter(frame, x, center)) {
+                        railX = x;
+                        railY = center;
+                    }
+                    start = -1;
+                }
+            }
+        }
+        if (railX < 0) return Map.of();
+        int dark = 0;
+        for (int dx : new int[]{8, 14}) for (int y : new int[]{224, 245, 275, 315, 360, 410, 467, 522, 585, 644}) {
+            int color = pixel(frame, railX + dx, y);
+            int r = color >> 16 & 255, g = color >> 8 & 255, b = color & 255;
+            if (r <= 43 && g <= 61 && b <= 100 && b >= r + 6) dark++;
+        }
+        return Map.of("x", railX, "y", railY, "clear", dark >= 18);
+    }
+
+    private static boolean selectedChapter(PixelFrame frame, int x, int y) {
+        int white = 0;
+        for (int dx : new int[]{32, 58}) for (int dy : new int[]{-22, 22}) {
+            int color = pixel(frame, x - dx, y + dy);
+            if ((color >> 16 & 255) >= 220 && (color >> 8 & 255) >= 220 && (color & 255) >= 220) white++;
+        }
+        return white >= 3;
+    }
+
     private static boolean pink(int color) {
         return (color >> 16 & 255) > 175 && (color >> 8 & 255) < 62 && (color & 255) >= 55 && (color & 255) <= 120;
     }
