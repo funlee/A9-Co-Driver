@@ -323,8 +323,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         }
         if(!master&&scene.equals("event")&&
                 MapMatcher.normalize(text).replace('賽','赛').contains("世界系列赛")){
-            String league=worldLeague(words);
-            if(!league.isEmpty())out.put("worldLeague",league);
+            addWorldLeague(out,words);
         }
         if(scene.equals("unknown")&&!text.isEmpty()&&!text.equals(lastUnknownText)&&clock-lastUnknownLog>=5000){
             lastUnknownLog=clock;lastUnknownText=text;SessionState.log("待识别界面文字："+text);
@@ -374,24 +373,35 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         long score=RaceRewards.amount(text(719-bottom,left,719-top,right,2),false);
         if(score>=0)out.put("seriesScore",score);
     }
-    private String worldLeague(List<?> words)throws Exception {
+    private void addWorldLeague(Map<String,Object> out,List<?> words)throws Exception {
         String league=MultiplayerGarage.eventLeagueIcon(frame,words,wideViewport());
-        if(!league.isEmpty())return league;
+        if(league.isEmpty())league=MultiplayerGarage.leagueBadge(text(324,53,460,146,4));
+        if(!league.isEmpty()){
+            out.put("worldLeague",league);
+            return;
+        }
+        int rating=MultiplayerGarage.eventRatingScore(words);
+        if(rating<0)rating=MultiplayerGarage.eventRatingScore(focusedWords(105,263,281,412,3));
+        league=MultiplayerGarage.leagueForRating(rating);
+        if(!league.isEmpty()){
+            out.put("worldRating",rating);
+            out.put("worldLeagueByRating",league);
+            return;
+        }
         league=MultiplayerGarage.eventLeagueBanner(words);
-        if(!league.isEmpty())return league;
         // The banner moves with the camera and can sit higher or farther left in emulators.
-        int left=425,top=75,scale=3;
-        Text banner=readText(422,left,719-top,1065,scale);
+        if(league.isEmpty())league=MultiplayerGarage.eventLeagueBanner(focusedWords(425,75,1065,297,3));
+        if(!league.isEmpty())out.put("worldLeague",league);
+    }
+    private List<Object> focusedWords(int left,int top,int right,int bottom,int scale)throws Exception {
+        Text region=readText(719-bottom,left,719-top,right,scale);
         List<Object> focused=new ArrayList<>();
-        if(banner!=null)for(Text.TextBlock block:banner.getTextBlocks())for(Text.Line line:block.getLines()){
+        if(region!=null)for(Text.TextBlock block:region.getTextBlocks())for(Text.Line line:block.getLines()){
             Rect bounds=line.getBoundingBox();
             if(bounds!=null)focused.add(Map.of("text",line.getText(),
                     "x",left+bounds.centerX()/scale,"y",top+bounds.centerY()/scale));
         }
-        league=MultiplayerGarage.eventLeagueBanner(focused);
-        if(!league.isEmpty())return league;
-        // Cover the full emblem and leave room for the rating block to move in wide layouts.
-        return MultiplayerGarage.leagueBadge(text(324,53,460,174,4));
+        return focused;
     }
     private boolean addLeagueDemotion(Map<String,Object> out,List<?> words)throws Exception {
         if(!MultiplayerUi.leagueDemotionLayout(frame))return false;

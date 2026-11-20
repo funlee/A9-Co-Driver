@@ -45,6 +45,20 @@ final class MultiplayerGarageChecks {
         require(MultiplayerGarage.eventLeagueBanner(List.of(word("黄",620,125),word("金",725,190),
                         word("传奇促销",1010,92))).isEmpty(),
                 "Ignore unrelated text and letters on different rows");checks++;
+        List<String> ratingLeagues=List.of("青铜","白银","黄金","白金","翡翠","钻石","精英","宗师","传奇");
+        int[] thresholds={1000,1075,1175,1300,1450,1625,1825,2050,2300};
+        for(int i=0;i<thresholds.length;i++){
+            require(MultiplayerGarage.leagueForRating(thresholds[i]).equals(ratingLeagues.get(i))&&
+                    MultiplayerGarage.leagueForRating(thresholds[i]-1).equals(i==0?"":ratingLeagues.get(i-1)),
+                    "Rating boundary for "+ratingLeagues.get(i));checks++;
+        }
+        require(MultiplayerGarage.eventRatingScore(List.of(word("1,287",172,339),word("我的阳及分",162,368),
+                        word("5,000",163,603),word("34,000",375,609)))==1287,
+                "Select the rating above the caption on the actual Gold layout");checks++;
+        require(MultiplayerGarage.eventRatingScore(List.of(word("1,287",172,339),word("我的排名",162,368)))<0,
+                "Placement is not a rating");checks++;
+        require(MultiplayerGarage.eventRatingScore(List.of(word("1,287",172,339),word("1,387",197,340),
+                        word("我的评级分",162,368)))<0,"Conflicting ratings remain unidentified");checks++;
         int[] emblem=new int[720*1280];
         for(int x=79;x<113;x++)for(int y=304;y<320;y++)emblem[x*720+719-y]=0xff22a8ee;
         require(MultiplayerGarage.eventLeagueIcon(new PixelFrame(720,1280,emblem)).equals("钻石"),
@@ -265,12 +279,21 @@ final class MultiplayerGarageChecks {
 
     private static int leagueSelection(Path assets)throws Exception {
         int checks=0;
-        for(String league:List.of("青铜","白银","黄金","白金","翡翠","钻石","精英","宗师","传奇")) {
+        for(String scenario:List.of("青铜","白银","黄金","白金","翡翠","钻石","精英","宗师","传奇","rating")) {
+            boolean byRating=scenario.equals("rating");
+            String league=byRating?"黄金":scenario;
             int[] reads={0},selected={0},started={0};
             try(LuaRuntime lua=new LuaRuntime((name,l)->{
                 if(name.equals("_multiplayerUi")) {
                     int n=reads[0]++;Map<String,Object> screen=fixture(screen(n<2?"series":n<9?"event":selected[0]==0?"cars":"car"));
-                    if("event".equals(screen.get("scene")))screen.put("worldLeague",league);
+                    if("event".equals(screen.get("scene"))){
+                        if(byRating){
+                            screen.remove("worldLeague");
+                            screen.put("worldRating",n==4?1286:1287);
+                            screen.put("worldLeagueByRating",league);
+                            screen.put("frameId",Math.max(3,n)*1000);
+                        }else screen.put("worldLeague",league);
+                    }
                     if("cars".equals(screen.get("scene"))) {
                         Map<String,Object> garage=new HashMap<>((Map<String,Object>)screen.get("garage"));
                         garage.put("rank",league);garage.put("key",league+":467/1094");
@@ -286,6 +309,8 @@ final class MultiplayerGarageChecks {
                 if(name.equals("tap")) {
                     int x=(int)l.toInteger(2),y=719-(int)l.toInteger(1);
                     if(x==410&&(y==305||y==542))selected[0]=y==542?2:1;
+                    if(byRating&&x==1100&&y==650&&selected[0]==0)
+                        require(reads[0]>=7,"Do not start on stale frames or a single rating sample");
                     if(x==1100&&y==650&&selected[0]>0)started[0]++;
                 }
                 if(name.equals("cmpColor")){l.push(1);return 1;}return 0;

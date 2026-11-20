@@ -8,6 +8,7 @@ public final class MultiplayerGarage {
     private static final java.util.regex.Pattern SOLO_SCORE=java.util.regex.Pattern.compile("(?<![0-9/])([0-9]{3,4})(?![0-9])");
     private static final Pattern PAIR=Pattern.compile("(\\d[\\d,]*)\\s*/\\s*(\\d[\\d,]*)");
     private static final List<String> LEAGUES=List.of("青铜","白银","黄金","白金","翡翠","钻石","精英","宗师","传奇");
+    private static final int[] MIN_LEAGUE_RATING={1000,1075,1175,1300,1450,1625,1825,2050,2300};
     private static final int[] BADGE_COLORS={0xd88560,0x96b2d4,0xf0ca30,0xb18eff,0x65c6a5,0x21a9ff,0xc0569f,0xc85059,0xf5e2a4};
 
     public static String leagueBadge(String text) {
@@ -47,6 +48,34 @@ public final class MultiplayerGarage {
             if(LEAGUES.contains(combined))candidates.add(combined);
         }
         return candidates.size()==1?candidates.iterator().next():"";
+    }
+
+    /** Read the number above the rating caption, away from placement and series points. */
+    public static int eventRatingScore(List<?> words) {
+        Set<Integer> ratings=new HashSet<>();
+        for(Object entry:words){
+            Map<?,?> caption=(Map<?,?>)entry;
+            int x=pos(caption,"x"),y=pos(caption,"y");
+            String label=MapMatcher.normalize(caption.get("text").toString());
+            // A photographed caption may read “我的阳及分”; its location and the number above it still agree.
+            if(x<107||x>274||y<286||y>408||!label.matches("我的\\p{IsHan}{2}分"))continue;
+            for(Object item:words){
+                Map<?,?> word=(Map<?,?>)item;
+                int sx=pos(word,"x"),sy=pos(word,"y"),dy=y-sy;
+                if(sx<109||sx>276||Math.abs(x-sx)>55||dy<12||dy>52)continue;
+                String digits=java.text.Normalizer.normalize(word.get("text").toString(),java.text.Normalizer.Form.NFKC)
+                        .replaceAll("\\s","");
+                if(!digits.matches("[0-9]{4,5}|[0-9]{1,2},[0-9]{3}"))continue;
+                int value=Integer.parseInt(digits.replace(",",""));
+                if(value>=MIN_LEAGUE_RATING[0])ratings.add(value);
+            }
+        }
+        return ratings.size()==1?ratings.iterator().next():-1;
+    }
+
+    public static String leagueForRating(int rating) {
+        for(int i=MIN_LEAGUE_RATING.length-1;i>=0;i--)if(rating>=MIN_LEAGUE_RATING[i])return LEAGUES.get(i);
+        return "";
     }
 
     /** Read the saturated center stripe of the event's small rating emblem, not the garage tabs. */

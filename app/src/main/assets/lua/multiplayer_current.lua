@@ -293,6 +293,7 @@ function currentMultiplayer.run(resumingTutorial)
     local position={offset=0}
     local pageOffset,pageLeft,pageFrame
     local verifiedWorldLeague,targetLeague
+    local ratingScore,ratingFrame
     local leagueWaitAt=nil
     local rewardChoice=nil;local rewardAt=0;local rewardTries=0;local dialogMisses=0
     local scoreBefore,scoreAfter,scoreSample,scoreFrame,scoreSince
@@ -341,12 +342,21 @@ function currentMultiplayer.run(resumingTutorial)
     while true do
       local screen=_multiplayerUi(readSeriesScore,started or raced)
       local scene=screen.scene
-      if world and scene=='event' and has(screen.text,series) and screen.worldLeague then
-        if verifiedWorldLeague~=screen.worldLeague then
-          verifiedWorldLeague=screen.worldLeague
-          print('赛事详情已确认世界赛当前段位：'..verifiedWorldLeague)
+      if world and scene=='event' and has(screen.text,series) then
+        local league=screen.worldLeague
+        if not league and screen.worldLeagueByRating and screen.worldRating and screen.frameId then
+          if screen.worldRating==ratingScore and screen.frameId>ratingFrame then
+            league=screen.worldLeagueByRating
+            if league~=verifiedWorldLeague then print('按评级分 '..ratingScore..' 确认世界赛段位：'..league) end
+          elseif screen.worldRating~=ratingScore then
+            ratingScore=screen.worldRating;ratingFrame=screen.frameId
+          end
+        else ratingScore,ratingFrame=nil,nil end
+        if league and verifiedWorldLeague~=league then
+          verifiedWorldLeague=league
+          print('赛事详情已确认世界赛当前段位：'..league)
         end
-      end
+      else ratingScore,ratingFrame=nil,nil end
       if scene~='series' then seriesEntry=nil;seriesFrame=nil;seriesPressedAt=nil end
       local tutorial=started and not raced and spCup and spCup.tutorialButton(screen)
       if _racePanel then _racePanel(scene=='race') end
