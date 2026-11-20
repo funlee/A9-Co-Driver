@@ -232,10 +232,22 @@ public final class MultiplayerGarage {
                 boolean clipped=edge+width>right;
                 cards.add(Map.of("index",2*column+row+1,"x",edge+(wide?145:190),"y",y+113,"left",edge,"top",y,
                         "signature",thumbnail(frame,edge,y),"clipped",clipped,
-                        "score",scoreIn(words,edge+12,edge+169,y+27,y+78)));
+                        "score",scoreIn(words,edge+12,edge+169,y+27,y+78),
+                        "model",modelIn(words,edge+width*2/3,edge+width-5,y+132,y+180)));
             }
         }
-        return Map.of("left",left,"start",left>=87&&left<=132,"cards",cards,"pitch",pitch);
+        return Map.of("left",left,"start",left>=87&&left<=132&&soloOriginGutter(frame,left,top,rowPitch),
+                "cards",cards,"pitch",pitch);
+    }
+
+    private static boolean soloOriginGutter(PixelFrame frame,int left,int top,int rowPitch){
+        int filled=0;
+        for(int row=0;row<2;row++)for(int dy:new int[]{2,62,110,164,205})
+            for(int x=45;x<left-8;x+=8){
+                int color=frame.pixel(719-top-row*rowPitch-dy,x);
+                if((color>>16&255)>46||(color>>8&255)>78||(color&255)>113)filled++;
+            }
+        return filled<=3;
     }
 
     public static String soloDetailScore(List<?> words){
@@ -251,6 +263,22 @@ public final class MultiplayerGarage {
             if(x>=150&&x<=550&&y>=80&&y<=192&&text.matches("[A-Za-z0-9 .+'’\\-]+"))parts.add(text);
         }
         return String.join(" ",parts);
+    }
+
+    private static String modelIn(List<?> words,int left,int right,int top,int bottom){
+        String model="";
+        int lowest=top;
+        for(Object value:words){
+            Map<?,?> word=(Map<?,?>)value;
+            int x=pos(word,"x"),y=pos(word,"y");
+            String raw=word.get("text").toString();
+            String compact=compact(raw);
+            if(x>=left&&x<=right&&y>=lowest&&y<=bottom&&compact.length()>=3&&raw.matches("[A-Za-z0-9 .+'’\\-]+")){
+                model=compact;
+                lowest=y;
+            }
+        }
+        return model;
     }
 
     private static String scoreIn(List<?> words,int left,int right,int top,int bottom){

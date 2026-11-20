@@ -2,6 +2,7 @@ data={['项目']='每日战利品',['用车次数']={}}
 run={data={['用车模式']='1',['选车方式']='0',['杯赛用车']={12,22}}}
 local frame,offset,resets,chosen=0,8,0,0
 local tapped={}
+local blankReads=2
 function print()end
 function keepCapture()end
 local function signature(index)
@@ -14,18 +15,24 @@ local function signature(index)
 end
 function _soloGarageUi(fast)
   frame=frame+250
+  if blankReads>0 then
+    blankReads=blankReads-1
+    return {scene='cars',frameId=frame,gridOnly=fast,garage={start=false,left=-1,pitch=474,cards={}}}
+  end
   local cards={}
   for i=1,6 do
     local number=offset+i
     cards[i]={index=i,x=280+math.floor((i-1)/2)*474,y=i%2==1 and 308 or 550,
-      signature=signature(number),score=fast and '' or tostring(5900-number)}
+      signature=signature(number),score=fast and '' or tostring(5900-number),model=scenario=='model' and 'CCXR' or ''}
   end
   return {scene='cars',frameId=frame,gridOnly=fast,garage={start=offset==0,left=offset==0 and 97 or 200,pitch=474,cards=cards}}
 end
 function swipe(_,from,__,to)
+  assert(blankReads==0,'Wait for the car cards to reappear before dragging again')
   if to>from then
     resets=resets+1
     if scenario~='stuck' then offset=0 end
+    blankReads=4
   else
     assert(resets>=2,'Do not count cars before a verified origin')
     offset=offset+2
@@ -36,7 +43,8 @@ function tap(y,x)
   tapped[#tapped+1]=chosen
 end
 function _soloEventUi()
-  return {scene='car',soloScore=tostring(5900-chosen+(scenario=='mismatch' and 1 or 0)),soloName='Test car'}
+  return {scene='car',soloScore=tostring(5900-chosen+((scenario=='mismatch' or scenario=='model') and 1 or 0)),
+    soloName=scenario=='model' and 'Koenigsegg CCXR' or 'Test car'}
 end
 utils.carFuel=function()return 2,_soloEventUi()end
 function test()
@@ -45,9 +53,9 @@ function test()
     assert(not ok and message:find(scenario=='stuck' and '最左起点' or '性能分不一致'),message)
     assert((scenario=='stuck' and #tapped==0) or (scenario=='mismatch' and tapped[1]==12 and not utils.verifiedDailyCar))
   else
-    assert(utils.chooseCarCup(utils.taskCars()) and utils.verifiedDailyCar=='5888')
+    assert(utils.chooseCarCup(utils.taskCars()) and utils.verifiedDailyCar.score=='5888')
     offset=12
-    assert(utils.chooseCarCup(utils.taskCars()) and utils.verifiedDailyCar=='5878')
+    assert(utils.chooseCarCup(utils.taskCars()) and utils.verifiedDailyCar.score=='5878')
     assert(table.concat(tapped,',')=='12,22','Actual tiles match the configured order')
   end
   done=true

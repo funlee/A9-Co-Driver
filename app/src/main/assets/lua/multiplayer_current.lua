@@ -199,24 +199,39 @@ local function locateCar(screen,index,position,readGrid,readFull)
   end
 end
 
+local function sameSoloPage(before,after)
+  if not before or not after or before.start~=after.start or math.abs(before.left-after.left)>3 then return false end
+  local matches=0
+  for _,a in ipairs(before.cards) do
+    for _,b in ipairs(after.cards) do
+      if a.index==b.index and sameCard(a,b,12,5) then matches=matches+1 end
+    end
+  end
+  return matches>=math.min(2,#after.cards) and matches>0
+end
+
+local function settledSoloGrid()
+  local previous
+  for sample=1,18 do
+    local page=_soloGarageUi(true)
+    if sameSoloPage(previous,page.garage) then return page end
+    previous=page.garage
+    sleep(200)
+  end
+end
+
 function vehicleGrid.soloOrigin()
-  local previous=_soloGarageUi(true)
+  local previous=settledSoloGrid()
   for attempt=1,30 do
-    swipe(414,350,414,1135,470,120)
+    if not previous then break end
+    -- A long pull at the left end can bounce the complete grid off the screen.
+    local atStart=previous.garage.start
+    swipe(414,350,414,atStart and 660 or 1135,atStart and 660 or 470,120)
     sleep(500)
-    local current=_soloGarageUi(true)
-    local old,new=previous.garage,current.garage
-    if old and new and old.start and new.start and current.frameId>previous.frameId and math.abs(old.left-new.left)<=3 then
-      local matches=0
-      for _,a in ipairs(old.cards) do
-        for _,b in ipairs(new.cards) do
-          if a.index==b.index and sameCard(a,b,12,5) then matches=matches+1 end
-        end
-      end
-      if matches>=math.min(2,#new.cards) and matches>0 then
-        print('每日战利品车库已回到最左，确认第 1 列')
-        return current
-      end
+    local current=settledSoloGrid()
+    if current and atStart and sameSoloPage(previous.garage,current.garage) then
+      print('每日战利品车库已回到最左，确认第 1 列')
+      return current
     end
     previous=current
   end

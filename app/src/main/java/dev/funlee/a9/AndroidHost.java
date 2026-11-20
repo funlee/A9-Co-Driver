@@ -20,7 +20,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     public static final List<String> FUNCTIONS=List.of("keepCapture","releaseCapture","tap","swipe","touchDown","touchMove","touchUp",
             "cmpColorEx","cmpColor","getPixelColor","findColor","findMultiColor","findPic","snapShot","rotateImage",
             "getDisplaySize","getDisplayRotate","getWorkPath","getSdPath","getPackageName","getInstalledApk","frontAppName","runApp","stopApp","keyPress",
-            "setScreenScale","setControlBarPos","rnd","toast","print","colorToRGB","_jsonEncode","_jsonDecode","_textOcr","_digit","_mapMatch","_recoverEventStart","_specialEventList","_popupUi","_soloGarageScore",
+            "setScreenScale","setControlBarPos","rnd","toast","print","colorToRGB","_jsonEncode","_jsonDecode","_textOcr","_digit","_mapMatch","_recoverEventStart","_specialEventList","_popupUi","_soloGarageScore","_soloDetailScore",
             "_validateRoute","_driverBegin","_driverStep","_driverEnd","_racePanel","_hud","_taskNotice","_finished","_multiplayerUi","_rewardUi","_fallbackBegin","_fallbackStep","_sessionCycle","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_sessionLegacyCompleted","_sessionRaceRewards","_sessionLegacyPrepare","_sessionLegacyMap","_legacyRewardSample","_sessionLegacyRewards","_sessionOperation","_routeDisplay","_cupCards","_dailyEventUi","_soloEventUi","_soloGarageUi","_garageFilterState","_garageFilterPrepare","_dailyTaskStatus","_queueResume","_queueRewardsDone","_queueEnter","_queueDone");
     private final Context context;
     private final LocalStore store;
@@ -588,6 +588,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                     int left=n(l,1),top=n(l,2);
                     return result(l,MultiplayerGarage.soloScore(text(719-top-77,left+11,719-top-29,left+171,3)));
                 }
+                case "_soloDetailScore":return result(l,MultiplayerGarage.soloScore(text(565,880,600,1038,4)));
                 case "_soloGarageUi":{
                     if(!l.toBoolean(1)){
                         Map<String,Object> ui=dailyEventUi(true);

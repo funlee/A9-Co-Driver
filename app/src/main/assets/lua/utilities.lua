@@ -1380,6 +1380,15 @@ local function ticketedTrial(screen)
   return (project=='杯赛' or project=='特殊赛事') and screen.scene=='car' and screen.fuel==-1 and not screen.starUpPending
     and (trialText or (project=='特殊赛事' and screen.zeroTicketStart)) and startButton(screen)
 end
+local function verifiedDailyDetail(slot,detail)
+  if not detail or detail.scene~='car' then return false end
+  if slot.score and slot.score~='' and detail.soloScore==slot.score then return true end
+  local model=slot.model or ''
+  local name=(detail.soloName or ''):upper():gsub('[^A-Z0-9]','')
+  if #model>=3 and name:sub(-#model)==model then return true end
+  return slot.score and slot.score~='' and _soloDetailScore and _soloDetailScore()==slot.score
+end
+
 function utils.startRace()
   local fuel,latestCar=utils.carFuel()
   if fuel=='vehicleLocked' then return fuel end
@@ -1396,7 +1405,7 @@ function utils.startRace()
     latestCar=nil
     if screen.scene=='car' then
       if screen.starUpPending or screen.fuel==0 then return 'fuelEmpty' end
-      if type(utils.verifiedDailyCar)=='string' and screen.soloScore~=utils.verifiedDailyCar then
+      if type(utils.verifiedDailyCar)=='table' and not verifiedDailyDetail(utils.verifiedDailyCar,screen) then
         data['信息']='等待再次核对每日战利品车辆性能分'
       elseif fuel=='trial' and not ticketedTrial(screen) then
         data['信息']='等待重新确认赛事试驾按钮'
@@ -1573,8 +1582,11 @@ function utils.chooseCarCup(carList)
           origin=origin or vehicleGrid.soloOrigin()
           slot=vehicleGrid.soloCar(origin,car)
           origin=nil
-          if slot.score=='' and _soloGarageScore then slot.score=_soloGarageScore(slot.left,slot.top) end
-          if not slot.score or slot.score=='' then error('未读到每日战利品第 '..car..' 辆车的性能分，已保留任务进度') end
+          local focused=_soloGarageScore and _soloGarageScore(slot.left,slot.top)
+          if focused and focused~='' then slot.score=focused end
+          if (not slot.score or slot.score=='') and #(slot.model or '')<3 then
+            error('未读到每日战利品第 '..car..' 辆车的性能分或车型，已保留任务进度')
+          end
           tapUiWord(slot)
           sleep(1200)
         else
@@ -1607,14 +1619,16 @@ function utils.chooseCarCup(carList)
         if slot and (type(fuel)=='number' or fuel=='starUp' or fuel=='trial') then
           local matched=false
           for attempt=1,4 do
-            if detail and detail.scene=='car' and detail.soloScore==slot.score then matched=true;break end
+            if verifiedDailyDetail(slot,detail) then matched=true;break end
             sleep(300)
             detail=_soloEventUi()
           end
           if not matched then
+            print('每日战利品核对识别：卡片 '..tostring(slot.score)..' '..tostring(slot.model)..
+              ' · 详情 '..tostring(detail and detail.soloScore)..' '..tostring(detail and detail.soloName))
             error('每日战利品第 '..car..' 辆车的卡片与详情性能分不一致，已保留任务进度')
           end
-          print('每日战利品已核验第 '..car..' 辆：'..(detail.soloName or '')..' · 性能分 '..slot.score)
+          print('每日战利品已核验第 '..car..' 辆：'..(detail.soloName or '')..' · 性能分 '..(detail.soloScore or slot.score or '未识别'))
         end
         if fuel=='vehicleLocked' then
           if not wide or #carList==1 then return fuel end
@@ -1626,7 +1640,7 @@ function utils.chooseCarCup(carList)
           print('配置车辆 '..car..' 未打开详情，尝试下一辆配置车辆')
         elseif fuel=='trial' or (type(fuel)=='number' and fuel>0) then
           data['用车次数']['car'..j]=1
-          if dailyGrid then utils.verifiedDailyCar=slot and slot.score or true end
+          if dailyGrid then utils.verifiedDailyCar=slot or true end
           utils.selectNextTaskCar=false
           data['信息']='使用配置车辆 '..car..(fuel=='trial' and '（免费试驾）' or '，剩余燃油 '..fuel)
           print(data['信息']);return true

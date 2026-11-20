@@ -52,7 +52,7 @@ final class CupCarRotationChecks {
         try(var input=CupCarRotationChecks.class.getResourceAsStream("/daily-car-grid.lua")){
             fixture=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
         }
-        for(String scenario:List.of("ordered","stuck","mismatch"))try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
+        for(String scenario:List.of("ordered","stuck","mismatch","model"))try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
             lua.set("scenario",scenario);
             lua.load("utilities",Files.readString(assets.resolve("lua/utilities.lua")));
             lua.load("grid",Files.readString(assets.resolve("lua/multiplayer_current.lua")));
@@ -77,6 +77,9 @@ final class CupCarRotationChecks {
         if(!Boolean.TRUE.equals(page.get("start"))||cards.size()!=4||
                 !"4998".equals(((Map<?,?>)cards.get(3)).get("score")))
             throw new AssertionError("Daily garage counts red and gold tiles and reads the expected lower card");
-        return 4;
+        for(int x=46;x<87;x++)for(int y=195;y<670;y++)pixels[x*720+719-y]=0xff963815;
+        if(Boolean.TRUE.equals(MultiplayerGarage.soloSlots(new PixelFrame(720,1280,pixels),List.of(),16.0/9).get("start")))
+            throw new AssertionError("A clipped preceding card cannot be counted as the origin");
+        return 6;
     }
 }
