@@ -236,7 +236,8 @@ public final class MultiplayerGarage {
                         "model",modelIn(words,edge+width*2/3,edge+width-5,y+132,y+180)));
             }
         }
-        return Map.of("left",left,"start",left>=87&&left<=132&&soloOriginGutter(frame,left,top,rowPitch),
+        boolean leadingClear=left>=87&&soloOriginGutter(frame,left,top,rowPitch);
+        return Map.of("left",left,"start",leadingClear&&left<=132,"leadingClear",leadingClear,
                 "cards",cards,"pitch",pitch);
     }
 

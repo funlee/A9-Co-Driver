@@ -3,6 +3,7 @@ run={data={['用车模式']='1',['选车方式']='0',['杯赛用车']={12,22}}}
 local frame,offset,resets,chosen=0,scenario=='large' and 150 or 8,0,0
 local tapped={}
 local blankReads=2
+local bounceReads=0
 function print()end
 function keepCapture()end
 local function signature(index)
@@ -25,17 +26,22 @@ function _soloGarageUi(fast)
     cards[i]={index=i,x=280+math.floor((i-1)/2)*474,y=i%2==1 and 308 or 550,
       signature=signature(number),score=fast and '' or tostring(5900-number),model=scenario=='model' and 'CCXR' or ''}
   end
-  return {scene='cars',frameId=frame,gridOnly=fast,garage={start=offset==0,left=offset==0 and 97 or 200,pitch=474,cards=cards}}
+  local atStart=offset==0 and bounceReads==0
+  local left=atStart and 97 or offset==0 and 376 or 200
+  bounceReads=math.max(0,bounceReads-1)
+  return {scene='cars',frameId=frame,gridOnly=fast,garage={start=atStart,leadingClear=offset==0,left=left,pitch=474,cards=cards}}
 end
 function swipe(_,from,__,to)
   assert(blankReads==0,'Wait for the car cards to reappear before dragging again')
+  assert(bounceReads==0,'Wait for the visible first column to finish bouncing')
   if to>from then
     resets=resets+1
     if scenario=='large' then offset=math.max(0,offset-4)
     elseif scenario~='stuck' then offset=0 end
     blankReads=4
+    if offset==0 then bounceReads=4 end
   else
-    assert(resets>=2,'Do not count cars before a verified origin')
+    assert(resets>=1,'Do not count cars before a verified origin')
     offset=offset+2
   end
 end

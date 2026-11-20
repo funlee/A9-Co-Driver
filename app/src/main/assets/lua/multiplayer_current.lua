@@ -212,47 +212,42 @@ end
 
 local function settledSoloGrid()
   local previous
-  for sample=1,18 do
+  local stable=0
+  for sample=1,14 do
     local page=_soloGarageUi(true)
-    if sameSoloPage(previous,page.garage) then return page end
-    previous=page.garage
-    sleep(200)
-  end
-end
-
-local function visibleSoloGrid()
-  for sample=1,32 do
-    local page=_soloGarageUi(true)
-    if page.garage and #page.garage.cards>0 then return page end
-    sleep(200)
+    local garage=page.garage
+    if garage and #garage.cards>0 then
+      if not garage.leadingClear then return page end
+      -- An empty leading gutter can grow during overscroll. Wait for it to
+      -- return to the normal inset and verify the same leading cards in fresh frames.
+      if not previous or page.frameId>previous.frameId then
+        stable=garage.start and sameSoloPage(previous and previous.garage,garage) and stable+1 or 0
+        if stable>=2 then return page end
+        previous=page
+      end
+    else
+      previous=nil;stable=0
+    end
+    sleep(250)
   end
 end
 
 function vehicleGrid.soloOrigin()
-  local previous=visibleSoloGrid()
-  local stalled=0
-  while previous and stalled<5 and not data['超时状态'] do
-    local atStart=previous.garage.start
-    if atStart then
-      -- A long pull at the left end can bounce the complete grid off the screen.
-      swipe(414,350,414,660,660,120)
-      sleep(500)
-      local current=settledSoloGrid()
-      if current and sameSoloPage(previous.garage,current.garage) then
-        print('每日战利品车库已回到最左，确认第 1 列')
-        return current
-      end
-      previous=current or visibleSoloGrid()
-      stalled=stalled+1
-    else
-      -- Travel by momentum in a large garage. Intermediate pages need only be visible;
-      -- a fully settled page and the empty leading gutter are required at the origin.
+  local previous,stalled,drags=nil,0,0
+  while stalled<5 and not data['超时状态'] do
+    local current=settledSoloGrid()
+    if not current then break end
+    if current.garage.start then
+      print('每日战利品车库已回到最左，确认第 1 列（回拖 '..drags..' 次）')
+      return current
+    end
+    if sameSoloPage(previous,current.garage) then stalled=stalled+1 else stalled=0 end
+    if stalled<5 then
+      previous=current.garage
+      -- Travel by momentum while an earlier column still occupies the leading gutter.
       swipe(414,255,414,1150,190)
-      sleep(380)
-      local current=visibleSoloGrid()
-      if current and sameSoloPage(previous.garage,current.garage) then stalled=stalled+1
-      else stalled=0 end
-      previous=current
+      drags=drags+1
+      sleep(550)
     end
   end
   error('未确认每日战利品车库最左起点，已保留任务进度')
