@@ -6,7 +6,7 @@ import java.util.regex.Pattern;
 
 public final class MapMatcher {
     private static final Pattern LAPS = Pattern.compile("(?<![0-9])[1-9][0-9]?[圈圏固]");
-    private static final Pattern CHINESE_TITLE = Pattern.compile("\\p{IsHan}{3,}");
+    private static final Pattern CHINESE_TITLE = Pattern.compile("\\p{sc=Han}{3,}");
     public static final class Rule {
         public final String display, internal;
         public final List<List<String>> groups;

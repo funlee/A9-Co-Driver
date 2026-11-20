@@ -35,6 +35,13 @@ final class OrchestrationRecoveryChecks {
         script(assets,List.of("workflows","daily"),"data={['项目']='每日战利品',['杯赛']=0};run.data={['次数']='1'};local restored=false;local reads=0;utils={tipsHandle=function()end};run.rebootHandle=function()end;"+
             "function _soloEventUi()reads=reads+1;return {scene=restored and (reads==2 and 'event' or 'car') or 'clubRewards',text='每日车辆战利品',words={{text='单人奖励',x=1080,y=200}}}end;function tap()restored=true end;function keepCapture()error('Club tab must precede legacy color dispatch')end;"+
             "run.carDetails={['每日战利品']=function()return 'fuelEmpty' end};function test()assert(run.project()=='fuelEmpty' and restored and data['杯赛']==0);done=true end");
+        script(assets,List.of("workflows","daily","cup"),"data={['项目']='杯赛'};run.data={['次数']='1'};local reads,starts,confirmations=0,0,0;"+
+            "utils={tipsHandle=function()error('Loading must not dispatch generic taps')end};run.nitro=function()end;run.rebootHandle=function()end;function print()end;"+
+            "function _soloEventUi()reads=reads+1;if reads<=2 then return {scene='car'} elseif reads<=4 then return {scene='unknown',words={{text='仍然挑战',x=920,y=530}}} elseif reads<=6 then return {scene='unknown'} else return {scene='race'} end end;"+
+            "function tap(y,x)assert(y==189 and x==920);confirmations=confirmations+1 end;function keepCapture()end;function cmpColorEx()return 1 end;"+
+            "run.carDetails={['杯赛']=function()starts=starts+1;utils.soloStartAt=tickCount()end};"+
+            "run.list={['杯赛']={{'race',function()assert(reads==7);return 'raceSeen'end}}};"+
+            "function test()assert(run.project()=='raceSeen' and starts==1 and confirmations==1);done=true end");
         script(assets,List.of("special"),"data={};local reads=0;local taps=0;local routes=0;utils={taskRouteAuto=function()return false end,prepareTaskRoute=function()routes=routes+1 end};"+
             "function print()end;function tap()taps=taps+1 end;function _soloEventUi()reads=reads+1;return {scene=reads<5 and 'unknown' or 'race'} end;"+
             "function test()spCup.operation[1][2]();assert(reads==5 and taps==1 and routes==1,'Teaching must wait through loading');done=true end");
@@ -130,13 +137,31 @@ final class OrchestrationRecoveryChecks {
         script(assets,List.of("utilities"),"run={data={['特殊赛事阶段']='1'}};local badge={text='|阶段1',x=195,y=112};"+
             "local start={text='开始令0',x=1100,y=650};local screen={scene='specialRanking',words={badge,start}};"+
             "function test()assert(utils.specialMissionContinue(screen)==start);badge.text='|阶段2';assert(not utils.specialMissionContinue(screen));done=true end");
+        script(assets,List.of("utilities"),"data={};run={data={['特殊赛事阶段']='1'}};local reads,taps=0,0;function print()end;"+
+            "local screen={scene='specialRanking',words={{text='阶段1',x=195,y=112},{text='开始',x=1100,y=650}}};"+
+            "function tap(y,x)assert(y==69 and x==1100);taps=taps+1 end;"+
+            "function _soloEventUi()reads=reads+1;return reads==1 and screen or {scene='car'}end;"+
+            "function test()local started=tickCount();assert(utils.continueSpecialMission(screen));assert(taps==1 and reads==2 and tickCount()-started<2500);done=true end");
         script(assets,List.of("utilities"),"data={};run={data={['特殊赛事位置']='2',['称霸模式']='0',['称霸位置']='1',['特殊赛事阶段']='1'}};"+
-            "utils.openHomeTab=function()end;utils.mySwipe=function()end;function keepCapture()end;function cmpColor()return 0 end;function cmpColorEx()return 0 end;"+
+            "utils.openSpecialEntry=function(_,position)assert(position==2)end;utils.mySwipe=function()end;function keepCapture()end;function cmpColor()return 0 end;function cmpColorEx()return 0 end;"+
             "function _findColorTriple()return -1,-1,-1 end;function print()end;local reads,swipes=0,0;local entered=false;"+
             "function tap(x,y)if x==481 and y==355 then entered=true end end;function swipe(x1,y1,x2,y2)assert(y2>y1);swipes=swipes+1 end;"+
             "function _soloEventUi()reads=reads+1;if entered then return {scene='car'} end;if reads==2 then return {scene='unknown'} end;"+
             "return {scene='unknown',words={{text='章节1',x=165,y=250},{text=swipes==0 and '阶段2' or '阶段1',x=355,y=238}}} end;"+
-            "function test()assert(utils.intoSpecial({})==1 and swipes==1 and entered);done=true end");
+            "function test()assert(utils.intoSpecial({})==1 and swipes==3 and entered);done=true end");
+        for(int target:List.of(1,3))script(assets,List.of("utilities"),
+            "data={};run={data={['特殊赛事位置']='2',['称霸模式']='0',['称霸位置']='1',['特殊赛事阶段']='"+target+"'}};"+
+            "utils.openSpecialEntry=function(_,position)assert(position==2)end;function keepCapture()end;function cmpColor()return 0 end;function cmpColorEx()return 1 end;"+
+            "function _findColorTriple()return -1,-1,-1 end;function print()end;local swipes,advanced,selected,corrected=0,false,false,false;"+
+            "utils.mySwipe=function(y,x,_,endX)if y==60 then assert(swipes==3 and endX<x and not corrected);corrected=true end end;"+
+            "function swipe(y,x,_,endX)assert(y==290 and not selected);if endX>x then swipes=swipes+1 else assert(swipes==4 and not advanced);advanced=true end end;"+
+            "function tap(y,x)if y==289 or x==750 then assert(swipes==4 and corrected and x=="+(target==1?626:750)+");selected=true end end;"+
+            "function _soloEventUi()if selected then return {scene='car'}end;local words={{text='章节1',x=165,y=250}};"+
+            "if swipes==0 then words[2]={text='阶段3',x=309,y=238};words[3]={text='阶段4',x=642,y=238};words[4]={text='阶段5',x=997,y=238} "+
+            "elseif swipes==3 then words[2]={text='我的排名',x=665,y=309};words[3]={text='阶段2',x=823,y=238};words[4]={text='阶段3',x=1179,y=238} "+
+            "elseif advanced then words[2]={text='阶段2',x=393,y=238};words[3]={text='阶段3',x=750,y=238};words[4]={text='阶段4',x=1100,y=238} "+
+            "else words[2]={text='我的排名',x=844,y=309};words[3]={text='阶段2',x=1008,y=238} end;return {scene='unknown',words=words}end;"+
+            "function test()assert(utils.intoSpecial({})==1 and swipes==4 and corrected and selected);done=true end");
         script(assets,List.of("utilities"),"data={};local frame,taps=0,0;local fuel=-1;local star,zeroTicket=false,false;utils.mycolor=function(x,y,color)assert(color=='12FBC3-303030');return 1 end;function print()end;"+
             "function _soloEventUi()frame=frame+1;return {scene='car',text=zeroTicket and '' or '免费试驾',zeroTicketStart=zeroTicket,fuel=fuel,starUpPending=star,frameId=frame,words={{text='开始0',x=1100,y=650}}}end;"+
             "function tap(x,y)assert(x==69 and y==1100);taps=taps+1 end;function test()"+
@@ -159,24 +184,24 @@ final class OrchestrationRecoveryChecks {
         script(assets,List.of("utilities"),"data={};function _soloEventUi()return {scene='unknown',text='世界系列賽 試驾挑战 大师系列赛 对决'} end;"+
                 "function toast()end;function tap()error('Series selector already on home')end;function test()utils.backToMain();done=true end");
         int fuelScenarios=0;
-        for(String project:List.of("多人上","多人下"))for(String scenario:List.of("mixed","allEmpty","detailEmpty","starCard","starDetail","rotate","detailOcr","wrongCar","lateRewards","blockedRewards")){
+        for(String project:List.of("多人上","多人下"))for(String scenario:List.of("mixed","allEmpty","detailEmpty","starCard","starDetail","rotate","detailOcr","wrongCar","lateRewards","blockedRewards","longRewards")){
             String series=project.equals("多人上")?"世界系列赛":"大师系列赛";
             script(assets,List.of("multiplayer_current"),
                 "local scenario='"+scenario+"';local series='"+series+"';local count=scenario=='rotate' and 2 or 1;"+
                 "data={['项目']='"+project+"',['多人']=0};run={data={['次数']=count,['用车模式']=(scenario=='rotate' or scenario=='detailOcr') and '1' or '0',['青铜用车']={1,2},['多人下用车']={1,2}}};"+
-                "utils={defultCfg=function(v,d)return v or d end};local phase='series';local frame=0;local selected=0;local choices={};local finished=0;local rewardSince=nil;local exitAt=nil;local rewardTaps=0;"+
+                "utils={defultCfg=function(v,d)return v or d end};local phase='series';local frame=0;local selected=0;local choices={};local finished=0;local rewardSince=nil;local exitAt=nil;local rewardTaps=0;local bonusAt=nil;local bonusTaps=0;"+
                 "function print()end;function _hud()end;function swipe()end;function cmpColor()return 1 end;function _sessionProject()return 0 end;function _sessionRaceBegin()end;function _sessionRaceResult()end;function _sessionRaceRewards()end;function _fallbackBegin()end;function _fallbackStep()return 99 end;function _sessionOperation()end;"+
                 "function _sessionRaceReturned()finished=finished+1;phase='series' end;"+
-                "function tap(y,x)y=719-y;if x==350 and y==450 then phase='event' elseif x==1100 and y==650 then if phase=='event' then phase='cars' elseif phase=='car' then phase='race' elseif phase=='result' then phase=(scenario=='lateRewards' or scenario=='blockedRewards') and 'reward' or 'returned' elseif phase=='reward' then phase='rewardLeaving';exitAt=tickCount();rewardTaps=rewardTaps+1 end elseif x==410 and (y==305 or y==542)then selected=y==305 and 1 or 2;choices[#choices+1]=selected;phase='car' elseif x==38 and y==29 then phase='cars' end end;"+
-                "function _multiplayerUi()frame=frame+2000;local s={scene=phase,text=series,frameId=frame,words={}};"+
+                "function tap(y,x)y=719-y;if x==350 and y==450 then phase='event' elseif x==1100 and y==650 then if phase=='event' then phase='cars' elseif phase=='car' then phase='race' elseif phase=='result' then phase=(scenario=='lateRewards' or scenario=='blockedRewards' or scenario=='longRewards') and 'reward' or 'returned' elseif phase=='reward' then phase='rewardLeaving';exitAt=tickCount();rewardTaps=rewardTaps+1 elseif phase=='bonus' then bonusTaps=bonusTaps+1;bonusAt=tickCount();if bonusTaps==3 then phase='returned' end end elseif x==410 and (y==305 or y==542)then selected=y==305 and 1 or 2;choices[#choices+1]=selected;phase='car' elseif x==38 and y==29 then phase='cars' end end;"+
+                "function _multiplayerUi()frame=frame+2000;local s={scene=phase,text=series,frameId=frame,words={},worldLeague='青铜'};"+
                 "if phase=='series' then s.text='世界系列赛 大师系列赛';s.words={{text=series,x=350,y=450}} " +
                 "elseif phase=='event' or phase=='car' then s.words={{text='开始',x=1100,y=650}};s.carDetail={name='LANCER',performance=((scenario=='detailOcr' and #choices==1) or scenario=='wrongCar') and '1/9' or '1/2'};s.fuel=scenario=='detailEmpty' and selected==1 and 0 or 3;s.starUpPending=scenario=='starDetail' and selected==1 " +
                 "elseif phase=='cars' then s.garage={start=true,key='origin',rank='青铜',cards={}};for i=1,2 do s.garage.cards[i]={index=i,x=410,y=i==1 and 305 or 542,availability=(scenario=='allEmpty' or scenario=='mixed' and i==1)and 'empty' or scenario=='starCard' and i==1 and 'starUp' or 'ready'}end " +
-                "elseif phase=='race' then phase='result' elseif phase=='result' then s.text='你的排名';s.words={{text='继续',x=1100,y=650}} elseif phase=='reward' or phase=='rewardLeaving' then rewardSince=rewardSince or tickCount();s.scene='result';s.rewardPage=true;s.rewardCanContinue=phase=='reward' and scenario=='lateRewards' and tickCount()-rewardSince>=14000;s.rewardReady=true;s.words={{text='继续',x=1100,y=650}};if phase=='rewardLeaving' and tickCount()-exitAt>=10000 then phase='returned' end elseif phase=='returned' then s.scene='event' end;return s end;"+
-                "function test()local ok,result=pcall(currentMultiplayer.run);if scenario=='blockedRewards' then assert(not ok and finished==0 and rewardTaps==0,'Unusable reward exit still times out');done=true;return end;assert(ok,result);if scenario=='lateRewards' then assert(finished==1 and rewardTaps==1,'Late-ready reward gets a separate exit transition window');elseif scenario=='detailOcr' or scenario=='wrongCar' then assert(finished==1 and table.concat(choices,',')=='1','Start the unlocked fueled slot without reading detail text');elseif scenario=='allEmpty' then assert(result=='fuelEmpty' and finished==0 and #choices==0) elseif scenario=='rotate' then assert(finished==2 and table.concat(choices,',')=='1,2') elseif scenario=='detailEmpty' or scenario=='starDetail' then assert(finished==1 and table.concat(choices,',')=='1,2') else assert(finished==1 and table.concat(choices,',')=='2')end;done=true end");
+                "elseif phase=='race' then phase='result' elseif phase=='result' then s.text='你的排名';s.words={{text='继续',x=1100,y=650}} elseif phase=='reward' or phase=='rewardLeaving' then rewardSince=rewardSince or tickCount();s.scene='result';s.rewardPage=true;s.rewardCanContinue=phase=='reward' and ((scenario=='lateRewards' and tickCount()-rewardSince>=14000) or (scenario=='longRewards' and tickCount()-rewardSince>=28000));s.rewardReady=true;s.words={{text='继续',x=1100,y=650}};if phase=='rewardLeaving' and tickCount()-exitAt>=10000 then phase=scenario=='longRewards' and 'bonus' or 'returned';bonusAt=tickCount() end elseif phase=='bonus' then s.scene='unknown';s.text=({'名人堂奖励','新赛季奖励','你获得了卡包奖励'})[bonusTaps+1];if tickCount()-bonusAt>=10000 then s.words={{text='继续',x=1100,y=650}}end elseif phase=='returned' then s.scene='event' end;return s end;"+
+                "function test()local ok,result=pcall(currentMultiplayer.run);if scenario=='blockedRewards' then assert(not ok and finished==0 and rewardTaps==0,'Unusable reward exit still times out');done=true;return end;assert(ok,result);if scenario=='longRewards' then assert(finished==1 and rewardTaps==1 and bonusTaps==3,'Wait past 20 seconds and advance each distinct reward page') elseif scenario=='lateRewards' then assert(finished==1 and rewardTaps==1,'Late-ready reward gets a separate exit transition window');elseif scenario=='detailOcr' or scenario=='wrongCar' then assert(finished==1 and table.concat(choices,',')=='1','Start the unlocked fueled slot without reading detail text');elseif scenario=='allEmpty' then assert(result=='fuelEmpty' and finished==0 and #choices==0) elseif scenario=='rotate' then assert(finished==2 and table.concat(choices,',')=='1,2') elseif scenario=='detailEmpty' or scenario=='starDetail' then assert(finished==1 and table.concat(choices,',')=='1,2') else assert(finished==1 and table.concat(choices,',')=='2')end;done=true end");
             fuelScenarios++;
         }
-        return 48+fuelScenarios+wideHome(assets);
+        return 52+fuelScenarios+wideHome(assets);
     }
     private static int wideHome(Path assets)throws Exception{
         List<Object> tabs=List.of(Map.of("text","每日","x",593,"y",626),Map.of("text","多人","x",787,"y",626),
@@ -201,6 +226,12 @@ final class OrchestrationRecoveryChecks {
                 "function _soloEventUi()return {scene='unknown'}end;function tap()taps=taps+1 end;"+
                 "function keyPress(k)assert(k=='back');backs=backs+1 end;function keepCapture()end;function releaseCapture()end;function cmpColorEx()return 0 end;"+
                 "function test()assert(not pcall(utils.backToMain));assert(backs==1 and taps==1,'Unknown page must stop instead of looping Back');done=true end");
+        script(assets,List.of("utilities"),"data={};local phase=1;local actedAt=nil;local pages={'garageFilter','cars','event','home'};"+
+                "function keepCapture()end;function releaseCapture()end;function toast()end;function cmpColorEx()return 0 end;"+
+                "function _soloEventUi()if actedAt and tickCount()-actedAt>=1500 then phase=phase+1;actedAt=nil end;return {scene=pages[phase]}end;"+
+                "function keyPress(key)assert(phase==1 and key=='back' and not actedAt);actedAt=tickCount()end;"+
+                "function tap(y,x)assert(y==690 and (phase==2 and x==38 or phase==3 and x==1244) and not actedAt);actedAt=tickCount()end;"+
+                "function test()utils.backToMain();assert(phase==4);done=true end");
         script(assets,List.of("utilities"),String.join("\n",
                 "data={};local tappedAt",
                 "function _soloEventUi()",
@@ -257,7 +288,7 @@ final class OrchestrationRecoveryChecks {
             "return {scene='car',fuel=6,words={{text='开始',x=1110,y=650}}}end",
             "function tap(x,y)taps[#taps+1]=y end",
             "function test()assert(utils.startRace()==1);assert(table.concat(taps,',')=='1088,1088,1110',table.concat(taps,','));done=true end"));
-        return 15;
+        return 16;
     }
     private static void script(Path assets,List<String> modules,String fixture)throws Exception {
         try(LuaRuntime lua=new LuaRuntime((n,l)->0,List.of())) {

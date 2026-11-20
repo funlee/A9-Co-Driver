@@ -20,7 +20,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     public static final List<String> FUNCTIONS=List.of("keepCapture","releaseCapture","tap","swipe","touchDown","touchMove","touchUp",
             "cmpColorEx","cmpColor","getPixelColor","findColor","findMultiColor","findPic","snapShot","rotateImage",
             "getDisplaySize","getDisplayRotate","getWorkPath","getSdPath","getPackageName","getInstalledApk","frontAppName","runApp","stopApp","keyPress",
-            "setScreenScale","setControlBarPos","rnd","toast","print","colorToRGB","_jsonEncode","_jsonDecode","_textOcr","_digit","_mapMatch","_recoverEventStart",
+            "setScreenScale","setControlBarPos","rnd","toast","print","colorToRGB","_jsonEncode","_jsonDecode","_textOcr","_digit","_mapMatch","_recoverEventStart","_specialEventList","_popupUi",
             "_validateRoute","_driverBegin","_driverStep","_driverEnd","_racePanel","_hud","_taskNotice","_finished","_multiplayerUi","_rewardUi","_fallbackBegin","_fallbackStep","_sessionCycle","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_sessionLegacyCompleted","_sessionRaceRewards","_sessionLegacyPrepare","_sessionLegacyMap","_legacyRewardSample","_sessionLegacyRewards","_sessionOperation","_routeDisplay","_cupCards","_dailyEventUi","_soloEventUi","_garageFilterState","_garageFilterPrepare","_dailyTaskStatus","_queueResume","_queueRewardsDone","_queueEnter","_queueDone");
     private final Context context;
     private final LocalStore store;
@@ -154,6 +154,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         Map<String,Object> screen=rewardUi();
         String text=(String)screen.get("text");
         if(RecoveryReadiness.incompatibleDevice(text))throw new GameRecovery.IncompatibleStartup();
+        if("interruptingPopup".equals(screen.get("scene")))return screen.containsKey("dismissPopup");
         if(MultiplayerUi.limitedSalePromo(text))return PopupCloseDetector.findLimitedSale(frame)!=null;
         return RecoveryReadiness.ready(text,(String)screen.get("scene"));
     }
@@ -178,6 +179,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             String scene=menu.isEmpty()?MultiplayerUi.classify(text.toString()):menu;
             Map<String,Object> screen=new LinkedHashMap<>(Map.of("text",text.toString(),"words",words,
                     "frameId",capture.frameId(),"scene",scene));
+            if(addInterruptingPopup(screen,ModalPopup.locate(frame),words))return screen;
             if(addLeagueDemotion(screen,words))screen.put("scene","leagueDemotion");
             if(scene.equals("home"))screen.put("dailyGoalsHighlighted",MainMenuUi.dailyGoalsHighlighted(frame));
             addWideHomeButton(screen);
@@ -191,17 +193,31 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         long before=SystemClock.elapsedRealtime();
         if(SessionState.overlayMode(result,menu))capture.awaitFrameAfter(before);
     }
+    private boolean addInterruptingPopup(Map<String,Object> screen,ModalPopup.Panel panel,List<?> words) {
+        if(panel==null||(touch!=null&&touch.unlockGuard.active()))return false;
+        Map<String,Object> action=ModalPopup.dismiss(frame,panel,words,viewportAspect());
+        if(action==null)return false;
+        screen.put("scene","interruptingPopup");
+        if(!action.isEmpty())screen.put("dismissPopup",action);
+        return true;
+    }
+    private Map<String,Object> popupOverPixelMenu()throws Exception{
+        if(ModalPopup.locate(frame())==null)return Map.of();
+        Map<String,Object> screen=dailyEventUi(true);
+        return "interruptingPopup".equals(screen.get("scene"))?screen:Map.of();
+    }
     private Map<String,Object> multiplayerUi(boolean readSeriesScore,boolean raceExpected,boolean sampleGrid) throws Exception {
         boolean master=SessionState.stats.masterSeries();
         capture();
-        if(sampleGrid&&!master&&lastUiScene.equals("cars")){
+        ModalPopup.Panel panel=ModalPopup.locate(frame);
+        if(panel==null&&sampleGrid&&!master&&lastUiScene.equals("cars")){
             Map<String,Object> garage=MultiplayerGarage.slots(frame,List.of(),"",viewportAspect());
             if(!((List<?>)garage.get("cards")).isEmpty()&&!MultiplayerGarage.leagueTabs(frame).isEmpty())
                 return Map.of("frameId",capture.frameId(),"scene","cars","garage",garage,"gridOnly",true);
         }
         Map<String,Object> out=new LinkedHashMap<>();out.put("frameId",capture.frameId());
         // Menu transitions may look like the wide race HUD before verified vehicle Start.
-        if(raceExpected&&(touch==null||!touch.unlockGuard.active())&&RaceHud.visible(frame,wideViewport())) {
+        if(panel==null&&raceExpected&&(touch==null||!touch.unlockGuard.active())&&RaceHud.visible(frame,wideViewport())) {
             matching.reset();SessionState.stats.matching(-1);
             SessionState.overlayMode(false,false);out.put("scene","race");out.put("text","");out.put("words",List.of());return out;
         }
@@ -243,6 +259,11 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 if(later!=null)out.put("unlockLater",Map.of("x",later[0],"y",later[1]));
                 return out;
             }
+        }
+        if(addInterruptingPopup(out,panel,words)){
+            matching.uncertain(clock);
+            SessionState.stats.matching(-1);
+            return out;
         }
         boolean restart=false;
         if(scene.equals("unknown"))matching.uncertain(clock);
@@ -296,6 +317,11 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 addSeriesScore(out,excluded,543,505,690,550);
             }
         }
+        if(!master&&scene.equals("event")&&
+                MapMatcher.normalize(text).replace('賽','赛').contains("世界系列赛")){
+            String league=worldLeague(words);
+            if(!league.isEmpty())out.put("worldLeague",league);
+        }
         if(scene.equals("unknown")&&!text.isEmpty()&&!text.equals(lastUnknownText)&&clock-lastUnknownLog>=5000){
             lastUnknownLog=clock;lastUnknownText=text;SessionState.log("待识别界面文字："+text);
         }
@@ -344,6 +370,23 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         long score=RaceRewards.amount(text(719-bottom,left,719-top,right,2),false);
         if(score>=0)out.put("seriesScore",score);
     }
+    private String worldLeague(List<?> words)throws Exception {
+        StringBuilder banners=new StringBuilder();
+        for(Object item:words){
+            Map<?,?> word=(Map<?,?>)item;
+            int x=((Number)word.get("x")).intValue(),y=((Number)word.get("y")).intValue();
+            if(x>=490&&x<=1120&&y>=105&&y<=255)banners.append(word.get("text")).append('\n');
+        }
+        String league=MultiplayerGarage.leagueBadge(banners.toString());
+        if(!league.isEmpty())return league;
+        if(!wideViewport()){
+            league=MultiplayerGarage.eventLeagueIcon(frame);
+            if(!league.isEmpty())return league;
+        }
+        league=MultiplayerGarage.leagueBadge(text(371,65,437,122,5));
+        if(!league.isEmpty())return league;
+        return MultiplayerGarage.leagueBadge(text(455,515,604,1115,2));
+    }
     private boolean addLeagueDemotion(Map<String,Object> out,List<?> words) {
         Map<String,Integer> button=MultiplayerUi.leagueDemotionButton(frame,words);
         if(button.isEmpty())return false;
@@ -354,7 +397,8 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     private Map<String,Object> dailyEventUi(boolean solo)throws Exception { return dailyEventUi(solo,false); }
     private Map<String,Object> dailyEventUi(boolean solo,boolean specialLoading)throws Exception {
         capture();
-        if(RaceHud.visible(frame,wideViewport()))return Map.of("scene","race","words",List.of());
+        ModalPopup.Panel panel=ModalPopup.locate(frame);
+        if(panel==null&&RaceHud.visible(frame,wideViewport()))return Map.of("scene","race","words",List.of());
         Bitmap side=Bitmap.createBitmap(frame.copyPixels(),720,1280,Bitmap.Config.ARGB_8888);Matrix m=new Matrix();m.postRotate(270);
         Bitmap upright=Bitmap.createBitmap(side,0,0,720,1280,m,false);
         Task<Text> task=null;Runnable cleanup=()->{upright.recycle();side.recycle();};
@@ -395,6 +439,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 Map<String,Integer> explore=MainMenuUi.dailyExplore(full.getText(),frame);
                 if(!explore.isEmpty())out.put("dailyExplore",explore);
             }
+            if(solo&&SpecialEventList.activeTab(frame))out.put("specialSeasonTab",true);
             if(solo)addWideHomeButton(out);
             out.put("words",words);
             if(scene.equals("car")){
@@ -412,6 +457,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                     if(center!=null)out.put("unlockLater",Map.of("x",center[0],"y",center[1]));return out;
                 }
             }
+            if(addInterruptingPopup(out,panel,words))return out;
             if(solo&&scene.equals("missionRewards"))out.put("stageLabel",specialStageLabel());
             if(specialLoading&&(scene.equals("unknown")||scene.equals("loading"))){
                 String header=text(445,0,675,430,3);
@@ -434,6 +480,8 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             }
             if(scene.equals("rewards")){
                 Map<String,Object> exit=RewardOcr.exitButton(full,frame);
+                if(exit.isEmpty()&&(!legacyPrepared||!legacyRaceSeen||legacyRewardDone))
+                    exit=RewardOcr.focusedExitButton(recognizer,upright,frame);
                 out.put("rewardPage",true);out.put("rewardCanContinue",!exit.isEmpty());out.put("rewardExitButton",exit);
             }
             if(scene.equals("rewards")&&legacyPrepared&&legacyRaceSeen){
@@ -442,8 +490,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 for(Object word:words){Map<?,?> w=(Map<?,?>)word;
                     if(DailyEventUi.rewardExit((String)w.get("text"),(Integer)w.get("x"),(Integer)w.get("y"))){
                         int x=(Integer)w.get("x"),y=(Integer)w.get("y");
-                        int color=frame.pixel(719-y+25,x);
-                        if(ColorPattern.color(color,"FFFFFF-202020",1)||ColorPattern.color(color,"12FBC3-303030",1))out.put("rewardCanContinue",true);
+                        if(RaceRewards.enabledExit(frame,x,y))out.put("rewardCanContinue",true);
                     }
                 }
             }
@@ -478,11 +525,12 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         return rewardRead(upright,full,false);
     }
     private Map<String,Object> rewardRead(Bitmap upright,Text full,boolean soloLayout)throws Exception{
-        if(!RewardOcr.page(full.getText())){rewardStable.reset();return Map.of("rewardPage",false);}
+        if(!RaceRewards.page(full.getText())){rewardStable.reset();return Map.of("rewardPage",false);}
         RaceRewards value=RewardOcr.read(recognizer,upright,full,soloLayout,wideViewport());
         RaceRewards stable=rewardStable.observe(value,capture.frameId(),SystemClock.elapsedRealtime());
         android.util.Log.d("A9RewardOcr","observed="+value.coins+"/"+value.fame+" stable="+stable.coins+"/"+stable.fame);
         Map<String,Object> exitButton=RewardOcr.exitButton(full,frame);
+        if(exitButton.isEmpty())exitButton=RewardOcr.focusedExitButton(recognizer,upright,frame);
         boolean canContinue=!exitButton.isEmpty();
         String exit=(String)exitButton.getOrDefault("label","");
         return Map.of("rewardPage",true,"rewardCoins",stable.coins,"rewardFame",stable.fame,"rewardCanContinue",canContinue,"rewardExit",exit,"rewardExitButton",exitButton,"rewardReady",stable.coins>=0&&stable.fame>=0);
@@ -516,12 +564,27 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         try {
             checkAccountLogin();
             switch(name) {
-                case "_cupCards":return result(l,CupCarousel.cards(frame(),wideViewport()));
+                case "_cupCards":{
+                    Map<String,Object> popup=popupOverPixelMenu();
+                    return popup.isEmpty()?result(l,CupCarousel.cards(frame(),wideViewport())):result(l,popup);
+                }
+                case "_popupUi":return result(l,popupOverPixelMenu());
+                case "_specialEventList":{
+                    capture();
+                    Map<String,Object> popup=popupOverPixelMenu();
+                    if(!popup.isEmpty())return result(l,popup);
+                    Map<String,Object> list=new LinkedHashMap<>(SpecialEventList.read(frame,wideViewport()));
+                    list.put("frameId",capture.frameId());
+                    return result(l,list);
+                }
                 case "_dailyEventUi":return result(l,dailyEventUi());
                 case "_soloEventUi":return result(l,dailyEventUi(true,l.toBoolean(1)));
                 case "_garageFilterPrepare":
                     prepareOverlay(false,true);return 0;
-                case "_garageFilterState":return result(l,GarageFilter.read(frame(),viewportAspect()));
+                case "_garageFilterState":{
+                    Map<String,Object> popup=popupOverPixelMenu();
+                    return popup.isEmpty()?result(l,GarageFilter.read(frame(),viewportAspect())):result(l,popup);
+                }
                 case "keepCapture": capture();return 0;
                 case "releaseCapture": return 0;
                 case "tap": touch.tap(8,n(l,1),n(l,2));return 0;
@@ -673,6 +736,11 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             prepareOverlay(true,false);
             Map<String,Object> observed=legacyRaceSeen?dailyEventUi(true):multiplayerUi(false,false,false);
             String scene=(String)observed.get("scene");
+            if(scene.equals("interruptingPopup")){
+                if(driver!=null)driver.clear();
+                lastDigitTime=clock;lastProgressTime=clock;
+                return result(l,false,-1,"正在处理游戏弹窗",false,true);
+            }
             boolean settlement=scene.equals("results")||scene.equals("rewards");
             if(legacyRaceSeen?settlement:MultiplayerUi.raceEnded(scene)){
                 if(driver!=null)driver.stop();

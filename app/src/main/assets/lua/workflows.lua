@@ -56,6 +56,7 @@ function run.project()
     if _sessionLegacyPrepare then _sessionLegacyPrepare() end
     data["心跳时间"] = os.time()
     local soloRaceSeen=false
+    utils.soloStartAt=nil;run.challengeConfirmed=false
     while true do
       local carHandler=run.carDetails and run.carDetails[data['项目']]
       local screen=carHandler and _soloEventUi()
@@ -71,7 +72,7 @@ function run.project()
       end
       local allowRace=not daily or dailyMatched
       local tutorial=data['项目']=='特殊赛事' and spCup and spCup.tutorialButton and spCup.tutorialButton(screen)
-      if allowRace and scene=='race' then soloRaceSeen=true end
+      if allowRace and scene=='race' then soloRaceSeen=true;utils.soloStartAt=nil end
       local homeHandler=run.homeEntries and run.homeEntries[data['项目']]
       if screen and screen.scene=='home' and homeHandler then
         ret=homeHandler(screen)
@@ -94,6 +95,14 @@ function run.project()
         if fresh.scene=='dailyRewardOnly' and fresh.frameId~=screen.frameId then return 'dailyExpired' end
       elseif daily and screen and dailyCup.dismissClaimSpotlight(screen) then
         -- Read the configured event carousel again after dismissing the claim hint.
+      elseif utils.soloStartAt and scene=='noTicket' then
+        utils.soloStartAt=nil
+        ret=run.list[data['项目']][6][2]()
+        if ret~=nil then goto lbl_129 end
+      elseif utils.soloStartAt and not tutorial then
+        -- Start was dispatched once. A loading frame must not go through legacy car actions.
+        dailyCup.confirmChallenge(screen)
+        if tickCount()-utils.soloStartAt>=120000 then error('已点击开始，但未确认进入比赛，保留当前任务') end
       elseif allowRace and scene=='lockedCar' then
         return 'vehicleLocked'
       elseif allowRace and scene=='car' then
@@ -134,7 +143,7 @@ function run.project()
           sleep(10)
         end
       end
-      if allowRace then utils.tipsHandle() end
+      if allowRace and not utils.soloStartAt then utils.tipsHandle() end
       run.rebootHandle()
       sleep(500)
     end

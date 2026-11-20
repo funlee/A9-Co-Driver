@@ -10,6 +10,11 @@ final class RewardChecks {
         count=0;
         for(String label:List.of("錯失机会","錯失機會","错矢机会"))check(RaceRewards.exitLabel(label,1044,638).equals("错失机会"),"Canonical reward skip: "+label);
         check(RaceRewards.exitLabel("繼續",1044,638).equals("继续"),"Traditional continue");
+        int[] compactButton=new int[720*1280];
+        for(int x=1000;x<=1100;x++)for(int y=622;y<=654;y++)compactButton[x*720+719-y]=0xffb8ec27;
+        check(RaceRewards.enabledExit(new PixelFrame(720,1280,compactButton),1050,638),"Compact enabled button does not require a pixel 25px above its caption");
+        check(!RaceRewards.enabledExit(new PixelFrame(720,1280,compactButton),1050,610),"An isolated stripe outside the button cannot authorize Continue");
+        check(DailyEventUi.classifySolo("比赛奖励 你的用时 01:03:566 名人堂与俱乐部经验").equals("rewards"),"A missed coin label does not hide the personal rewards page");
         check(RaceRewards.exitLabel("观看广告",1044,638).isEmpty()&&RaceRewards.exitLabel("錯失机会",1044,480).isEmpty(),"Exclude ad and non-footer labels");
         check(ResultRank.personalReward("比赛賽奖励 你的用时 总金币"),"Live doubled race glyph remains a personal reward page");
         check(RaceRewards.amount("4,800",false)==4800&&RaceRewards.amount("＋207",true)==207,"Separate scoped gold and paid fame amounts");
@@ -108,7 +113,7 @@ final class RewardChecks {
         Map<String,Object> animating=new LinkedHashMap<>(reward);animating.put("rewardCoins",100);animating.put("rewardFame",90);animating.put("rewardReady",false);animating.put("rewardCanContinue",false);frames.add(animating);
         if(scenario==5){Map<String,Object> missing=new LinkedHashMap<>(reward);missing.put("scene","unknown");missing.put("text","比赛賽奖励 总金币 名人堂 继续");missing.put("rewardPage",false);frames.add(missing);}
         Map<String,Object> finalFrame=new LinkedHashMap<>(reward);finalFrame.put("rewardCoins",4800);finalFrame.put("rewardFame",scenario==1?-1:189);finalFrame.put("rewardReady",scenario!=1);finalFrame.put("rewardCanContinue",scenario!=3);
-        for(int i=0;i<(scenario==1?12:scenario==3?30:3);i++)frames.add(finalFrame);
+        for(int i=0;i<(scenario==1?12:scenario==3?85:4);i++)frames.add(finalFrame);
         if(scenario==2)frames.add(0,new LinkedHashMap<>(reward));
         for(int i=0;i<8;i++)frames.add(screen("event"));
         boolean[] animation={false};

@@ -16,10 +16,12 @@ final class CupCarRotationChecks {
             "local cars={1,2,3};empty[1]=true;assert(utils.chooseCarCup(cars));assert(utils.chooseCarCup(cars));assert(table.concat(calls,',')=='1,2,1,3')",
             "local cars={1,2};empty[1]=true;empty[2]=true;assert(utils.chooseCarCup(cars)=='fuelEmpty');assert(table.concat(calls,',')=='1,2')",
             "run.data['用车模式']='0';local cars={1,2};assert(utils.chooseCarCup(cars));assert(utils.chooseCarCup(cars));assert(table.concat(calls,',')=='1,1')",
-            "run.data['选车方式']='0';function findMultiColor()return -1,-1 end;local next=0;utils.carSwipe=function()end;function tap()next=next+1;selected=math.ceil(next/2);calls[#calls+1]=selected end;utils.backToGarage=function()end;empty[1]=true;assert(utils.chooseCarCup({1,2})==true and selected==2)",
+            "run.data['选车方式']='0';function findMultiColor()return -1,-1 end;utils.carSwipe=function()end;function tap()selected=selected+1;calls[#calls+1]=selected end;utils.backToGarage=function()end;empty[1]=true;assert(utils.chooseCarCup({1,2})==true and table.concat(calls,',')=='1,2')",
             "run.data['选车方式']='0';data['用车次数']['car1']=1;local frame=0;local columns={};function findMultiColor()return -1,-1 end;utils.carSwipe=function(col)columns[#columns+1]=col end;function _soloEventUi()frame=frame+1;if columns[#columns]==6 then return {scene='cars',frameId=frame} end;return {scene='car',frameId=frame,fuel=2}end;assert(utils.chooseCarCup({1,11}));assert(table.concat(columns,',')=='6,1','Unavailable grid slot should rotate to the next configured car')",
             "function _soloEventUi()return {scene='car',frameId=1,fuel=0}end;assert(not pcall(function()utils.chooseCarCup({1})end),'Stale frame cannot prove empty')",
             "function _soloEventUi()return {scene='unknown',frameId=1}end;assert(not pcall(function()utils.chooseCarCup({1})end),'Unknown is not empty')",
+            "local reads,taps=0,0;function tap(y,x)assert(y==690 and x==38);taps=taps+1 end;function _soloEventUi()reads=reads+1;if reads<4 then return {scene='vehicleUpgrade',frameId=reads} end;return {scene='car',frameId=reads,fuel=7}end;assert(utils.carFuel()==7 and taps==1 and reads==5)",
+            "local taps=0;function tap()taps=taps+1 end;function _soloEventUi()return {scene='vehicleUpgrade',frameId=1}end;assert(not pcall(utils.carFuel) and taps==1)",
             "empty[1]=true;selected=1;run.data['杯赛用车']={1};function tap()error('Must not click refuel/Skip/Start')end;assert(utils.startConfiguredRace()=='fuelEmpty')",
             "run.data['广告修车']='0';empty[1]=true;local cars={1,2};assert(utils.chooseCarCup(cars));assert(table.concat(calls,',')=='1,2' and ads==0)"
         );

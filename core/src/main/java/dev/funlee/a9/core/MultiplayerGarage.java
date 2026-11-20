@@ -9,6 +9,54 @@ public final class MultiplayerGarage {
     private static final List<String> LEAGUES=List.of("青铜","白银","黄金","白金","翡翠","钻石","精英","宗师","传奇");
     private static final int[] BADGE_COLORS={0xd88560,0x96b2d4,0xf0ca30,0xb18eff,0x65c6a5,0x21a9ff,0xc0569f,0xc85059,0xf5e2a4};
 
+    public static String leagueBadge(String text) {
+        String normalized=MapMatcher.normalize(text).replace('銅','铜').replace('銀','银')
+                .replace('鑽','钻').replace('傳','传').replace('黃','黄').replace('鉑','铂')
+                .replace("铂金","白金");
+        String found="";
+        for(String league:LEAGUES)if(normalized.contains(league)){
+            if(!found.isEmpty())return "";
+            found=league;
+        }
+        return found;
+    }
+
+    /** Read the saturated center stripe of the event's small rating emblem, not the garage tabs. */
+    public static String eventLeagueIcon(PixelFrame frame) {
+        return leagueStripe(frame,77,307,115,320);
+    }
+
+    private static String leagueStripe(PixelFrame frame,int left,int top,int right,int bottom) {
+        int[] votes=new int[LEAGUES.size()];
+        for(int y=top;y<bottom;y++)for(int x=left;x<right;x++){
+            int pixel=frame.pixel(719-y,x);
+            int r=pixel>>16&255,g=pixel>>8&255,b=pixel&255;
+            int max=Math.max(r,Math.max(g,b)),min=Math.min(r,Math.min(g,b)),chroma=max-min;
+            if(max<100||chroma<64||chroma*100<38*max)continue;
+            double hue=(max==r?(double)(g-b)/chroma:max==g?2.0+(double)(b-r)/chroma:4.0+(double)(r-g)/chroma);
+            int band=Math.floorMod((int)Math.round(hue*4),24);
+            int league=eventLeagueStripe(band);
+            if(league>=0)votes[league]++;
+        }
+        int best=-1,first=0,second=0;
+        for(int i=0;i<votes.length;i++){
+            if(votes[i]>first){second=first;first=votes[i];best=i;}
+            else second=Math.max(second,votes[i]);
+        }
+        return first*10>=(right-left)*(bottom-top)*3&&first>=second*2?LEAGUES.get(best):"";
+    }
+
+    private static int eventLeagueStripe(int hue) {
+        if(hue==0||hue==23)return 7; // Grandmaster red
+        if(hue<=2)return 0;
+        if(hue<=4)return 2;
+        if(hue>=9&&hue<=11)return 4;
+        if(hue>=12&&hue<=15)return 5;
+        if(hue>=17&&hue<=20)return 3;
+        if(hue==21||hue==22)return 6;
+        return -1;
+    }
+
     /** Locate league shortcuts by their shield fill. A pink underline marks the selected shortcut. */
     public static Map<String,Object> leagueTabs(PixelFrame frame){
         Map<String,Object> tabs=new HashMap<>();
@@ -136,7 +184,11 @@ public final class MultiplayerGarage {
         for(int x=wide?18:4;x<650;x++){
             if(slotEdge(frame,x,top)&&slotEdge(frame,x,top+rowPitch)){left=x;break;}
         }
-        boolean origin=!league.isEmpty()&&left>=(wide?215:202)&&left<=(wide?233:220);
+        boolean originRegion=left>=(wide?215:202)&&left<=(wide?233:220);
+        // The rail emblem is separate from the highlighted shortcut. Read it
+        // only when the first card's geometry confirms the rail is present.
+        if(!master&&!wide&&!medium&&originRegion&&league.isEmpty())league=leagueStripe(frame,109,409,175,433);
+        boolean origin=originRegion&&!league.isEmpty();
         List<Object> cards=new ArrayList<>();
         for(int column=0;left>=0&&column<3;column++){
             int x=left+column*pitch;

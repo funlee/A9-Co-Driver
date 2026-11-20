@@ -60,7 +60,7 @@ public final class DailyEventUi {
         if(t.toUpperCase(java.util.Locale.ROOT).contains("TOUCHDRIVE")&&t.contains("性能分")&&
                 (t.contains("开始")||t.contains("跳过")))return "car";
         if(t.contains("比赛结果")&&t.contains("你的用时")&&(t.contains("排名")||t.contains("车名")))return "results";
-        if(ResultRank.personalReward(text)&&t.contains("总金币"))return "rewards";
+        if(RaceRewards.page(text))return "rewards";
         if(t.contains("红币")&&t.contains("将被兑换为红币"))return "conversion";
         if((t.contains("恭喜")&&t.contains("这些奖励"))||
                 (t.contains("名人堂")&&t.contains("继续")&&!t.contains("你的用时")&&!t.contains("比赛奖励")))return "cards";
@@ -78,6 +78,12 @@ public final class DailyEventUi {
         if(!scene.equals("unknown"))return scene;
         String t=MapMatcher.normalize(text).replace('賽','赛').replace('擇','择')
                 .replace('紙','纸').replace('鎖','锁');
+        if((t.contains("筛选条件")||t.contains("筛进条件"))&&t.contains("已拥有")&&
+                t.contains("排序方式")&&t.contains("完成"))return "garageFilter";
+        if(t.contains("性能分")&&t.contains("最大速度")&&t.contains("操控性")&&t.contains("氮气")&&
+                (t.contains("仓库")||t.contains("倉庫"))&&
+                (t.contains("阶段")||t.contains("升級")||t.contains("升级"))&&
+                !t.toUpperCase(java.util.Locale.ROOT).contains("TOUCHDRIVE"))return "vehicleUpgrade";
         if(t.contains("性能分")&&t.contains("取图纸")&&
                 (t.contains("立刻获取")||t.contains("图纸以解锁")))return "lockedCar";
         if(t.contains("性能分")&&t.contains("获取钥匙")&&t.contains("车钥匙以解锁"))return "lockedCar";

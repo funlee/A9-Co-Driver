@@ -8,6 +8,8 @@ final class MultiplayerGarageChecks {
     /** Existing workflow fixtures model an already rendered garage; negative cases below do not. */
     static Map<String,Object> fixture(Object source){
         Map<String,Object> s=new HashMap<>((Map<String,Object>)source);s.put("frameId",(++serial)*2000);
+        if("event".equals(s.get("scene"))&&s.getOrDefault("text","").toString().contains("世界系列赛"))
+            s.putIfAbsent("worldLeague","青铜");
         if("cars".equals(s.get("scene"))){
             List<Object> cards=new ArrayList<>();List<?> words=(List<?>)s.getOrDefault("words",List.of());
             for(int i=1;i<=6;i++){
@@ -31,10 +33,19 @@ final class MultiplayerGarageChecks {
         List<Object> words=List.of(word("467/1,094",270,225),word("6/6",240,390),word("LANCER",580,340),word("EVOLUTION",580,360));
         Map<String,Object> good=MultiplayerGarage.read(new PixelFrame(720,1280,pixels),words,"青铜");
         for(String league:List.of("青铜","白银","黄金","白金","翡翠","钻石","精英","宗师","传奇")) {
+            require(MultiplayerGarage.leagueBadge(league+"聯賽").equals(league),league+": read the league badge");checks++;
             List<Object> railWords=new ArrayList<>(words);railWords.add(word(league,138,421));
             Map<String,Object> recognized=MultiplayerGarage.read(new PixelFrame(720,1280,pixels),railWords,"");
             require(recognized.get("start").equals(true)&&recognized.get("rank").equals(league),league+": recognize league on garage rail");checks++;
         }
+        require(MultiplayerGarage.leagueBadge("青铜联赛 钻石联赛").isEmpty(),"Ambiguous badge text cannot authorize ranking");checks++;
+        int[] emblem=new int[720*1280];
+        for(int x=79;x<113;x++)for(int y=304;y<320;y++)emblem[x*720+719-y]=0xff22a8ee;
+        require(MultiplayerGarage.eventLeagueIcon(new PixelFrame(720,1280,emblem)).equals("钻石"),
+                "Read a diamond stripe at the event emblem");checks++;
+        for(int x=79;x<96;x++)for(int y=304;y<320;y++)emblem[x*720+719-y]=0xffcb3242;
+        require(MultiplayerGarage.eventLeagueIcon(new PixelFrame(720,1280,emblem)).isEmpty(),
+                "Conflicting emblem colors do not authorize selecting a league");checks++;
         require(MultiplayerGarage.read(new PixelFrame(720,1280,pixels),words,"铂金").get("rank").equals("白金"),"Legacy platinum OCR uses the current white-gold config key");checks++;
         require(MultiplayerGarage.validPerformance("1,868/1,868")&&!MultiplayerGarage.validPerformance("1,868/1,368"),
                 "Reject impossible OCR performance before replacing a valid card reading");checks++;
@@ -138,7 +149,7 @@ final class MultiplayerGarageChecks {
         try(var input=MultiplayerGarageChecks.class.getResourceAsStream("/world-league-fallback.lua")){
             fallbackCases=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
         }
-        for(String scenario:List.of("silverEmpty","silverFueled","skipBlank","cascade","detailEmpty","unknown","allEmpty","stuckTab","missingTab")){
+        for(String scenario:List.of("silverEmpty","silverFueled","skipBlank","cascade","detailEmpty","unknown","allEmpty","stuckTab","missingTab","diamondSelectedFromBronze","unreadableLeague")){
             try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
                 lua.set("scenario",scenario);
                 lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));
@@ -152,7 +163,7 @@ final class MultiplayerGarageChecks {
         try(var input=MultiplayerGarageChecks.class.getResourceAsStream("/world-car-pagination.lua")){
             paginationCases=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
         }
-        for(String scenario:List.of("car27","empty27","locked27","remembered","reversePage","differentPage","emptyBoth","delayedPage","missingBottom","slowPagination","fuzzyName","sameColumnShift","clippedOverlap","lockedOverlap","overshoot","targetMoved","targetSettled","stuckPage","wideCar10","wideCar10Overscroll")){
+        for(String scenario:List.of("car27","empty27","locked27","remembered","reversePage","differentPage","unreadableAfterRace","emptyBoth","delayedPage","missingBottom","slowPagination","fuzzyName","sameColumnShift","clippedOverlap","lockedOverlap","overshoot","targetMoved","targetSettled","stuckPage","wideCar10","wideCar10Overscroll")){
             try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
                 lua.set("scenario",scenario);
                 lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));
@@ -193,7 +204,7 @@ final class MultiplayerGarageChecks {
             try(LuaRuntime lua=new LuaRuntime((name,l)->{
                 if(name.equals("_multiplayerUi")){
                     int n=reads[0]++;Map<String,Object> s;
-                    if(n==0)s=fixture(screen("series"));
+                    if(n<2)s=fixture(screen("series"));
                     else if(n<9||mode.equals("stuckEvent"))s=fixture(screen("event"));
                     else if(cardTaps[0]==0||mode.equals("stuckCars")||detailReads[0]++<3)s=fixture(screen("cars"));
                     else s=fixture(screen("car"));
@@ -247,7 +258,8 @@ final class MultiplayerGarageChecks {
             int[] reads={0},selected={0},started={0};
             try(LuaRuntime lua=new LuaRuntime((name,l)->{
                 if(name.equals("_multiplayerUi")) {
-                    int n=reads[0]++;Map<String,Object> screen=fixture(screen(n==0?"series":n<9?"event":selected[0]==0?"cars":"car"));
+                    int n=reads[0]++;Map<String,Object> screen=fixture(screen(n<2?"series":n<9?"event":selected[0]==0?"cars":"car"));
+                    if("event".equals(screen.get("scene")))screen.put("worldLeague",league);
                     if("cars".equals(screen.get("scene"))) {
                         Map<String,Object> garage=new HashMap<>((Map<String,Object>)screen.get("garage"));
                         garage.put("rank",league);garage.put("key",league+":467/1094");

@@ -36,6 +36,10 @@ public final class RunIssue {
             return new RunIssue("游戏自动恢复未成功","请手动打开游戏，确认可以正常操作，再返回任务编排；若显示“续跑”，可继续未完成的任务。","打开游戏",Action.GAME);
         if(has(text,"锁屏","前台","已停止恢复"))
             return new RunIssue("游戏没有保持在前台","请解锁设备并打开游戏。运行时保持游戏可见，再返回任务编排启动任务。","打开游戏",Action.GAME);
+        if(has(text,"游戏弹窗遮挡画面","游戏弹窗关闭后仍遮挡画面"))
+            return new RunIssue("游戏弹窗遮挡画面","请关闭游戏内的弹窗后续跑，当前任务进度已保留。","打开游戏",Action.GAME);
+        if(has(text,"比赛奖励页面未完成结算","多人结算长时间未能切页"))
+            return new RunIssue("多人赛结算停在当前页面","请在游戏中完成结算后续跑，已经确认的完赛进度会保留。","打开游戏",Action.GAME);
         if(has(text,"未能确认进度","进度未知"))
             return new RunIssue("暂时无法读取比赛进度","请打开游戏，确认已进入比赛，并关闭遮挡画面的弹窗后重试。若反复出现，请停止任务并反馈问题。","打开游戏",Action.GAME);
         if(has(text,"点击每日赛事后仍在主菜单","未识别要进入的赛事标签"))

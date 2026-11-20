@@ -6,7 +6,8 @@ local swipes=0
 local dispatched=0
 local oldOffset=0
 local pageLeft=500
-local repeatRace=scenario=='remembered' or scenario=='differentPage' or scenario=='reversePage'
+local unreadableAfterRace=scenario=='unreadableAfterRace'
+local repeatRace=scenario=='remembered' or scenario=='differentPage' or scenario=='reversePage' or unreadableAfterRace
 local wideCar10=scenario=='wideCar10' or scenario=='wideCar10Overscroll'
 local firstSwipes=nil
 local fullPageReads=0
@@ -65,7 +66,11 @@ function _multiplayerUi(_,__,pixelsOnly)
   if phase=='race' then phase='result';return {scene='race',text='',frameId=frame} end
   if phase=='result' then phase='event';return {scene='result',text='你的排名',frameId=frame,finalRank=3} end
   if phase=='car' then return {scene='car',text='车辆详情',frameId=frame,carDetail={name=scenario=='fuzzyName' and 'PRAGAR1' or 'CAR'..chosen,performance=chosen..'/999'},fuel=3,words={{text='开始',x=1110,y=650}}} end
-  if phase=='event' then return {scene='event',text='世界系列赛',frameId=frame,words={{text='开始',x=1110,y=650}}} end
+  if phase=='event' then
+    local league='青铜'
+    if unreadableAfterRace and firstSwipes then league=nil end
+    return {scene='event',text='世界系列赛',frameId=frame,worldLeague=league,words={{text='开始',x=1110,y=650}}}
+  end
   dispatched=dispatched+1
   if swipes>0 and not pixelsOnly then fullPageReads=fullPageReads+1 end
   local visible=(scenario=='delayedPage' and dispatched<3) and oldOffset or offset
@@ -101,7 +106,9 @@ end
 function test()
   local ok,message=pcall(currentMultiplayer.run)
   assert(not ok)
-  if scenario=='overshoot' or scenario=='stuckPage' or scenario=='targetMoved' then
+  if unreadableAfterRace then
+    assert(message:find('未确认世界系列赛当前段位') and phase=='event' and swipes==firstSwipes,message)
+  elseif scenario=='overshoot' or scenario=='stuckPage' or scenario=='targetMoved' then
     assert(chosen==0,message)
   else
     assert(message:find('started'),message)

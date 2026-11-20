@@ -102,6 +102,7 @@ final class StabilityChecks {
         }
         check(limited&&errors[0]==maxRetries&&results[0]==0,"Animated close waits before bounded retries and never counts an unfinished race: "+errorScene);
         }
+        seriesEntryTransition(assets);
         postRaceTransitions(assets);
         postRaceRewardBatches(assets);
         disconnectedRace(assets);
@@ -138,16 +139,17 @@ final class StabilityChecks {
                     int n=reads[0]++;
                     Map<String,Object> screen=new HashMap<>();
                     screen.put("frameId",n*1000L);
-                    if(mapped&&n==0){
+                    if(mapped&&n<2){
                         screen.put("scene","series");screen.put("text","世界系列赛 大师系列赛");
                         screen.put("words",List.of(Map.of("text","世界系列赛","x",350,"y",450)));
-                    }else if(mapped&&n==1){
+                    }else if(mapped&&n==2){
                         screen.put("scene","event");screen.put("text","世界系列赛 里程碑 开始");
+                        screen.put("worldLeague","青铜");
                         screen.put("words",List.of(Map.of("text","开始","x",1100,"y",650)));
                         if(!mode.equals("noBefore"))screen.put("seriesScore",31680);
-                    }else if(mapped&&n==2){
+                    }else if(mapped&&n==3){
                         screen.put("scene","race");screen.put("text","");
-                    }else if(mapped&&n<6){
+                    }else if(mapped&&n<7){
                         screen.putAll(Map.of("scene","result","text","比赛奖励 系列赛分数 总计 继续","finalRank",2,
                                 "rewardPage",true,"rewardReady",true,"rewardCanContinue",true));
                         if(!mode.equals("noAfter"))screen.put("seriesScore",31754);
@@ -199,14 +201,38 @@ final class StabilityChecks {
         if(phase.equals("result")||phase.equals("bonus"))words.add(Map.of("text","继续","x",1100,"y",650));
         return Map.of("scene",scene,"text",text,"words",words,"finalRank",2);
     }
+    private static void seriesEntryTransition(Path assets)throws Exception{
+        int[] reads={0};
+        List<String> taps=new ArrayList<>();
+        try(LuaRuntime lua=new LuaRuntime((name,l)->{
+            if(name.equals("_multiplayerUi")){
+                int n=reads[0]++;
+                int x=n<2?350:640;
+                int frame=n<=1?1:n==2?2:n==3?2:n;
+                LuaRuntime.push(l,Map.of("scene","series","text","世界系列赛 大师系列赛","frameId",frame,
+                        "words",List.of(Map.of("text","大师系列赛","x",x,"y",450))));
+                return 1;
+            }
+            if(name.equals("tap"))taps.add(reads[0]+":"+l.toInteger(2));
+            return 0;
+        },List.of("_multiplayerUi","_sessionProject","_hud","print","tap"))){
+            lua.set("data",Map.of("项目","多人下"));
+            lua.set("run",Map.of("data",Map.of("次数",1)));
+            lua.load("helpers","utils={defultCfg=function(v,d)return v or d end}");
+            lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));
+            lua.start("currentMultiplayer.run");
+            for(int i=0;i<10;i++)lua.step(i*1000L);
+        }
+        check(taps.equals(List.of("5:640")),"Moving or duplicated series labels do not authorize taps, and the stable target is tapped once");
+    }
     private static void postRaceTransitions(Path assets)throws Exception{
         for(String destination:List.of("event","cars","car","home","series"))for(boolean confirmed:List.of(true,false)){
-            List<String> pages=new ArrayList<>(List.of("series","event"));
+            List<String> pages=new ArrayList<>(List.of("series","series","event"));
             pages.addAll(Collections.nCopies(6,"cars"));pages.addAll(Collections.nCopies(2,"car"));pages.add("race");
             if(confirmed){pages.addAll(Collections.nCopies(4,"result"));pages.addAll(Collections.nCopies(5,"bonus"));}
             // Reproduce a brief event lobby followed by a garage while the old selection timer exists.
             if(confirmed)pages.add("event");pages.addAll(Collections.nCopies(4,destination));
-            pages.add("series");pages.add("event");pages.addAll(Collections.nCopies(6,"cars"));pages.addAll(Collections.nCopies(2,"car"));pages.add("race");
+            pages.add("series");pages.add("series");pages.add("event");pages.addAll(Collections.nCopies(6,"cars"));pages.addAll(Collections.nCopies(2,"car"));pages.add("race");
             int[] reads={0},begins={0},cards={0},swipes={0},bonusTaps={0},resultTaps={0};String[] current={""};
             TaskStats stats=new TaskStats();stats.project("多人上");boolean rejected=false;
             try(LuaRuntime lua=new LuaRuntime((name,l)->{
@@ -320,8 +346,8 @@ final class StabilityChecks {
             try(LuaRuntime lua=new LuaRuntime((name,l)->{
                 if(name.equals("_multiplayerUi")){
                     int n=reads[0]++;
-                    LuaRuntime.push(l,MultiplayerGarageChecks.fixture(n==0?Map.of("scene","series","text","世界系列赛 大师系列赛","words",List.of(Map.of("text","大师系列赛","x",640,"y",450))):
-                        n==1?Map.of("scene","event","text","大师系列赛 里程碑 开始","words",List.of(Map.of("text","开始","x",1100,"y",650))):
+                    LuaRuntime.push(l,MultiplayerGarageChecks.fixture(n<2?Map.of("scene","series","text","世界系列赛 大师系列赛","words",List.of(Map.of("text","大师系列赛","x",640,"y",450))):
+                        n==2?Map.of("scene","event","text","大师系列赛 里程碑 开始","words",List.of(Map.of("text","开始","x",1100,"y",650))):
                         Map.of("scene","cars","text","车辆选择 选择参与此赛事的车辆",
                             "emptyFuelSlots",testCase==1?List.of(1,2,3,4,5):testCase==3?List.of():List.of(1,2,3,4,5,6),
                             "words",testCase==3?List.of(Map.of("text","0/3","x",240,"y",390)):List.of())));return 1;
@@ -376,15 +402,15 @@ final class StabilityChecks {
         try(LuaRuntime lua=new LuaRuntime((name,l)->{
             if(name.equals("_multiplayerUi")){
                 int n=frames[0]++;
-                LuaRuntime.push(l,MultiplayerGarageChecks.fixture(n==0?Map.of("scene","series","text","世界系列赛 大师系列赛","words",List.of(Map.of("text","大师系列赛","x",640,"y",450))):
-                    n==1?Map.of("scene","event","text","大师系列赛 里程碑 开始","words",List.of(Map.of("text","开始","x",1100,"y",650))):
-                    unexpectedDetail&&n<4?Map.of("scene","car","text","车辆详情 开始","words",List.of(Map.of("text","开始","x",1100,"y",650))):
+                LuaRuntime.push(l,MultiplayerGarageChecks.fixture(n<2?Map.of("scene","series","text","世界系列赛 大师系列赛","words",List.of(Map.of("text","大师系列赛","x",640,"y",450))):
+                    n==2?Map.of("scene","event","text","大师系列赛 里程碑 开始","words",List.of(Map.of("text","开始","x",1100,"y",650))):
+                    unexpectedDetail&&n<5?Map.of("scene","car","text","车辆详情 开始","words",List.of(Map.of("text","开始","x",1100,"y",650))):
                     Map.of("scene","cars","text","车辆选择 选择参与此赛事的车辆","words",List.of(
                         Map.of("text","2/3","x",swipes[0]<1?240:704,"y",390)))));return 1;
             }
             if(name.equals("swipe")){check(l.toInteger(1)==419&&l.toInteger(2)==300&&l.toInteger(4)==1100,"Garage recenter swipes right in card region");swipes[0]++;}
-            if(name.equals("tap")&&frames[0]>2){
-                if(unexpectedDetail&&frames[0]<=4&&l.toInteger(1)==690&&l.toInteger(2)==38)backs[0]++;
+            if(name.equals("tap")&&frames[0]>3){
+                if(unexpectedDetail&&frames[0]<=5&&l.toInteger(1)==690&&l.toInteger(2)==38)backs[0]++;
                 else taps.add(l.toInteger(1)+","+l.toInteger(2));
             }
             return 0;

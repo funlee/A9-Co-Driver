@@ -41,8 +41,8 @@ final class TaskRouteChecks {
                 "utils.prepareTaskRoute();assert(data['线路']=='0,21');"+
                 "stage=2;reads=9;utils.prepareTaskRoute(true);workflow.readMap();assert(data['线路']=='','Previous race route leaked into failed recognition');"+
                 "stage=0;reads=0;ROUTES.chosen='10,31';workflow.readMap();assert(data['线路']=='10,31');"+
-                "local read=workflow.readMap;local calls=0;workflow.readMap=function()calls=calls+1;read();stage=2 end;utils.startConfiguredRace=function()return 1 end;stage=0;reads=0;workflow.operation[5][2]();assert(calls==1 and data['线路']=='10,31');"+
-                "run.data['路线来源']='1';run.data['跑法代码']='5,22';workflow.operation[5][2]();assert(calls==1 and not utils.taskRouteAuto() and data['线路']=='5,22');end");
+                "local read=workflow.readMap;local calls,manual=0,0;workflow.readMap=function(readRoute)if readRoute==false then manual=manual+1 else calls=calls+1 end;read(readRoute);stage=2 end;utils.startConfiguredRace=function()return 1 end;stage=0;reads=0;workflow.operation[5][2]();assert(calls==1 and manual==0 and data['线路']=='10,31');"+
+                "run.data['路线来源']='1';run.data['跑法代码']='5,22';workflow.operation[5][2]();assert(calls==1 and manual==(workflow==dailyCup and 1 or 0) and not utils.taskRouteAuto() and data['线路']=='5,22');end");
             lua.start("test");boolean alive=true;for(int i=0;i<60&&alive;i++)alive=lua.step(i*1000L);
             if(alive)throw new AssertionError("Automatic map test did not finish");checks+=6;
         }

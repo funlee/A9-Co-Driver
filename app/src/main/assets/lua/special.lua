@@ -86,7 +86,6 @@ spCup.operation = {
       if utils.intoSpecial(screen) == 0 then
         return -1
       end
-      sleep(2000)
     end
   },
   {
@@ -94,7 +93,7 @@ spCup.operation = {
     function()
       data["信息"] = "即将进入车库"
       tap(24, 1200)
-      sleep(3000)
+      sleep(1)
       for cc = 1, 30 do
         keepCapture()
         if cmpColorEx(config.carport, 1) == 1 or cmpColorEx(config.carInfo, 1) == 1 then
@@ -110,7 +109,6 @@ spCup.operation = {
       data["信息"] = "开始选车"
       local chosen=utils.chooseCarCup(utils.taskCars())
       if type(chosen)=="string" then return chosen end
-      sleep(2000)
     end
   },
   {
@@ -125,8 +123,7 @@ spCup.operation = {
       elseif sRet == -1 or sRet == 2 then
         return nil
       end
-      if utils.taskRouteAuto() then return spCup.observeStart(true) end
-      sleep(3000)
+      return spCup.observeStart(true)
     end
   },
   {

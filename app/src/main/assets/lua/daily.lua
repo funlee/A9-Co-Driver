@@ -105,41 +105,60 @@ function dailyCup.returnToSolo(screen)
   error('每日战利品未确认返回单人奖励页，保留当前任务')
 end
 -- Loading and settlement differ from multiplayer; neither rank nor XP pages are mandatory.
-function dailyCup.readMap()
+function dailyCup.confirmChallenge(screen)
+  if run.challengeConfirmed or not screen or
+      (screen.scene~='unknown' and screen.scene~='car' and screen.scene~='event') then return end
+  for _,word in ipairs(screen.words or {}) do
+    local label=word.text:gsub('%s',''):gsub('戰','战')
+    if (label=='仍然挑战' or label=='任然挑战') and word.x>=240 and word.x<=1160 and word.y>=390 then
+      run.challengeConfirmed=true
+      print('已确认仍然挑战')
+      tap(719-math.floor(word.y),math.floor(word.x));sleep(1200)
+      return
+    end
+  end
+end
+
+function dailyCup.readMap(readRoute)
+  readRoute=readRoute~=false
   if _racePanel then _racePanel(false) end
-  data["多人地图"]="";data["线路"]=""
+  if readRoute then data["多人地图"]="";data["线路"]="" end
   local candidate=nil;local frames=0;local chosen=nil
+  local tipsFrames=0
   for i=1,60 do
     local screen=_dailyEventUi()
     if screen.scene=="race" then break end
     if screen.scene=="loading" then
+      if not readRoute then break end
       if screen.route and screen.route==candidate then frames=frames+1 else candidate=screen.route;frames=screen.route and 1 or 0 end
       if frames>=2 and chosen~=candidate then
         chosen=candidate;utils.getMapName(chosen)
         print("每日战利品地图连续确认："..data["多人地图"])
       end
     end
+    dailyCup.confirmChallenge(screen)
     keepCapture()
-    if cmpColorEx(config.noTicket,1)==1 or cmpColorEx(config.tips,1)==1 then
+    if cmpColorEx(config.tips,1)==1 and not run.challengeConfirmed then tipsFrames=tipsFrames+1 else tipsFrames=0 end
+    if cmpColorEx(config.noTicket,1)==1 or tipsFrames>=3 then
       if _racePanel then _racePanel(false) end
       break
     end
     if data["超时状态"] then return -1 end
     sleep(200)
   end
-  if not chosen then print("每日战利品地图未确认，使用左划兜底") end
+  if readRoute and not chosen then print("每日战利品地图未确认，使用左划兜底") end
 end
-local function press(screen,label)
+local function press(screen,label,delay)
   local exit=screen.rewardExitButton
   if exit and exit.label==label and exit.x>850 and exit.y>590 then
-    tap(719-math.floor(exit.y),math.floor(exit.x));sleep(800);return true
+    tap(719-math.floor(exit.y),math.floor(exit.x));sleep(delay);return true
   end
   for _,w in ipairs(screen.words or {}) do
     local text=string.gsub(w.text,"%s","")
     if label=="继续" and text=="继绩" then text="继续" end
     if label=="错失机会" and text=="错矢机会" then text="错失机会" end
     if text==label and w.x>750 and w.y>540 then
-      tap(719-math.floor(w.y),math.floor(w.x));sleep(800);return true
+      tap(719-math.floor(w.y),math.floor(w.x));sleep(delay);return true
     end
   end
   return false
@@ -149,7 +168,9 @@ function dailyCup.settle(label,readScreen)
   readScreen=readScreen or _dailyEventUi
   if _racePanel then _racePanel(false) end
   data["信息"]=label.."结算中"
+  local special=label=='特殊赛事'
   local started=tickCount();local rewardSince=nil;local readySince=nil;local rewardDone=false;local seen=false;local eventFrames=0;local eventSince=nil;local lastEvent=nil
+  local returnedScene,returnedFrame
   local pressedFrame=nil;local pressedScene=nil;local pressTries=0
   local function advance(screen,button)
     local frame=screen.frameId
@@ -157,18 +178,21 @@ function dailyCup.settle(label,readScreen)
         (screen.scene==pressedScene and frame-pressedFrame<8000)) then return true end
     if screen.scene~=pressedScene then pressTries=0 end
     if pressTries>=3 then error(label..'结算按钮点击后未切页，保留当前任务') end
-    if not press(screen,button) then return false end
+    if not press(screen,button,special and 350 or 800) then return false end
     pressedFrame=frame;pressedScene=screen.scene;pressTries=pressTries+1
     return true
   end
   while tickCount()-started<90000 do
     local screen=readScreen();local scene=screen.scene
-    if scene=="event" or scene=="car" or (label=='特殊赛事' and scene=='specialRanking') then
-      eventFrames=eventFrames+1
+    if scene=="event" or scene=="car" or (special and scene=='specialRanking') then
+      if special and scene~=returnedScene then eventFrames=0;eventSince=nil end
+      if not screen.frameId or screen.frameId~=returnedFrame then eventFrames=eventFrames+1 end
+      returnedScene=scene;returnedFrame=screen.frameId
       eventSince=eventSince or tickCount()
       lastEvent=tickCount()
       -- Hall-of-Fame cards may appear just after the event lobby returns.
-      if seen and eventFrames>=2 and tickCount()-eventSince>=3000 then print(label.."结算完成，已返回赛事");return 0 end
+      local grace=special and scene=='specialRanking' and screen.frameId and 1500 or 3000
+      if seen and eventFrames>=2 and tickCount()-eventSince>=grace then print(label.."结算完成，已返回赛事");return 0 end
     else
       if scene~="unknown" or screen.closeX or not lastEvent then
         eventFrames=0;eventSince=nil
@@ -290,7 +314,7 @@ dailyCup.operation = {
       elseif sRet == -1 or sRet == 2 then
         return nil
       end
-      if utils.taskRouteAuto() then dailyCup.readMap() end
+      dailyCup.readMap(utils.taskRouteAuto())
       for ci = 1, 30 do
         keepCapture()
         if cmpColorEx(config.racing, 1) == 1 or cmpColorEx(config.noTicket, 1) == 1 then

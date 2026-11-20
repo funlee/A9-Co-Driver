@@ -24,6 +24,48 @@ myocr.level=myocr.smartOcrEx
 dialog={newLayout=function(message) error(message) end}
 mt={dialog=function(title,lines) error(title..': '..table.concat(lines,'\n')) end}
 
+local function withPopupRecovery(read)
+  if not read then return end
+  return function(...)
+    local screen=read(...)
+    if not screen or screen.scene~='interruptingPopup' then return screen end
+    local previous,clicks=nil,0
+    local deadline=tickCount()+18000
+    local status=data and data['信息']
+    while screen and screen.scene=='interruptingPopup' and tickCount()<deadline do
+      local action=screen.dismissPopup
+      local before=previous and previous.dismissPopup
+      if data then data['信息']='正在确认弹窗关闭控件' end
+      if action and before and screen.frameId and previous.frameId and screen.frameId>previous.frameId
+          and action.label==before.label and math.abs(action.x-before.x)<=5 and math.abs(action.y-before.y)<=5 then
+        if clicks>=5 then break end
+        print('关闭游戏弹窗：'..action.label)
+        tap(719-action.y,action.x)
+        clicks=clicks+1;previous=nil
+        sleep(1);sleep(850)
+      else
+        previous=screen
+        sleep(1);sleep(250)
+      end
+      screen=read(...)
+    end
+    if screen and screen.scene=='interruptingPopup' then
+      error(clicks>0 and '游戏弹窗关闭后仍遮挡画面，已保留任务进度'
+        or '游戏弹窗遮挡画面，未确认可点的关闭控件，已保留任务进度')
+    end
+    if data then data['信息']=status end
+    return screen
+  end
+end
+_soloEventUi=withPopupRecovery(_soloEventUi)
+_dailyEventUi=withPopupRecovery(_dailyEventUi)
+_multiplayerUi=withPopupRecovery(_multiplayerUi)
+_rewardUi=withPopupRecovery(_rewardUi)
+_specialEventList=withPopupRecovery(_specialEventList)
+_cupCards=withPopupRecovery(_cupCards)
+_garageFilterState=withPopupRecovery(_garageFilterState)
+_popupUi=withPopupRecovery(_popupUi)
+
 function localInit()
   data['线路集合']=ROUTES
   data['配置路径']=LOCAL_ROOT..'/local-config.json'
@@ -76,7 +118,10 @@ function localInit()
     local lastProgress=-1
     local settlement=false
     while true do
-      local done,progress,info,confirmedSettlement=_driverStep()
+      local done,progress,info,confirmedSettlement,popup=_driverStep()
+      if popup then
+        if data['项目']=='多人上' or data['项目']=='多人下' then _multiplayerUi(false,false) else _soloEventUi() end
+      end
       if progress>=0 then
         data['路程']=progress
         if progress>lastProgress then lastProgress=progress;data['心跳时间']=os.time() end

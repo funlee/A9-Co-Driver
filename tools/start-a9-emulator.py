@@ -53,6 +53,22 @@ def wait_for_boot(previous_boot=None, timeout=55):
         time.sleep(1)
     raise SystemExit('启动仍未完成，请查看模拟器日志。')
 
+def wait_for_network(timeout=15):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            connectivity = adb('shell', 'dumpsys', 'connectivity', check=False, timeout=2).stdout
+        except subprocess.TimeoutExpired:
+            continue
+        default_network = re.search(r'^Active default network: (\d+)\s*$', connectivity, re.MULTILINE)
+        if default_network and re.search(
+            rf'^\s*NetworkAgentInfo\{{network\{{{default_network[1]}\}}[^\n]*Capabilities:[^\n]*\bVALIDATED\b',
+            connectivity, re.MULTILINE
+        ):
+            return
+        time.sleep(1)
+    print('模拟器网络尚未通过验证，仍尝试打开游戏。', flush=True)
+
 def boot_id():
     return adb('shell', 'cat', '/proc/sys/kernel/random/boot_id', check=False, timeout=2).stdout.strip()
 
@@ -116,6 +132,7 @@ def main():
                              stderr=subprocess.STDOUT, start_new_session=True)
         print('模拟器启动中；日志：' + str(log), flush=True)
         wait_for_boot()
+        wait_for_network()
     result = adb('shell', 'am', 'start', '-W', '-n', GAME + '/.MainActivity')
     print(result.stdout)
 

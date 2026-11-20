@@ -9,7 +9,6 @@ import java.util.concurrent.TimeUnit;
 
 /** Upright 1280x720 reward layout, including the paid-account boost badge. */
 final class RewardOcr {
-    static boolean page(String text){String s=MapMatcher.normalize(text);return ResultRank.personalReward(text)&&s.contains("总金币");}
     static RaceRewards read(TextRecognizer recognizer,Bitmap upright,Text full)throws Exception{
         return read(recognizer,upright,full,false);
     }
@@ -17,10 +16,10 @@ final class RewardOcr {
         return read(recognizer,upright,full,soloLayout,false);
     }
     static RaceRewards read(TextRecognizer recognizer,Bitmap upright,Text full,boolean soloLayout,boolean wide)throws Exception{
-        if(!page(full.getText()))return new RaceRewards(-1,-1);
+        if(!RaceRewards.page(full.getText()))return new RaceRewards(-1,-1);
         boolean total=false;
         for(Text.TextBlock block:full.getTextBlocks())for(Text.Line line:block.getLines()){
-            Rect b=line.getBoundingBox();if(b!=null&&b.centerX()<450&&b.centerY()>380&&b.centerY()<550&&MapMatcher.normalize(line.getText()).equals("总金币"))total=true;
+            Rect b=line.getBoundingBox();if(b!=null&&b.centerX()<450&&b.centerY()>380&&b.centerY()<550&&RaceRewards.totalCoinsLabel(line.getText()))total=true;
         }
         // Coins exclude the currency icon, rank reward and +10% boost. Fame excludes the VIP 90% badge.
         // The caller selects the layout; ad invitations do not change the totals font.
@@ -40,15 +39,31 @@ final class RewardOcr {
     }
     /** Keep the recognized label and enabled button coordinates from the same frame. */
     static java.util.Map<String,Object> exitButton(Text full,PixelFrame frame){
+        return exitButton(full,frame,0,0,1);
+    }
+    private static java.util.Map<String,Object> exitButton(Text full,PixelFrame frame,int left,int top,int scale){
+        java.util.Map<String,Object> next=java.util.Map.of();
         for(Text.TextBlock block:full.getTextBlocks())for(Text.Line line:block.getLines()){
             Rect b=line.getBoundingBox();if(b==null)continue;
-            String label=RaceRewards.exitLabel(line.getText(),b.centerX(),b.centerY());
-            if(label.isEmpty())continue;
-            int color=frame.pixel(719-b.centerY()+25,b.centerX());
-            if(ColorPattern.color(color,"FFFFFF-202020",1)||ColorPattern.color(color,"12FBC3-303030",1))
-                return java.util.Map.of("x",b.centerX(),"y",b.centerY(),"label",label);
+            int x=left+b.centerX()/scale,y=top+b.centerY()/scale;
+            String label=RaceRewards.exitLabel(line.getText(),x,y);
+            if(label.isEmpty()||!RaceRewards.enabledExit(frame,x,y))continue;
+            java.util.Map<String,Object> button=java.util.Map.of("x",x,"y",y,"label",label);
+            if(label.equals("错失机会"))return button;
+            next=button;
         }
-        return java.util.Map.of();
+        return next;
+    }
+    static java.util.Map<String,Object> focusedExitButton(TextRecognizer recognizer,Bitmap upright,PixelFrame frame)throws Exception{
+        boolean visible=false;
+        for(int x:new int[]{960,1020,1080,1140,1200})for(int y:new int[]{618,646,674,690})
+            if(RaceRewards.enabledExit(frame,x,y)){visible=true;break;}
+        if(!visible)return java.util.Map.of();
+        int left=850,top=585,scale=3;
+        Bitmap crop=Bitmap.createBitmap(upright,left,top,430,135);
+        Bitmap zoom=Bitmap.createScaledBitmap(crop,430*scale,135*scale,true);
+        crop.recycle();
+        return exitButton(recognize(recognizer,zoom),frame,left,top,scale);
     }
     private static String crop(TextRecognizer recognizer,Bitmap frame,Rect b)throws Exception{
         Bitmap small=Bitmap.createBitmap(frame,b.left,b.top,b.width(),b.height());

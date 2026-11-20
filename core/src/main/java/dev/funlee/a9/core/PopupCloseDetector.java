@@ -2,6 +2,43 @@ package dev.funlee.a9.core;
 
 /** Detects the pink/white X on the upper-right of current 16:9 game promotions. */
 public final class PopupCloseDetector {
+    static int[] findInPanel(PixelFrame frame,ModalPopup.Panel panel,double aspect) {
+        double rise=Math.max(.9,Math.min(1.4,aspect*9/16));
+        int left=1280,right=-1,top=720,bottom=-1;
+        for(int y=panel.top+18;y<=panel.top+79;y++)for(int x=panel.right-80;x<=panel.right-17;x++){
+            int color=ModalPopup.pixel(frame,x,y);
+            int red=color>>16&255,green=color>>8&255,blue=color&255;
+            if(!(red>=185&&red-green>=85||Math.min(red,Math.min(green,blue))>=210||ModalPopup.maximum(color)<=105))continue;
+            if(!panelCross(frame,x,y,color,rise))continue;
+            left=Math.min(left,x);right=Math.max(right,x);top=Math.min(top,y);bottom=Math.max(bottom,y);
+            if(right-left>8||bottom-top>8)return null;
+        }
+        return right<0?null:new int[]{(left+right)/2,(top+bottom)/2};
+    }
+
+    private static boolean panelCross(PixelFrame frame,int x,int y,int color,double rise) {
+        for(int radius:new int[]{7,9,11,13,15}){
+            int inner=radius/2,innerY=(int)Math.round(inner*rise),outerY=(int)Math.round(radius*rise);
+            if(similar(frame,x-radius,y,color)||similar(frame,x+radius,y,color)||
+                    similar(frame,x,y-outerY,color)||similar(frame,x,y+outerY,color))continue;
+            boolean arms=true;
+            for(int dx=-1;dx<=1;dx+=2)for(int dy=-1;dy<=1;dy+=2){
+                arms&=stroke(frame,x+dx*inner,y+dy*innerY,color)&&
+                        stroke(frame,x+dx*radius,y+dy*outerY,color);
+            }
+            if(arms)return true;
+        }
+        return false;
+    }
+
+    private static boolean similar(PixelFrame frame,int x,int y,int color) {
+        return ModalPopup.distance(ModalPopup.pixel(frame,x,y),color)<=80;
+    }
+
+    private static boolean stroke(PixelFrame frame,int x,int y,int color) {
+        return similar(frame,x,y,color)||similar(frame,x,y-1,color)||similar(frame,x,y+1,color);
+    }
+
     private static boolean ink(int rgb,boolean pink) {
         int r=(rgb>>16)&255,g=(rgb>>8)&255,b=rgb&255;
         return pink?r>=220&&g<=65&&b>=65&&b<=190:r>=235&&g>=235&&b>=235;

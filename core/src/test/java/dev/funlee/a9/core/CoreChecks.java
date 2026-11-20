@@ -276,6 +276,8 @@ public final class CoreChecks {
         checks+=MultiplayerGarageChecks.run(assets);
         checks+=DailyEventChecks.run(assets);
         checks+=OrchestrationRecoveryChecks.run(assets);
+        checks+=SpecialEventListChecks.run(assets);
+        checks+=ModalPopupChecks.run(assets);
         checks+=DailyTaskChecks.run(assets);
         checks+=TaskRouteChecks.run(assets);
         checks+=RewardChecks.run(assets);
@@ -293,7 +295,7 @@ public final class CoreChecks {
             List<String> taps=new ArrayList<>();int[] frames={0};boolean rejected=false;
             try(LuaRuntime r=new LuaRuntime((name,l)->{
                 if(name.equals("_multiplayerUi")) {
-                    Object screen=frames[0]++==0?Map.of("scene","series","text","世界系列赛 大师系列赛","words",List.of(
+                    Object screen=frames[0]++<2?Map.of("scene","series","text","世界系列赛 大师系列赛","words",List.of(
                         Map.of("text","世界系列赛","x",350,"y",450),Map.of("text","大师系列赛","x",640,"y",450))):
                         Map.of("scene","event","text",wrong+" 排行榜 里程碑 开始","words",List.of(Map.of("text","开始","x",1100,"y",650)));
                     LuaRuntime.push(l,MultiplayerGarageChecks.fixture(screen));return 1;
@@ -336,7 +338,7 @@ public final class CoreChecks {
             screens.add(5,Map.of("scene","unknown","text","恭喜! 你获得了这些奖励 架续","words",List.of(Map.of("text","架续","x",1155,"y",665))));
             screens.add(2,screens.get(1));
             screens.add(2,screens.get(1));
-            duplicateCarFrames(screens);
+            duplicateSelectionFrames(screens);
             int[] frame={0},routeRuns={0};boolean[] done={false};boolean rejected=false;List<String> swipes=new ArrayList<>(),taps=new ArrayList<>();
             try(LuaRuntime r=new LuaRuntime((name,l)->{
                 if(name.equals("_multiplayerUi")){LuaRuntime.push(l,MultiplayerGarageChecks.fixture(screens.get(Math.min(frame[0]++,screens.size()-1))));return 1;}
@@ -397,7 +399,7 @@ public final class CoreChecks {
                 screens.add(Map.of("scene","result","text","你的用时 比赛奖励 继续","words",List.of(Map.of("text","继续","x",1100,"y",650))));
                 for(int n=0;n<5;n++)screens.add(Map.of("scene","event","text",series+" 开始","words",List.of()));
             }
-            duplicateCarFrames(screens);
+            duplicateSelectionFrames(screens);
             int[] frame={0},left={0},nitro={0};boolean[] done={false};List<String> validated=new ArrayList<>(),hud=new ArrayList<>();TaskStats stats=new TaskStats();
             try(LuaRuntime r=new LuaRuntime((name,l)->{
                 if(name.equals("_multiplayerUi")){LuaRuntime.push(l,MultiplayerGarageChecks.fixture(screens.get(Math.min(frame[0]++,screens.size()-1))));return 1;}
@@ -447,10 +449,10 @@ public final class CoreChecks {
             check(began[0]==1&&ended[0]==1,"Shared manual/legacy Lua driver delegates absent and invalid scripts to host fallback and releases it");
         }
     }
-    private static void duplicateCarFrames(List<Object> screens){
+    private static void duplicateSelectionFrames(List<Object> screens){
         for(int i=screens.size()-1;i>=0;i--){
             String scene=((Map<?,?>)screens.get(i)).get("scene").toString();
-            int extra=scene.equals("cars")?4:scene.equals("car")?1:0;
+            int extra=scene.equals("cars")?4:scene.equals("car")||scene.equals("series")?1:0;
             for(int n=0;n<extra;n++)screens.add(i,screens.get(i));
         }
     }
@@ -467,11 +469,11 @@ public final class CoreChecks {
             try(LuaRuntime r=new LuaRuntime((name,l)->{
                 if(name.equals("_multiplayerUi")) {
                     int n=frame[0]++;
-                    LuaRuntime.push(l,MultiplayerGarageChecks.fixture(n==0?Map.of("scene","series","text","世界系列赛 大师系列赛","words",List.of(Map.of("text","大师系列赛","x",640,"y",450))):
-                        n==1?Map.of("scene","event","text","大师系列赛 里程碑 开始","words",List.of(Map.of("text","开始","x",1100,"y",650))):
+                    LuaRuntime.push(l,MultiplayerGarageChecks.fixture(n<2?Map.of("scene","series","text","世界系列赛 大师系列赛","words",List.of(Map.of("text","大师系列赛","x",640,"y",450))):
+                        n==2?Map.of("scene","event","text","大师系列赛 里程碑 开始","words",List.of(Map.of("text","开始","x",1100,"y",650))):
                         Map.of("scene","cars","text","车辆选择 选择参与比赛的车辆","words",words)));return 1;
                 }
-                if(name.equals("tap")&&frame[0]>=3){long x=l.toInteger(2),y=719-l.toInteger(1);chosen[0]=(x>1150?4:x>600?2:0)+(y>400?2:1);}
+                if(name.equals("tap")&&frame[0]>=4){long x=l.toInteger(2),y=719-l.toInteger(1);chosen[0]=(x>1150?4:x>600?2:0)+(y>400?2:1);}
                 return 0;
             },List.of("_multiplayerUi","_sessionProject","tap","swipe","_hud","print"))) {
                 r.set("data",Map.of("项目","多人下","多人",0));r.set("run",Map.of("data",Map.of("次数","10","多人下用车",List.of("1","2","3","4","5","6"))));
@@ -568,7 +570,11 @@ public final class CoreChecks {
             },apis)) {
                 r.set("LOCAL_ROOT","/tmp/a9-local-check");r.set("UIconfig",cfg);r.set("ROUTES",Map.of());
                 for(String module:modules)r.load(module,Files.readString(assets.resolve("lua/"+module+".lua")));
-                r.load("menu-smoke","function _soloEventUi()return {scene='home'}end;"+
+                String ui = mode.equals("spCup") ?
+                        "function _soloEventUi()return {scene='home',specialSeasonTab=true,words={{text='赛季赛事',x=340,y=650},{text='开始',x=1100,y=535}}}end;"+
+                        "local frame=0;function _specialEventList()frame=frame+1;return {frameId=frame,aligned=true,cards={{x=220,y=170,top=73,artwork={42}}}}end;" :
+                        "function _soloEventUi()return {scene='home'}end;";
+                r.load("menu-smoke",ui+
                         "function smoke() localInit();run.data={};"+mode+".operation["+(mode.equals("spCup")?2:1)+"][2]();record('done') end");
                 r.start("smoke");for(int i=0;i<1000;i++)if(!r.step(i*1000L))break;
                 check(done[0],mode+" menu state can finish under mocked nonmatching frames");

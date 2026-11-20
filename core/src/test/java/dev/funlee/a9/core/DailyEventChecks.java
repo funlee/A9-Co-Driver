@@ -23,8 +23,18 @@ final class DailyEventChecks {
             {"你有足够的图纸来提升车库了! 恭喜! 升呈就绪! 新车辆性能分上限 稍后查看 升星","vehicleUnlock"},
             {"车库 车辆升星 稍后查看","unknown"},
             {"比赛奖励 你的用时 总金币 3200 +100 继续","rewards"},
+            {"比賽奖励 你的用时00:32:881 总全币 G4,200 +165 继续","rewards"},
             {"你的用时 继续","unknown"},{"限时赛事 购买优惠 立即购买","unknown"}};
         for(String[] c:scenes)if(!DailyEventUi.classify(c[0]).equals(c[1]))throw new AssertionError(c[0]);
+        if(!RaceRewards.totalCoinsLabel("总全币")||RaceRewards.totalCoinsLabel("总全币 4,200")||
+                RaceRewards.page("总全币 4,200 继续"))
+            throw new AssertionError("Accept the observed OCR error in the total label without weakening its boundaries");
+        String attributes="性能分 最大速度 加速 操控性 氮气";
+        if(!DailyEventUi.classifySolo(attributes+" 最高阶段 仓库 你已达到最高等级").equals("vehicleUpgrade")||
+                !DailyEventUi.classifySolo(attributes+" TOUCHDRIVE 升级 开始 7/8").equals("car"))
+            throw new AssertionError("Vehicle attributes upgrade and the racing car detail are distinct");
+        if(!DailyEventUi.classifySolo("筛进条件 已拥有 排序方式 性能分 完成").equals("garageFilter"))
+            throw new AssertionError("Garage filter is distinguishable from the car list during task resume");
         String avatar="恭喜！你已解锁新的档案头像！稍后查看 前往";
         if(!MultiplayerUi.classify(avatar).equals("profileUnlock")||!RecoveryReadiness.ready(avatar)||VehicleUnlockGuard.prompt(avatar))
             throw new AssertionError("Profile popup is actionable after recovery without conflating vehicle unlocks");
@@ -60,6 +70,8 @@ final class DailyEventChecks {
             "screens={{scene='event'}};assert(not pcall(dailyCup.settle));assert(taps==0)",
             "screens={{scene='unknown',"+continueButton+"}};assert(not pcall(dailyCup.settle));assert(taps==0)",
             "screens={{scene='loading',route='旧金山喧闹铁路'},{scene='loading',route='旧金山喧闹铁路'},{scene='race'}};dailyCup.readMap();assert(data['多人地图']=='旧金山喧闹铁路' and data['线路']=='route')",
+            "local prompt={scene='car',words={{text='取消',x=510,y=523},{text='仍 然 挑 战',x=915,y=529}}};screens={prompt,prompt,{scene='loading',route='旧金山喧闹铁路'},{scene='loading',route='旧金山喧闹铁路'},{scene='race'}};function tap(y,x)assert(x==915 and y==190);taps=taps+1 end;dailyCup.readMap();assert(taps==1 and data['多人地图']=='旧金山喧闹铁路')",
+            "local prompt={scene='unknown',words={{text='任然挑战',x=915,y=529}}};data['线路']='configured';screens={prompt,prompt,{scene='loading'}};dailyCup.readMap(false);assert(taps==1 and data['线路']=='configured')",
             "data['线路']='stale';screens={{scene='loading',route='old'},{scene='race'}};dailyCup.readMap();assert(data['线路']=='' and data['多人地图']=='')"
         );
         for(String script:cases)try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
@@ -85,6 +97,6 @@ final class DailyEventChecks {
         for(int y=639;y<=657;y++)button[1170*720+719-y]=0xff263e45;
         if(DailyEventUi.zeroTicketStart(vehicle,mixedIcon,new PixelFrame(720,1280,button)))
             throw new AssertionError("An additional digit cannot pass the zero-cost check");
-        return scenes.length+cases.size()+6;
+        return scenes.length+cases.size()+9;
     }
 }

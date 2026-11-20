@@ -269,8 +269,16 @@ function utils.continueSpecialMission(screen)
   local button=utils.specialMissionContinue(screen)
   if not button then return false end
   data['信息']='特殊赛事：继续进入配置阶段'
-  print(data['信息']);tapUiWord(button);sleep(2500)
-  return true
+  print(data['信息']);tapUiWord(button)
+  local deadline=tickCount()+15000
+  repeat
+    sleep(250)
+    local fresh=_soloEventUi()
+    if fresh.scene=='car' or fresh.scene=='cars' or fresh.scene=='noTicket' or fresh.scene=='race'
+        or fresh.scene~=screen.scene and utils.specialMissionContinue(fresh)
+        or spCup and spCup.tutorialButton(fresh) then return true end
+  until tickCount()>=deadline
+  error('特殊赛事点击阶段后未确认切页，保留当前任务')
 end
 function utils.dismissExitDialog(screen)
   local stay=findUiWord(screen,{['再玩一会']=true,['再玩一会儿']=true},300,710,370,640)
@@ -362,6 +370,7 @@ function utils.backToMain()
   local driveTutorialPages=0
   local triedRankingHome=false
   local dismissedDemotion=false
+  local garageBacks={}
   local attempts=0
   local navigationDeadline=0
   local rewardTapAt=-10000
@@ -440,6 +449,14 @@ function utils.backToMain()
       elseif tickCount()<navigationDeadline then
         -- Look for Home while the page is moving. Keep the original window
         -- before sending another navigation gesture.
+        sleep(400)
+      elseif screen.scene=='garageFilter' or screen.scene=='vehicleUpgrade' or screen.scene=='cars'
+          or (screen.scene=='car' or screen.scene=='lockedCar') and not screen.homeButton then
+        if not garageBacks[screen.scene] then
+          garageBacks[screen.scene]=true
+          if screen.scene=='garageFilter' then keyPress('back') else tap(690,38) end
+          sleep(1);navigationDeadline=tickCount()+2000
+        end
         sleep(400)
       elseif screen.scene=='race' or cmpColorEx("680|50|FFFFFF,660|70|FFFFFF",1)==1 then
         tap(670, 60)
@@ -1364,17 +1381,19 @@ local function ticketedTrial(screen)
     and (trialText or (project=='特殊赛事' and screen.zeroTicketStart)) and startButton(screen)
 end
 function utils.startRace()
-  local fuel=utils.carFuel()
+  local fuel,latestCar=utils.carFuel()
   if fuel=='vehicleLocked' then return fuel end
   if fuel=='starUp' then
     print('车辆待升星，跳过本车')
     return 'fuelEmpty'
   end
   if fuel==0 then return 'fuelEmpty' end
+  if fuel=='trial' then latestCar=nil end
   data['信息']='开始跑图'
   local driveTutorialPages=0
   for i=1,8 do
-    local screen=_soloEventUi()
+    local screen=latestCar or _soloEventUi()
+    latestCar=nil
     if screen.scene=='car' then
       if screen.starUpPending or screen.fuel==0 then return 'fuelEmpty' end
       if fuel=='trial' and not ticketedTrial(screen) then
@@ -1385,7 +1404,9 @@ function utils.startRace()
         local button=startButton(screen)
         if button then
           if fuel=='trial' then print('使用赛事提供的免费试驾车辆') end
-          tapUiWord(button);sleep(2000)
+          tapUiWord(button)
+          utils.soloStartAt=tickCount()
+          sleep(data['项目']=='特殊赛事' and 1 or 2000)
           -- Loading is not a race; the host shows the panel after detecting the race HUD.
           if _racePanel then _racePanel(false) end
           return 1
@@ -1457,9 +1478,21 @@ end
 function utils.carFuel(allowGarage)
   local previous=nil;local frame=nil
   local garageFrame=nil;local stillInGarage=false
-  for i=1,6 do
+  local returnedFromUpgrade=false
+  local attempts=0
+  while attempts<6 do
+    attempts=attempts+1
     local screen=_soloEventUi()
     if screen.scene=='lockedCar' then return 'vehicleLocked' end
+    if screen.scene=='vehicleUpgrade' and not returnedFromUpgrade then
+      data['信息']='误入车辆属性升级，返回车辆详情'
+      print(data['信息'])
+      tap(690,38)
+      returnedFromUpgrade=true
+      attempts=0
+      previous=nil;frame=screen.frameId
+      sleep(1200)
+    end
     if allowGarage and screen.scene=='cars' and screen.frameId then
       stillInGarage=stillInGarage or (garageFrame~=nil and garageFrame~=screen.frameId)
       garageFrame=screen.frameId
@@ -1470,7 +1503,7 @@ function utils.carFuel(allowGarage)
       or screen.scene=='car' and screen.fuel and screen.fuel>=0 and screen.fuel
       or ticketedTrial(screen) and 'trial'
     if availability then
-      if screen.frameId~=frame and previous==availability then return availability end
+      if screen.frameId~=frame and previous==availability then return availability,screen end
       previous=availability;frame=screen.frameId
     elseif previous~='trial' or (screen.scene~='car' and screen.scene~='unknown') then
       previous=nil
@@ -1520,6 +1553,7 @@ function utils.chooseCarCup(carList)
       if not car or car==0 then error('车辆序号无效，保留当前任务') end
       if data['超时状态'] then error('选车超时，保留当前任务') end
       if not empty[car] and not unavailable[car] and not locked[car] and (not rotate or data['用车次数']['car'..j]~=1) then
+        local retryX,retryY
         if clickMode then utils.clickChoose(car,lastCar)
         else
           local slot=utils.getCarHL(car);local previous=utils.getCarHL(lastCar)
@@ -1527,24 +1561,25 @@ function utils.chooseCarCup(carList)
           local column=math.min(slot[2],3)
           if wide then
             -- Tap the car artwork on the left of the card, away from the blueprint control.
-            tap(({430,235})[slot[1]],230+(column-1)*370)
+            retryX,retryY=({430,235})[slot[1]],195+(column-1)*370
+            tap(retryX,retryY+35)
           else
             local h=({272,40})[slot[1]];local l=({60,500,1000})[column]
             local x,y=findMultiColor(h,l,h+60,l+250,'13FBC3-101010','6|10|39260C-101010|158|-2|FFFFFF-101010',2,1)
             -- Empty cards lack the green badge. Open that configured card to read its counter.
             local tx,ty=h+80,math.min(l+230,1200)
             if x~=-1 and y~=-1 then tx,ty=x+20,y end
-            tap(tx,ty);sleep(50);tap(tx,ty)
+            retryX,retryY=tx,ty
+            tap(tx,ty)
           end
           sleep(1500)
         end
         lastCar=car
         local fuel=utils.carFuel(not clickMode)
-        if wide and fuel==nil then
-          -- The garage is still visible. Try a second point on the same car artwork.
-          local slot=utils.getCarHL(car)
-          tap(({430,235})[slot[1]],195+(math.min(slot[2],3)-1)*370)
-          sleep(1);sleep(1500)
+        if fuel==nil and retryX then
+          -- A second tap is allowed only while the original garage is still visible.
+          tap(retryX,retryY)
+          sleep(1500)
           fuel=utils.carFuel(true)
         end
         if fuel=='vehicleLocked' then
@@ -1965,61 +2000,98 @@ function utils.findCup(cupAddr)
     y1
   }
 end
+local function specialListPage(previous)
+  local deadline=tickCount()+5000
+  repeat
+    local page=_specialEventList()
+    if page.cards and #page.cards>0 and (not previous or page.frameId~=previous.frameId) then return page end
+    sleep(250)
+  until tickCount()>=deadline
+  error('未识别特殊赛事入口列表，已保留当前任务')
+end
+
+local function sameSpecialCard(a,b)
+  if #a.artwork==0 or #a.artwork~=#b.artwork then return false end
+  local matches=0
+  for i,color in ipairs(a.artwork) do
+    local other=b.artwork[i]
+    local difference=math.abs((color>>16)-(other>>16))
+      +math.abs((color>>8&255)-(other>>8&255))+math.abs((color&255)-(other&255))
+    if difference<=72 then matches=matches+1 end
+  end
+  return matches*4>=#a.artwork*3
+end
+
+local function sameSpecialOrigin(a,b)
+  if not a.aligned or not b.aligned or #a.cards~=#b.cards then return false end
+  for i,card in ipairs(a.cards) do
+    local previous=b.cards[i]
+    if math.abs(card.top-previous.top)>3 or
+        (#card.artwork>0 or #previous.artwork>0) and not sameSpecialCard(card,previous) then return false end
+  end
+  return true
+end
+
+function utils.openSpecialEntry(screen,position)
+  if position<1 or position%1~=0 then error('特殊赛事位置必须为正整数') end
+  utils.openHomeTab(screen or _soloEventUi(),'season')
+  local page=specialListPage()
+  local atOrigin=false
+  data['信息']='向下拉取特殊赛事入口列表'
+  for attempt=1,8 do
+    -- Stay inside the left rail and let the drag end without a second tap or fling.
+    swipe(550,220,200,220,460,160)
+    sleep(500)
+    local previous=page
+    page=specialListPage(previous)
+    if sameSpecialOrigin(page,previous) then
+      atOrigin=true
+      print('特殊赛事入口列表已回顶，确认了第 1 张赛事卡')
+      break
+    end
+  end
+  if not atOrigin then error('未确认特殊赛事入口列表起点，已保留当前任务') end
+
+  local offset=0
+  while position>offset+#page.cards do
+    local previous=page
+    swipe(230,220,405,220,470,160)
+    sleep(500)
+    page=specialListPage(previous)
+    -- Keep an overlap with the previous page, so a drag cannot skip a position.
+    local advanced
+    for i,before in ipairs(previous.cards) do
+      for j,current in ipairs(page.cards) do
+        if sameSpecialCard(before,current) then
+          if advanced and advanced~=i-j then error('特殊赛事入口翻页位置不明确，已保留当前任务') end
+          advanced=i-j
+        end
+      end
+    end
+    if not advanced or advanced<0 or advanced+#page.cards<=#previous.cards then
+      error('未确认特殊赛事入口位置 '..position..'，已保留当前任务')
+    end
+    offset=offset+advanced
+  end
+
+  tapUiWord(page.cards[position-offset])
+  for attempt=1,7 do
+    sleep(450)
+    local preview=_soloEventUi()
+    local button=findUiWord(preview,{['开始']=true,['进入']=true,['进人']=true},930,1200,450,575)
+    if preview.specialSeasonTab and button then
+      print('已选中特殊赛事入口位置 '..position)
+      tapUiWord(button)
+      return
+    end
+  end
+  error('未确认特殊赛事入口位置 '..position..' 的进入按钮，已保留当前任务')
+end
+
 function utils.intoSpecial(screen)
   data["信息"] = "进入特殊赛事 "
-  if screen then utils.openHomeTab(screen,'season') else
-  keepCapture()
-  if cmpColorEx("702|1252|FFFFFF-101010,690|1252|3B2312-101010,670|1270|3B2312-101010", 1) == 1 then
-  else
-    utils.backToMain()
-  end
-  for i = 1, 5 do
-    keepCapture()
-    if cmpColor(88, 300, "FFFFFF-101010", 1) == 0 then
-      tap(88, 300)
-      sleep(1000)
-    end
-    sleep(200)
-  end
-  end
-  for i = 1, 8 do
-    utils.mySwipe(550, 406, 200, 406)
-  end
-  sleep(2000)
-  local spPos = tonumber(run.data["特殊赛事位置"]) or 1
+  utils.openSpecialEntry(screen,tonumber(run.data["特殊赛事位置"]) or 1)
   local spStage = tonumber(run.data["特殊赛事阶段"]) or 1
-  local swipes = function(n)
-    local dx = 0
-    for i = 1, n do
-      dx = 0
-      keepCapture()
-      local ret, x, y = _findColorTriple(330, 60, 560, 60, "360A17-090909", 0, 1.0)
-      if x ~= -1 then
-        dx = 425 - x
-        print(dx, x)
-      end
-      utils.mySwipe1(180, 408, 430 + dx, 408, 500)
-      sleep(500)
-    end
-  end
-  if spPos == 1 then
-    for i = 1, 3 do
-      tap(500, 406)
-      sleep(200)
-    end
-  else
-    swipes(spPos - 2)
-    keepCapture()
-    local ret, x, y = _findColorTriple(250, 60, 400, 60, "360A17-090909", 0, 1.0)
-    local dx = 320
-    print(x, dx)
-    for i = 1, 3 do
-      tap(dx, 406)
-      sleep(200)
-    end
-  end
-  tap(20, 320)
-  tap(20, 320)
   sleep(3000)
   keepCapture()
   if cmpColor(640, 1270, "5400FF-101010", 1) == 1 then
@@ -2027,36 +2099,76 @@ function utils.intoSpecial(screen)
     sleep(3000)
   end
   keepCapture()
-  if cmpColorEx("580|161|FFFFFF-101010,607|160|FFFFFF-101010,610|1238|000000-101010,634|1229|190F0A-101010", 1) == 1 then
-    return 1
-  end
   if run.data["称霸模式"] == "0" then
     local chapter=tonumber(run.data["称霸位置"]) or 1
-    local function numberedWord(screen,label,number,minX,maxX)
+    local function numberedWord(screen,label,number,minX,maxX,minY,maxY)
       for _,word in ipairs(screen.words or {}) do
         local digits=word.text:gsub('[ \t\r\n]',''):match(label..'(%d+)')
-        if tonumber(digits)==number and word.x>=minX and word.x<=maxX then return word end
+        if tonumber(digits)==number and word.x>=minX and word.x<=maxX
+            and word.y>=(minY or 0) and word.y<=(maxY or 719) then return word end
       end
+    end
+    local function stageWord(screen,number)
+      return numberedWord(screen,'阶段',number,300,1240,190,310)
+    end
+    local function firstStage(screen)
+      local first=stageWord(screen,1)
+      if first and first.x>=330 then return first end
+      local second=stageWord(screen,2)
+      if not second then return end
+      local clippedOne=stageWord(screen,11)
+      if clippedOne and clippedOne.x>=330 and clippedOne.x<second.x then return clippedOne end
+      -- When OCR misses the first badge, require the ranking card and the
+      -- second badge at the right edge. A partly visible first card is common.
+      if second.x>=900 and findUiWord(screen,{['我的排名']=true,['我的排各']=true},335,second.x-65,260,405) then
+        return {x=math.floor((300+second.x-55)/2),y=430}
+      end
+    end
+    local function firstVisibleStage(screen)
+      local first
+      for _,word in ipairs(screen.words or {}) do
+        if word.x>=300 and word.y>=160 and word.y<=340 then
+          local number=tonumber(word.text:gsub('%s',''):match('阶段(%d+)'))
+          if number then first=math.min(first or number,number) end
+        end
+      end
+      return first
     end
     local tab
     for attempt=1,4 do
-      tab=numberedWord(_soloEventUi(),'章节',chapter,0,370)
+      local screen=_soloEventUi()
+      if utils.specialMissionContinue(screen) then return 1 end
+      tab=numberedWord(screen,'章节',chapter,0,370)
       if tab then break end
       sleep(500)
     end
     if not tab then error('未找到称霸章节 '..chapter) end
     tapUiWord(tab)
     sleep(900)
+    local resetApplied=false
+    local originVerified=false
     for attempt=1,12 do
       local screen=_soloEventUi()
-      if numberedWord(screen,'章节',chapter,0,370) then
-        local stage=numberedWord(screen,'阶段',spStage,300,1279)
-        if not stage then
+      local chapterVisible=numberedWord(screen,'章节',chapter,0,370)
+      local firstVisible=chapterVisible and firstVisibleStage(screen)
+      if not resetApplied and firstVisible then
+        for _=1,3 do
+          swipe(290,377,290,1155,570)
+          sleep(500)
+        end
+        utils.mySwipe(60,600,60,250)
+        resetApplied=true
+        print('称霸阶段列表：右拖三次并左移校正')
+      elseif resetApplied and chapterVisible then
+        local first=(not originVerified or spStage==1) and firstStage(screen)
+        if first then originVerified=true end
+        local stage=originVerified and (spStage==1 and first or stageWord(screen,spStage))
+        if originVerified and not stage then
           -- On white badges OCR can append the right border as a digit 1.
           -- Accept that reading only between independently recognized adjacent stages.
-          local badge=numberedWord(screen,'阶段',spStage*10+1,300,1279)
-          local before=numberedWord(screen,'阶段',spStage-1,300,1279)
-          local after=numberedWord(screen,'阶段',spStage+1,300,1279)
+          local badge=stageWord(screen,spStage*10+1)
+          local before=stageWord(screen,spStage-1)
+          local after=stageWord(screen,spStage+1)
           if badge and ((before and before.x<badge.x) or (after and after.x>badge.x)) then stage=badge end
         end
         if stage then
@@ -2072,16 +2184,13 @@ function utils.intoSpecial(screen)
           until tickCount()>=deadline
           error('未能确认进入称霸阶段 '..spStage..'，已保留当前任务')
         end
-        local firstVisible=nil
-        for _,word in ipairs(screen.words or {}) do
-          if word.x>=300 and word.y>=160 and word.y<=340 then
-            local number=tonumber(word.text:gsub('%s',''):match('阶段(%d+)'))
-            if number then firstVisible=math.min(firstVisible or number,number) end
+        -- The game can reopen the chapter partway through. Re-center before
+        -- using a visible stage, including a target already on the offset page.
+        if not originVerified or firstVisible and spStage<firstVisible then
+          if firstVisible then
+            print('称霸阶段列表向右拉取，确认列表起点')
+            swipe(290,377,290,1155,570)
           end
-        end
-        -- The game can reopen the chapter at a later stage after a race.
-        if firstVisible and spStage<firstVisible then
-          swipe(290,550,290,1050,450)
         elseif firstVisible then
           swipe(290,1050,290,550,450)
         end
@@ -2089,6 +2198,8 @@ function utils.intoSpecial(screen)
       sleep(500)
     end
     error('当前章节未找到阶段 '..spStage)
+  elseif cmpColorEx("580|161|FFFFFF-101010,607|160|FFFFFF-101010,610|1238|000000-101010,634|1229|190F0A-101010", 1) == 1 then
+    return 1
   else
     for i = 1, 7 do
       swipe(60, 250, 60, 1200, 100)
@@ -2405,6 +2516,7 @@ function utils.backToCup()
 end
 function utils.tipsHandle()
   keepCapture()
+  if _popupUi then _popupUi() end
   if cmpColorEx("190|560|FFFFFF-101010,540|330|2C180C-101010,550|1000|2C1A0C-101010", 1) == 1 then
     tap(192, 610)
   end
@@ -2468,6 +2580,7 @@ end
 function utils.waitStart()
   for di = 1, 200 do
     keepCapture()
+    if _popupUi then _popupUi() end
     if cmpColorEx("680|50|FFFFFF-101010,660|70|FFFFFF-101010", 1) == 1 then
       return 1
     elseif cmpColorEx("476|1112|5400FF-101010,486|982|2B190C-101010,590|396|1B0804-101010", 1) == 1 and cmpColor(112, 117, "DB9714-101010", 1) == 0 then
