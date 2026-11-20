@@ -1,9 +1,12 @@
 package dev.funlee.a9.core;
 
 import java.util.*;
+import java.util.regex.Pattern;
 
 /** Empty-fuel badges in the aligned first six garage slots; never authorizes a tap. */
 public final class FuelAvailability {
+    private static final Pattern DETAIL_COUNTER=Pattern.compile("(?<![0-9])(10|[0-9])\\s*[/／]\\s*(10|[1-9])(?![0-9])");
+
     /** Upright vehicle-detail fuel counter, excluding tickets, blueprints and performance. */
     public static int detail(List<?> words) {
         Set<Integer> values=new HashSet<>();
@@ -11,8 +14,8 @@ public final class FuelAvailability {
             Map<?,?> w=(Map<?,?>)o;
             int x=((Number)w.get("x")).intValue(),y=((Number)w.get("y")).intValue();
             if(x<470||x>710||y<640||y>705)continue;
-            java.util.regex.Matcher m=java.util.regex.Pattern.compile("(?<![0-9])([0-9])\\s*/\\s*([1-9])(?![0-9])").matcher(w.get("text").toString());
-            if(m.find()){
+            var m=DETAIL_COUNTER.matcher(w.get("text").toString());
+            while(m.find()){
                 int fuel=Integer.parseInt(m.group(1)),capacity=Integer.parseInt(m.group(2));
                 if(fuel<=capacity)values.add(fuel);
             }

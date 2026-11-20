@@ -101,6 +101,10 @@ final class OrchestrationRecoveryChecks {
         for(int fuel:List.of(0,1,3)){
             if(FuelAvailability.detail(List.of(Map.of("text","肉"+fuel+"/3","x",541,"y",665)))!=fuel)throw new AssertionError("Detail fuel counter");
         }
+        for(int fuel:List.of(0,9,10)){
+            if(FuelAvailability.detail(List.of(Map.of("text",fuel+" / 10","x",562,"y",665)))!=fuel)
+                throw new AssertionError("Ten-slot detail fuel counter");
+        }
         for(Map<String,Object> w:List.of(Map.<String,Object>of("text","0/10","x",1150,"y",183),Map.<String,Object>of("text","0/3","x",300,"y",300),Map.<String,Object>of("text","0/30","x",540,"y",665),Map.<String,Object>of("text","4/3","x",540,"y",665))){
             if(FuelAvailability.detail(List.of(w))!=-1)throw new AssertionError("Non-fuel ratio accepted");
         }
