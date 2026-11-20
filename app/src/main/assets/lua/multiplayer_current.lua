@@ -21,6 +21,10 @@ end
 local function status(message)
   data['信息']=message;_hud(message);print(message)
 end
+local function showLeague(league)
+  local label=league=='白金' and '铂金' or league or '无段位'
+  if _taskNotice then _taskNotice(label,2000) else print(label) end
+end
 local function settlementStatus(screen)
   local rank=tonumber(screen.finalRank) or 0
   return rank>0 and ('开始结算 · 第 '..rank..' 名') or '开始结算'
@@ -210,14 +214,14 @@ local function sameSoloPage(before,after)
   return matches>=math.min(2,#after.cards) and matches>0
 end
 
-local function settledSoloGrid()
+local function readSoloGrid(waitForSettle)
   local previous
   local stable=0
   for sample=1,14 do
     local page=_soloGarageUi(true)
     local garage=page.garage
     if garage and #garage.cards>0 then
-      if not garage.leadingClear then return page end
+      if not waitForSettle or not garage.leadingClear then return page end
       -- An empty leading gutter can grow during overscroll. Wait for it to
       -- return to the normal inset and verify the same leading cards in fresh frames.
       if not previous or page.frameId>previous.frameId then
@@ -232,13 +236,23 @@ local function settledSoloGrid()
   end
 end
 
-function vehicleGrid.soloOrigin()
+function vehicleGrid.soloOrigin(entrySwipes)
+  if entrySwipes and entrySwipes>0 then
+    if not readSoloGrid(false) then error('未确认赛事车库车辆列表，已保留任务进度') end
+    data['信息']='每日战利品选车：向右滑回最左侧'
+    print(data['信息']..'（'..entrySwipes..' 次）')
+    for i=1,entrySwipes do
+      swipe(290,70,290,1200,100)
+      sleep(100)
+    end
+    sleep(2000)
+  end
   local previous,stalled,drags=nil,0,0
   while stalled<5 and not data['超时状态'] do
-    local current=settledSoloGrid()
+    local current=readSoloGrid(true)
     if not current then break end
     if current.garage.start then
-      print('每日战利品车库已回到最左，确认第 1 列（回拖 '..drags..' 次）')
+      print('赛事车库已回到最左，确认第 1 列（回拖 '..drags..' 次）')
       return current
     end
     if sameSoloPage(previous,current.garage) then stalled=stalled+1 else stalled=0 end
@@ -250,7 +264,7 @@ function vehicleGrid.soloOrigin()
       sleep(550)
     end
   end
-  error('未确认每日战利品车库最左起点，已保留任务进度')
+  error('未确认赛事车库最左起点，已保留任务进度')
 end
 
 function vehicleGrid.soloCar(origin,index)
@@ -276,6 +290,7 @@ function currentMultiplayer.run(resumingTutorial)
   local readSeriesScore=autoReward and #rewardRules>0
   status('目标赛事：'..series..'（'..data['项目']..'）')
   local disconnects=0;local total=completed;local unlockMisses=0;local milestoneMisses=0;local loginAttempts=0;local loginMissing=0;local serverErrors=0;local noOpponents=0
+  local leagueChanged=false
   while total<count do
     local route=nil;local routeAvailable=true;local candidate=nil;local candidateFrames=0;local lastMapText=''
     local raceMode=mode;local fallback=false;local fallbackReason=''
@@ -283,24 +298,28 @@ function currentMultiplayer.run(resumingTutorial)
     local lastScene='';local changed=tickCount();local started=resumingTutorial==true;local seriesSelected=started
     resumingTutorial=false
     local seriesEntry,seriesFrame,seriesPressedAt
+    local matchWaitAt,matchWaitFrame
+    local rosterSeen=false
     local tutorialPressedAt=nil
     local demotionPressedAt=nil
     local lastPulse=0;local carRetries=0;local carListAligned=false
     local eventPressedAt=nil;local carPressedAt=nil;local selectedCar=nil
+    local deferredCarPrompt=false
     local unverifiedCarBackAt=nil;local unverifiedCarBacks=0
     local returnHomeAt=nil;local emptyCars={};local emptyDetailFrames=0;local emptyDetailFrame=nil
     local originRetries=0;local alignAttempts=0;local alignKey=nil;local alignFrames=0;local alignFrame=nil;local alignSwipeFrame=nil;local verifiedKey=nil
     local position={offset=0}
     local pageOffset,pageLeft,pageFrame
-    local verifiedWorldLeague,targetLeague
+    local verifiedLeague,targetLeague
     local leagueCandidate,leagueFrame
+    local entryLeague,entryCandidate
     local leagueWaitAt=nil
     local rewardChoice=nil;local rewardAt=0;local rewardTries=0;local dialogMisses=0
     local scoreBefore,scoreAfter,scoreSample,scoreFrame,scoreSince
     local rewardSeenAt,rewardConfirmedAt,rewardObservedCard,rewardObservedAt
     local rewardHandled=false
     local returnFrame=nil;local returnFrames=0
-    local postActionKey,postActionFrame,postCandidate,settlementProgressAt
+    local postActionKey,postActionFrame,postRewardText,postCandidate,settlementProgressAt
     local function postPress(screen,label,minY,phase)
       local button=word(screen,label,minY)
       local exit=screen.rewardExitButton
@@ -308,33 +327,34 @@ function currentMultiplayer.run(resumingTutorial)
       if not button then postCandidate=nil;return false end
       if not raced then click(button.x,button.y);sleep(1200);return true end
       local frame=screen.frameId or tickCount()
-      local key=phase..':'..label
+      local key=phase..':'..(label=='架续' and '继续' or label)
+      local rewardText
       if phase=='bonusReward' then
-        -- Successive reward pages can use the same Continue label and heading.
-        -- The reward text distinguishes batches after two matching fresh frames.
-        local rewardText=(screen.text or ''):gsub('%s',''):gsub('賽','赛'):gsub('續','续')
-        key=key..':'..rewardText
+        rewardText=(screen.text or ''):gsub('%s',''):gsub('賽','赛'):gsub('續','续')
       end
-      -- OCR and tap dispatch can outlive a page animation. Never repeatedly tap
-      -- Continue through a stale reward image into the next menu's Start button.
-      -- Different reward batches can share the same Continue label, so use it
-      -- only for pacing taps across fresh frames.
-      if postActionFrame and (frame-postActionFrame<2200 or
-          (key==postActionKey and frame-postActionFrame<6500)) then
+      if postActionFrame and frame-postActionFrame<2200 then
         data['信息']='已点击结算按钮，等待切页';sleep(500);return true
       end
       if not postCandidate or postCandidate.key~=key or math.abs(postCandidate.x-button.x)>8
           or math.abs(postCandidate.y-button.y)>8 then
-        postCandidate={key=key,frame=frame,x=button.x,y=button.y}
+        postCandidate={key=key,frame=frame,x=button.x,y=button.y,text=rewardText}
         return true
       end
       if frame<=postCandidate.frame then return true end
-      if key~=postActionKey then
+      -- Animated cards produce noisy OCR. Stable text can identify a new batch
+      -- early, but verifying the Continue button does not require stable card text.
+      local stableBatch=rewardText and rewardText==postCandidate.text
+      local newPage=key~=postActionKey or (stableBatch and rewardText~=postRewardText)
+      if not newPage and frame-postActionFrame<6500 then
+        postCandidate.text=rewardText;postCandidate.frame=frame
+        data['信息']='已点击结算按钮，等待切页';sleep(500);return true
+      end
+      if newPage then
         settlementProgressAt=tickCount()
         if phase=='raceRewards' then rewardExitAt=tickCount()
         else rewardsSince=nil;rewardExitAt=nil end
       end
-      postActionKey=key;postActionFrame=frame
+      postActionKey=key;postActionFrame=frame;postRewardText=rewardText
       postCandidate=nil
       print('多人结算：点击'..label)
       click(button.x,button.y);sleep(1200);return true,true
@@ -342,19 +362,26 @@ function currentMultiplayer.run(resumingTutorial)
     while true do
       local screen=_multiplayerUi(readSeriesScore,started or raced)
       local scene=screen.scene
-      if world and scene=='event' and has(screen.text,series) then
-        local league=screen.worldLeague
+      if scene=='event' and has(screen.text,series) then
+        local league=screen.masterLeague
+        if world then
+          league=screen.worldLeague
+          if league and league~=entryLeague then entryLeague=nil end
+        end
         local frame=screen.frameId
         if not league or not frame then
-          leagueCandidate,leagueFrame,verifiedWorldLeague=nil,nil,nil
+          leagueCandidate,leagueFrame,verifiedLeague=nil,nil,nil
         elseif league~=leagueCandidate then
-          leagueCandidate,leagueFrame,verifiedWorldLeague=league,frame,nil
-        elseif frame>leagueFrame and verifiedWorldLeague~=league then
-          verifiedWorldLeague=league
-          print('赛事详情已确认世界赛当前段位：'..league)
+          leagueCandidate,leagueFrame,verifiedLeague=league,frame,nil
+        elseif frame>leagueFrame and verifiedLeague~=league then
+          verifiedLeague=league
         end
       else leagueCandidate,leagueFrame=nil,nil end
-      if scene~='series' then seriesEntry=nil;seriesFrame=nil;seriesPressedAt=nil end
+      if scene~='series' then seriesEntry=nil;seriesFrame=nil;seriesPressedAt=nil;entryCandidate=nil end
+      if scene=='leagueDemotion' or scene=='rewardClaim' then
+        leagueChanged=true
+        entryLeague=nil
+      end
       local tutorial=started and not raced and spCup and spCup.tutorialButton(screen)
       if _racePanel then _racePanel(scene=='race') end
       if scene=='event' or scene=='home' or scene=='cars' or scene=='series' then rewardsSince=nil end
@@ -373,6 +400,17 @@ function currentMultiplayer.run(resumingTutorial)
           tickCount()-(settlementProgressAt or tickCount())>=90000 then
         error('多人结算长时间未能切页，已保留完赛进度')
       end
+      -- After dispatching Start the original auto-route mode also times out if the
+      -- roster never appears. A recognized map/loading page ends this wait.
+      if started and (screen.matchingRoster or screen.route or scene=='loading') then rosterSeen=true end
+      if started and not raced and not rosterSeen and not tutorial and (scene=='unknown' or scene=='matching')
+          and not has(screen.text or '','加载中') and not has(screen.text or '','登录中') then
+        matchWaitAt=matchWaitAt or tickCount()
+        if screen.frameId and screen.frameId~=matchWaitFrame and tickCount()-matchWaitAt>60000 then
+          _requestGameRestart('matching')
+        end
+        matchWaitFrame=screen.frameId
+      else matchWaitAt=nil;matchWaitFrame=nil end
       if started and not raced and scene=='unknown' and not tutorial then
         if screen.mapText and screen.mapText~=lastMapText then
           lastMapText=screen.mapText;print('地图标题 OCR：'..lastMapText)
@@ -401,7 +439,7 @@ function currentMultiplayer.run(resumingTutorial)
       elseif scene=='leagueDemotion' then
         local confirm=screen.demotionConfirm
         if confirm and not demotionPressedAt then
-          verifiedWorldLeague=nil
+          verifiedLeague=nil
           demotionPressedAt=tickCount()
           status('已确认世界赛降级提示，等待返回赛事')
           click(confirm.x,confirm.y);sleep(1500)
@@ -414,6 +452,7 @@ function currentMultiplayer.run(resumingTutorial)
         -- Highest priority: never dispatch a close-X, Back, Continue or unlock action here.
         if screen.unlockLater and screen.unlockLater.x<640 and screen.unlockLater.y>=500 then
           unlockMisses=0;status('车辆提示：稍后查看')
+          deferredCarPrompt=selectedCar~=nil and not started
           click(screen.unlockLater.x,screen.unlockLater.y);sleep(1200);changed=tickCount()
         else
           unlockMisses=unlockMisses+1;status('车辆提示保护：等待确认稍后查看')
@@ -576,7 +615,7 @@ function currentMultiplayer.run(resumingTutorial)
       elseif scene=='unknown' and word(screen,'立即寻宝',530) and word(screen,'查看',530) then
         status('关闭寻宝广告：稍后查看');press(screen,'查看',530);changed=tickCount()
       elseif scene=='rewardClaim' then
-        verifiedWorldLeague=nil
+        verifiedLeague=nil
         status('领取联赛晋级奖励');if press(screen,'领取',530) then changed=tickCount() end
       elseif scene=='promo' then
         local closed=false
@@ -637,12 +676,14 @@ function currentMultiplayer.run(resumingTutorial)
         else
           -- The tabs can expose both series labels while the cards are still sliding.
           -- Only tap once the target label holds its position across fresh captures.
+          entryLeague=nil
           local entry=word(screen,series)
           if entry and seriesEntry and screen.frameId and seriesFrame and screen.frameId>seriesFrame
               and math.abs(entry.x-seriesEntry.x)<=12 and math.abs(entry.y-seriesEntry.y)<=12 then
+            if world and entryCandidate==screen.entryLeague then entryLeague=entryCandidate end
             seriesSelected=true;seriesPressedAt=tickCount()
             click(entry.x,entry.y);sleep(1200)
-          else seriesEntry=entry;seriesFrame=screen.frameId end
+          else seriesEntry=entry;seriesFrame=screen.frameId;entryCandidate=screen.entryLeague end
         end
       elseif scene=='event' then
         if has(screen.text,other) then error('赛事校验失败：目标是'..series..'，当前是'..other..'；已停止，不会开始比赛') end
@@ -656,12 +697,28 @@ function currentMultiplayer.run(resumingTutorial)
           data['信息']='已点击赛事开始，等待选车页面';sleep(500)
         elseif has(screen.text,series) then
           if start then
-            if world and not verifiedWorldLeague then
+            if world and not verifiedLeague then
               leagueWaitAt=leagueWaitAt or tickCount()
-              if tickCount()-leagueWaitAt>=15000 then error('未确认世界系列赛当前段位，保留任务') end
+              if entryLeague and tickCount()-leagueWaitAt>=2000 then verifiedLeague=entryLeague end
+            end
+            if world and not verifiedLeague then
+              if leagueChanged and tickCount()-leagueWaitAt>=3000 then
+                -- A fresh race can open directly on the event after a league change.
+                leagueChanged=false;seriesSelected=false;leagueWaitAt=nil
+                utils.backToMain()
+              elseif tickCount()-leagueWaitAt>=15000 then
+                showLeague('未能确认当前段位')
+                sleep(2000)
+                error('未确认世界系列赛当前段位，保留任务')
+              end
               data['信息']='正在识别世界系列赛当前段位'
+            elseif not world and leagueCandidate and not verifiedLeague and not leagueWaitAt then
+              -- Take a second reading when the master event exposes a league badge.
+              leagueWaitAt=tickCount()
             else
-              targetLeague=world and verifiedWorldLeague or nil
+              leagueChanged=false
+              showLeague(verifiedLeague)
+              targetLeague=world and verifiedLeague or nil
               seriesSelected=true
               scoreBefore=screen.seriesScore
               if readSeriesScore then print('世界赛赛前系列赛分数：'..tostring(scoreBefore or '未识别')) end
@@ -676,7 +733,7 @@ function currentMultiplayer.run(resumingTutorial)
         local garage=screen.garage or {}
         local tabs=screen.leagueTabs or {}
         if world and not targetLeague then
-          targetLeague=verifiedWorldLeague
+          targetLeague=verifiedLeague
           if not targetLeague then error('未确认世界系列赛当前段位，保留任务') end
         end
         local correctLeague=not targetLeague or (garage.rank==targetLeague and
@@ -694,6 +751,12 @@ function currentMultiplayer.run(resumingTutorial)
               print('复用'..targetLeague..'上局第 '..lastPage.index..' 辆的位置，当前首列 '..(offset+1)..'、'..(offset+2))
             end
           end
+        end
+        if deferredCarPrompt and selectedCar then
+          emptyCars[selectedCar.index]=true
+          carPressedAt=nil;selectedCar=nil;deferredCarPrompt=false
+          carListAligned=false;alignAttempts=0;alignKey=nil;alignFrames=0
+          verifiedKey=nil;alignFrame=nil;alignSwipeFrame=nil
         end
         if carPressedAt then
           if tickCount()-carPressedAt>30000 then error('选车后未能确认车辆详情，已停止避免重复点击') end
@@ -766,7 +829,7 @@ function currentMultiplayer.run(resumingTutorial)
                   emptyCars[index]=true;exhausted=exhausted+1
                   if card.availability=='starUp' then print('车辆 '..index..' 待升星，尝试下一辆配置车辆')
                   elseif not world and card.availability=='empty' then print('车辆 '..index..' 无油，尝试下一辆配置车辆') end
-                elseif card.availability=='ready' then
+                elseif card.availability=='ready' or card.availability=='trial' then
                   usedCars[rankKey][entry]=true
                   lastPage={rank=rankKey,index=index,offset=position.offset,cards=garage.cards}
                   selectedCar=card;carPressedAt=tickCount();chosen=true
@@ -799,7 +862,7 @@ function currentMultiplayer.run(resumingTutorial)
             sleep(500)
           end
         end
-      elseif scene=='car' and not started and not selectedCar then
+      elseif (scene=='car' or scene=='lockedCar') and not started and not selectedCar then
         if unverifiedCarBackAt then
           if tickCount()-unverifiedCarBackAt>10000 then error('未校验车辆详情无法返回选择列表，已停止') end
           sleep(500)
@@ -814,12 +877,13 @@ function currentMultiplayer.run(resumingTutorial)
           if screen.homeButton then keyPress('back') else click(38,29) end
           sleep(1200)
         end
-      elseif scene=='car' and not started then
-        if screen.fuel==0 or screen.starUpPending then
+      elseif (scene=='car' or scene=='lockedCar') and not started then
+        deferredCarPrompt=false
+        if scene=='lockedCar' or screen.fuel==0 or screen.starUpPending then
           if screen.frameId~=emptyDetailFrame then emptyDetailFrames=emptyDetailFrames+1;emptyDetailFrame=screen.frameId end
           if emptyDetailFrames>=2 then
             emptyCars[selectedCar.index]=true
-            status('车辆 '..selectedCar.index..(screen.starUpPending and ' 待升星' or ' 详情确认无油')..'，返回列表尝试下一辆')
+            status('车辆 '..selectedCar.index..(scene=='lockedCar' and ' 尚未解锁' or screen.starUpPending and ' 待升星' or ' 详情确认无油')..'，返回列表尝试下一辆')
             if screen.homeButton then keyPress('back') else click(38,29) end
             sleep(1200)
             carPressedAt=nil;selectedCar=nil

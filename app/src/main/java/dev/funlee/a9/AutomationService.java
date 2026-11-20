@@ -16,6 +16,7 @@ public final class AutomationService extends Service {
     public static final String START="dev.funlee.a9.START",STOP="dev.funlee.a9.STOP",PAUSE="dev.funlee.a9.PAUSE",SAMPLE="dev.funlee.a9.SAMPLE";
     private static final String CHANNEL="automation";
     private final Handler main=new Handler(Looper.getMainLooper());
+    private static long runGeneration; // Accessed on the main looper, including screenshot callbacks.
     private Thread worker;
     private CaptureSession capture;
     private Intent captureConsent;
@@ -25,6 +26,7 @@ public final class AutomationService extends Service {
     private volatile LuaRuntime runtime;
     private volatile boolean stopping,paused;
     private volatile boolean inspecting,sampleRequested;
+    private boolean waitForMenuOnStart;
     private WindowManager windows;
     private TaskPanelView overlay;
     private WindowManager.LayoutParams overlayParams;
@@ -44,12 +46,15 @@ public final class AutomationService extends Service {
         if(PAUSE.equals(intent.getAction())){
             paused=!paused;SessionState.paused=paused;
             TouchService touch=TouchService.instance;
-            if(paused&&touch!=null)touch.releaseAll();
+            if(paused&&touch!=null){touch.releaseAll();touch.updateRecoveryWait(null);}
             closeTaskControls();
             SessionState.status(paused?"暂停任务":"继续运行");updateOverlay();return START_NOT_STICKY;
         }
         if(worker!=null){SessionState.log("已有运行中的任务");return START_NOT_STICKY;}
         try {
+            runGeneration++;
+            RunStatusRecord.clearFailure(this);
+            waitForMenuOnStart=intent.getBooleanExtra("waitForMenuOnStart",false);
             inspecting=intent.getBooleanExtra("inspect",false);sampleRequested=false;
             SessionState.inspecting=inspecting;SessionState.clearIssue();
             TouchService touch=TouchService.instance;
@@ -68,7 +73,7 @@ public final class AutomationService extends Service {
             SessionState.stats=resumeState==null?new TaskStats():TaskStats.restore((Map<String,Object>)LocalStore.javaValue(resumeState.getJSONObject("stats")));
             SessionState.dashboardEnabled=!inspecting;SessionState.status(resumeState==null?"正在准备本地任务":"正在恢复上次任务，已完赛 "+SessionState.stats.finished()+" 局");
             worker=new Thread(()->execute(inspecting),"a9-automation");worker.start();
-        }catch(Exception e){SessionState.failure("启动失败："+e.getMessage());stopRun();}
+        }catch(Exception e){failRun("启动失败："+e.getMessage());}
         return START_NOT_STICKY;
     }
     private PendingIntent action(String value,int id) {
@@ -92,7 +97,7 @@ public final class AutomationService extends Service {
             // Old saved sessions may still carry a total-race target. Queue execution is unbounded.
             SessionState.stats.target(0);
             if(touch==null&&!inspect)throw new IllegalStateException(TouchService.unavailableReason(this));
-            // The activity launches the game immediately after consent. Let its display rotate first.
+            // MainActivity launches the game after receiving projection consent.
             Thread.sleep(3000);
             synchronized(this){
                 if(stopping)return;
@@ -117,17 +122,14 @@ public final class AutomationService extends Service {
                 }
                 if(resumeState!=null)host.restoreQueue(resumeState);
                 GameRecovery recovery=new GameRecovery(this,touch,gamePackage,()->stopping,SessionState::inputPaused,host::recoveryReady);
-                if(!touch.gameInForeground()){
-                    SessionState.status("等待游戏前台窗口就绪");
-                    long deadline=SystemClock.elapsedRealtime()+15000;
-                    while(!stopping&&!touch.gameInForeground()&&SystemClock.elapsedRealtime()<deadline)
-                        Thread.sleep(150);
-                }
+                recovery.awaitInitialForeground();
+                if(waitForMenuOnStart)recovery.awaitReady();
                 long origin=SystemClock.elapsedRealtime()-SessionState.stats.elapsedMillis(),pauseAt=0,pausedTotal=0;
                 while(!stopping&&!host.finished){
                     boolean restarted=false;
                     boolean rebuildForQueue=false;
-                    boolean restartForHome=false;
+                    String homeFailure=null;
+                    long portraitSince=-1,nextOrientationCheck=0;
                     GameRecovery.Reason interruptedAction=null;
                     try(LuaRuntime lua=new LuaRuntime(host,AndroidHost.FUNCTIONS)) {
                         runtime=lua;lua.set("LOCAL_ROOT",host.workPath());lua.set("UIconfig",store.luaConfig());
@@ -139,15 +141,24 @@ public final class AutomationService extends Service {
                         while(!stopping&&!host.finished) {
                             long now=SystemClock.elapsedRealtime();
                             host.checkAccountLogin();
-                            if(SessionState.inputPaused()){if(pauseAt==0){pauseAt=now;host.pause();}Thread.sleep(50);continue;}
+                            if(SessionState.inputPaused()){if(pauseAt==0){pauseAt=now;portraitSince=-1;host.pause();}Thread.sleep(50);continue;}
                             if(pauseAt>0){pausedTotal+=now-pauseAt;pauseAt=0;lua.load("resume","data['心跳时间']=os.time()");}
                             if(!touch.gameInForeground()){
+                                portraitSince=-1;
                                 long recoveryAt=SystemClock.elapsedRealtime();
                                 restarted=recoverInterrupted(host,recovery,GameRecovery.Reason.FOREGROUND_LOST);
                                 pausedTotal+=SystemClock.elapsedRealtime()-recoveryAt;
                                 if(restarted)break;
                                 host.pause();continue;
                             }
+                            if(now>=nextOrientationCheck){
+                                nextOrientationCheck=now+250;
+                                if(GameRecovery.portrait(this)){
+                                    if(portraitSince<0){portraitSince=now;host.pause();}
+                                    if(now-portraitSince>=3000){interruptedAction=GameRecovery.Reason.PORTRAIT;break;}
+                                }else portraitSince=-1;
+                            }
+                            if(portraitSince>=0){Thread.sleep(100);continue;}
                             host.clock=now-origin-pausedTotal;
                             SessionState.stats.elapsed(host.clock);
                             host.periodicSave();
@@ -157,8 +168,7 @@ public final class AutomationService extends Service {
                                 if(stopping)throw failed;
                                 host.checkRecoveryAvailable();
                                 boolean queueWork=host.runningQueueWork()||host.needsHome();
-                                if(host.recoveryReason==GameRecovery.Reason.FOREGROUND_LOST ||
-                                        (!queueWork&&host.recoveryReason!=null)){
+                                if(host.recoveryReason!=null&&(!queueWork||host.recoveryReason!=GameRecovery.Reason.EVENT_START_TIMEOUT)){
                                     interruptedAction=host.recoveryReason;
                                     break;
                                 }
@@ -167,7 +177,7 @@ public final class AutomationService extends Service {
                                 if(host.needsHome()){
                                     SessionState.log("回主未成功："+message);
                                     host.reserveHomeRestart();
-                                    restartForHome=true;
+                                    homeFailure=message;
                                 }else{
                                     host.recordQueueFailure(message);
                                 }
@@ -183,18 +193,24 @@ public final class AutomationService extends Service {
                         if(!restarted)restarted=recoverInterrupted(host,recovery,GameRecovery.Reason.INPUT_INTERRUPTED);
                         pausedTotal+=SystemClock.elapsedRealtime()-recoveryAt;
                     }
-                    if(restartForHome){
+                    if(homeFailure!=null){
                         long recoveryAt=SystemClock.elapsedRealtime();
-                        recovery.restartForHome();
+                        recovery.restartForHome(homeFailure);
                         pausedTotal+=SystemClock.elapsedRealtime()-recoveryAt;
                         restarted=true;
                     }
                     if(restarted||rebuildForQueue){host.resetWorkflow(restarted);continue;}
                     break;
                 }
-                if(!stopping)SessionState.status("本轮任务已完成");
+                if(!stopping){
+                    if(!host.finished)throw new IllegalStateException("任务流程意外结束，已保留当前进度");
+                    SessionState.status("本轮任务已完成");
+                }
             }
-        }catch(InterruptedException e){Thread.currentThread().interrupt();}
+        }catch(InterruptedException e){
+            Thread.currentThread().interrupt();
+            if(!stopping)main.post(()->failRun("任务执行意外中断，已保留当前进度"));
+        }
         catch(Throwable e){
             String detail = e.getMessage();
             if (detail == null || detail.isEmpty()) detail = e.getClass().getSimpleName();
@@ -205,6 +221,8 @@ public final class AutomationService extends Service {
         finally{main.post(()->{if(!stopping)stopRun();});}
     }
     private boolean recoverInterrupted(AndroidHost host,GameRecovery recovery,GameRecovery.Reason reason)throws Exception{
+        host.checkRecoveryAvailable();
+        host.persist(false);
         return recovery.recover(reason,host.needsHome()?host::reserveHomeRestart:null);
     }
     private static String businessReason(RuntimeException failure){
@@ -224,11 +242,31 @@ public final class AutomationService extends Service {
         } catch (RuntimeException e) {
             SessionState.log("读取异常画面失败：" + e.getMessage());
         }
-        FailureScreenshot.save(getApplicationContext(), frame);
+        long generation=runGeneration;
+        boolean notifyUser=!inspecting;
+        String game=gamePackage;
+        FailureScreenshot.save(getApplicationContext(),frame,detail,saved->{
+            if(!notifyUser||generation!=runGeneration)return;
+            String message=RunIssue.stopMessage(detail,saved);
+            RunStatusRecord.recordFailure(this,game,message);
+            TouchService touch=TouchService.instance;
+            if((touch==null||!touch.showPendingTaskFailure())&&SessionState.listener==null){
+                NotificationManager manager=getSystemService(NotificationManager.class);
+                if(manager.areNotificationsEnabled()){
+                    String channel="task-failure";
+                    manager.createNotificationChannel(new NotificationChannel(channel,"任务异常停止",NotificationManager.IMPORTANCE_HIGH));
+                    PendingIntent open=PendingIntent.getActivity(this,0,new Intent(this,MainActivity.class),
+                            PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+                    manager.notify(RunStatusRecord.FAILURE_NOTIFICATION,new Notification.Builder(this,channel)
+                            .setSmallIcon(android.R.drawable.ic_dialog_alert).setContentTitle("任务已停止")
+                            .setContentText(message.split("\n",2)[0]).setStyle(new Notification.BigTextStyle().bigText(message))
+                            .setContentIntent(open).setAutoCancel(true).build());
+                }
+            }
+            SessionState.changed();
+        });
         SessionState.failure(detail);
         stopRun();
-        TouchService touch=TouchService.instance;
-        if(!inspecting&&touch!=null)touch.showTaskFailure(gamePackage,detail);
     }
     private synchronized void stopRun() {
         if(stopping)return;stopping=true;

@@ -64,7 +64,7 @@ function run.project()
       local scene=screen and screen.scene
       if daily and screen then
         if scene=='event' then dailyMatched=dailyCup.matchesLobby(screen)
-        elseif scene=='home' or scene=='wideCupList' then dailyMatched=false end
+        elseif scene=='home' or scene=='wideCupList' or scene=='cupClaimSpotlight' then dailyMatched=false end
         if dailyMatched then dailySearchSince=nil
         else
           dailySearchSince=dailySearchSince or tickCount()
@@ -80,10 +80,11 @@ function run.project()
         if ret~=nil then goto lbl_129 end
       elseif screen and screen.scene=='exitGame' then
         utils.backToMain()
-      elseif screen and screen.scene=='wideCupList' and
+      elseif (scene=='wideCupList' or scene=='cupClaimSpotlight') and
           (data['项目']=='每日战利品' or data['项目']=='杯赛') then
         data['信息']='选择配置的赛事'
-        utils.chooseCup(run.data['杯赛位置'] or '2',true,daily)
+        local chosen=utils.chooseCup(run.data['杯赛位置'] or '2',scene=='wideCupList' or screen.wide,daily or scene=='cupClaimSpotlight')
+        if type(chosen)=='string' then return chosen end
         sleep(2500)
       elseif screen and screen.scene=='profileUnlock' and dailyCup then
         dailyCup.dismissProfile(screen)
@@ -94,8 +95,6 @@ function run.project()
         sleep(1);sleep(2000)
         local fresh=_soloEventUi()
         if fresh.scene=='dailyRewardOnly' and fresh.frameId~=screen.frameId then return 'dailyExpired' end
-      elseif daily and screen and dailyCup.dismissClaimSpotlight(screen) then
-        -- Read the configured event carousel again after dismissing the claim hint.
       elseif utils.soloStartAt and scene=='noTicket' then
         utils.soloStartAt=nil
         ret=run.list[data['项目']][6][2]()
@@ -105,7 +104,7 @@ function run.project()
         dailyCup.confirmChallenge(screen)
         if tickCount()-utils.soloStartAt>=120000 then error('已点击开始，但未确认进入比赛，保留当前任务') end
       elseif allowRace and scene=='lockedCar' then
-        if not daily or #utils.taskCars()==1 then return 'vehicleLocked' end
+        if #utils.taskCars()==1 then return 'vehicleLocked' end
         utils.backToGarage()
       elseif allowRace and scene=='car' then
         ret=carHandler()
@@ -136,6 +135,7 @@ function run.project()
           keepCapture()
           if (not daily or im1~=3 or scene=='event') and cmpColorEx(operations[im1][1], 1) == 1 then
             ret = operations[im1][2]()
+            if type(ret)=="string" then return ret end
             if daily and im1<=2 then
               dailyMatched=false
               break  -- Re-read the destination before allowing any race actions.

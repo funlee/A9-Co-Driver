@@ -13,7 +13,7 @@ import java.util.*;
 
 /** Queue lifecycle and real editor actions, using disposable preferences. */
 final class TaskEditingDeviceCheck {
-    private static final int WORLD=3, MASTER=4, CUP=2;
+    private static final int SPECIAL=0, DAILY=1, CUP=2, WORLD=3, MASTER=4;
     private final Instrumentation test;
     private MainActivity activity;
     private LocalStore store;
@@ -29,6 +29,7 @@ final class TaskEditingDeviceCheck {
         };
         try {
             store=new LocalStore(isolated);checkDefaults();
+            check(store.config.getInt("raceTimeout")==900,"Wrong initial race timeout");
             String initial=tasks().toString();reload();check(initial.equals(tasks().toString()),"Default identities did not persist");
             // An untouched legacy queue upgrades; a single edited or enabled slot preserves all 20.
             JSONArray legacy=new JSONArray();
@@ -62,11 +63,11 @@ final class TaskEditingDeviceCheck {
             check(node("5. 大师系列赛")!=null&&node("多人下用车")!=null,"Master editor did not open vehicle settings");
             input("多人下用车","2,4");click("保存");reload();bind();
             check(tasks().getJSONObject(MASTER).getJSONObject("data").getString("多人下用车").equals("2,4"),"Master vehicle settings did not persist");
-            String originalTask=tasks().getJSONObject(0).toString();
+            String originalTask=tasks().getJSONObject(DAILY).toString();
             clickTask("每日战利品");
-            check(node("选择项目类型")==null&&node("1. 每日战利品")!=null&&node("保存")!=null,"Existing task did not open its details directly");
+            check(node("选择项目类型")==null&&node("2. 每日战利品")!=null&&node("保存")!=null,"Existing task did not open its details directly");
             check(node("每日只执行一次")==null&&node("完成本任务后，当天后续循环自动跳过")==null,"Retired daily-once control is visible");
-            input("次数","9");click("取消");check(tasks().getJSONObject(0).toString().equals(originalTask),"Cancelling edit changed task");
+            input("次数","9");click("取消");check(tasks().getJSONObject(DAILY).toString().equals(originalTask),"Cancelling edit changed task");
             clickTask("每日战利品");input("次数","4");input("项目名称","test战利品");click("保存");reload();bind();
             test.runOnMainSync(()->{
                 View root=activity.getWindow().getDecorView(),title=findText(root,"test战利品");
@@ -76,7 +77,7 @@ final class TaskEditingDeviceCheck {
                 for(String label:List.of("世界赛","大师赛","杯赛","特赛"))check(findText(root,label)!=null,"Missing type tag "+label);
             });
             screenshot("custom-task-name.png");
-            JSONObject edited=tasks().getJSONObject(0),original=new JSONObject(originalTask);
+            JSONObject edited=tasks().getJSONObject(DAILY),original=new JSONObject(originalTask);
             check(edited.getJSONObject("data").getString("次数").equals("4")&&edited.getString("项目").equals("每日战利品")
                     &&edited.getString("taskId").equals(original.getString("taskId"))&&edited.getBoolean("enabled")==original.getBoolean("enabled"),"Edit lost fields/type/identity/flag on reload");
             clickMain("新增任务");check(node("选择项目类型")!=null,"New task must choose type first");click("取消");
@@ -170,8 +171,8 @@ final class TaskEditingDeviceCheck {
     private void checkTaskRoutes()throws Exception {
         String map=store.addCustomMap("路线测试赛道","任务测试地图","0,21");
         JSONObject original=new JSONObject(store.config.toString());
-        for(int index:new int[]{0,2,1}) {
-            String mode=tasks().getJSONObject(index).getString("项目"),prefix=index==1?"特殊赛事":"杯赛";
+        for(int index:new int[]{DAILY,CUP,SPECIAL}) {
+            String mode=tasks().getJSONObject(index).getString("项目"),prefix=index==SPECIAL?"特殊赛事":"杯赛";
             check(store.defaults(mode).getString("路线来源").equals("2"),"Incorrect default route source");
             {
                 JSONObject data=tasks().getJSONObject(index).getJSONObject("data");
@@ -187,22 +188,24 @@ final class TaskEditingDeviceCheck {
                 JSONObject snapshot=new JSONObject(store.config.toString());store.save();reload();
                 data=tasks().getJSONObject(index).getJSONObject("data");
                 check(!data.has(prefix+"选路")&&!data.has(prefix+"线路"),"Old route fields survived: "+mode);
-                check(data.getString("路线来源").equals(legacy.equals("3")?"1":index==1&&legacy.equals("4")?"0":"2"),"Wrong migrated route source: "+mode);
+                check(data.getString("路线来源").equals(legacy.equals("3")?"1":index==SPECIAL&&legacy.equals("4")?"0":"2"),"Wrong migrated route source: "+mode);
                 check(data.getString("已配置地图").equals(legacy.equals("4")?map:"")&&data.getString("跑法代码").equals(legacy.equals("3")?"10,22":""),"Lost old route data: "+mode);
                 Object expected=LocalStore.javaValue(store.config);store.config=snapshot;
                 check(store.migrateConfig()&&expected.equals(LocalStore.javaValue(store.config)),"Resume migration differs: "+mode);
             }
         }
         store.config=new JSONObject(original.toString());store.save();bind();
-        for(int index:new int[]{0,2,1}) {
+        for(int index:new int[]{DAILY,CUP,SPECIAL}) {
             openTaskForm(index);
-            scrollToControl("路线来源");check(node("自动识别地图")!=null,"Solo event default must be automatic");click("路线来源");click("选择已配置地图");
+            scrollToControl("路线来源");
+            check(node(index==SPECIAL?"选择已配置地图":"自动识别地图")!=null,"Wrong default route source in editor");
+            if(index!=SPECIAL){click("路线来源");click("选择已配置地图");}
             scrollToControl("已配置地图");click("已配置地图");
             input("搜索地图","任务测试地图");click(store.matcher.displayName(map));click("保存");reload();bind();
             JSONObject data=tasks().getJSONObject(index).getJSONObject("data");
             check(data.getString("路线来源").equals("0")&&data.getString("已配置地图").equals(map),"Map selection did not persist");
             openTaskForm(index);scrollToControl("路线来源");click("路线来源");click("自定义跑法代码");scrollToInput("跑法代码");
-            if(index==1){
+            if(index==SPECIAL){
                 input("跑法代码","");click("保存");check(node("确定")!=null,"Empty special event route was accepted");click("确定");
             }
             input("跑法代码","bad");click("保存");check(node("确定")!=null,"Invalid route code was accepted");click("确定");
@@ -232,12 +235,12 @@ final class TaskEditingDeviceCheck {
     }
     private void reload()throws Exception{store=new LocalStore(isolated);}
     private void checkDefaults()throws Exception {
-        String[] modes={"每日战利品","特殊赛事","杯赛","多人上","多人下"};String[] counts={"4","1","3","30","1"};Set<String> ids=new HashSet<>();
+        String[] modes={"特殊赛事","每日战利品","杯赛","多人上","多人下"};String[] counts={"2","5","1","7","4"};Set<String> ids=new HashSet<>();
         JSONArray template=new JSONArray(store.asset("data/default-projects.json"));
         check(tasks().length()==5,"Expected five tasks");
         for(int i=0;i<modes.length;i++) {
             JSONObject task=tasks().getJSONObject(i);
-            check(task.getString("项目").equals(modes[i])&&task.getBoolean("enabled")== (i<4),"Wrong default mode/flag at "+i);
+            check(task.getString("项目").equals(modes[i])&&task.getBoolean("enabled"),"Wrong default mode/flag at "+i);
             check(task.getJSONObject("data").getString("次数").equals(counts[i]),"Wrong saved default count");
             check(LocalStore.javaValue(task.getJSONObject("data")).equals(LocalStore.javaValue(template.getJSONObject(i).getJSONObject("data"))),"Default fields not restored");
             check(!task.getString("taskId").isEmpty()&&ids.add(task.getString("taskId")),"Missing/duplicate identity");

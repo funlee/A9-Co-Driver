@@ -44,6 +44,7 @@ public final class MainActivity extends Activity {
     private boolean pendingResume;
     @Override public void onCreate(Bundle saved){
         super.onCreate(saved);
+        if(saved==null)Toast.makeText(this,"程序开始启动",Toast.LENGTH_SHORT).show();
         if(Build.VERSION.SDK_INT>=27)getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR|View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
         if(saved!=null){
             tab=supportedPage(saved.getInt("tab",RUN));routeOnlyWithoutCode=saved.getBoolean("routeOnlyWithoutCode",false);
@@ -137,7 +138,21 @@ public final class MainActivity extends Activity {
         for(int i=0;i<navigation.length;i++){boolean active=navigationPages[i]==tab;surface(navigation[i],active?SOFT:wide?SURFACE:BG,0,9);navigation[i].setTextColor(active?ACCENT:MUTED);}
         switch(tab){case RUN:projects();break;case ROUTES:routes();break;case PREFERENCES:taskPreferences();break;default:settings();}updateSession();
     }
-    private void updateSession(){for(Runnable refresh:permissionRefreshers)refresh.run();updateIssue();if(stateBadge==null)return;String state=SessionState.running?(SessionState.paused?"已暂停":"运行中"):"";stateBadge.setText(state);stateBadge.setVisibility(SessionState.running?View.VISIBLE:View.GONE);if(startControl!=null)startControl.setEnabled(!SessionState.running);if(pauseControl!=null){pauseControl.setText(SessionState.paused?"继续":"暂停");pauseControl.setAlpha(SessionState.running?1:.45f);}if(stopControl!=null)stopControl.setAlpha(SessionState.running?1:.45f);updateRunStatus();}
+    private AlertDialog failureNotice;
+    private void showPendingTaskFailure(){
+        if(SessionState.running||isFinishing()||isDestroyed()||!hasWindowFocus()||failureNotice!=null)return;
+        String message=RunStatusRecord.failureMessage(this);
+        if(message.isEmpty())return;
+        failureNotice=new AlertDialog.Builder(this).setTitle("任务已停止").setMessage(message)
+                .setPositiveButton("确定",(d,w)->RunStatusRecord.clearFailure(this)).setCancelable(false).create();
+        failureNotice.setOnDismissListener(d->failureNotice=null);
+        showDialog(failureNotice);
+    }
+    @Override public void onWindowFocusChanged(boolean focused){
+        super.onWindowFocusChanged(focused);
+        if(focused)showPendingTaskFailure();
+    }
+    private void updateSession(){showPendingTaskFailure();for(Runnable refresh:permissionRefreshers)refresh.run();updateIssue();if(stateBadge==null)return;String state=SessionState.running?(SessionState.paused?"已暂停":"运行中"):"";stateBadge.setText(state);stateBadge.setVisibility(SessionState.running?View.VISIBLE:View.GONE);if(startControl!=null)startControl.setEnabled(!SessionState.running);if(pauseControl!=null){pauseControl.setText(SessionState.paused?"继续":"暂停");pauseControl.setAlpha(SessionState.running?1:.45f);}if(stopControl!=null)stopControl.setAlpha(SessionState.running?1:.45f);updateRunStatus();}
     private void updateRunStatus(){
         if(runStatus==null)return;
         String phase=SessionState.running?(SessionState.paused?"已暂停":SessionState.hud):RunStatusRecord.idleStatus(this);
@@ -683,35 +698,37 @@ public final class MainActivity extends Activity {
         permissionRow(permissions,"通知控制","也可从通知栏控制任务",()->getSystemService(NotificationManager.class).areNotificationsEnabled(),()->startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName())));
         body.addView(permissions);
         LinearLayout diagnostics=settingsGroup("问题排查");
-        settingRow(diagnostics,"查看异常截图","查看最近保存的异常画面","",this::showFailureScreenshot);
+        settingRow(diagnostics,"最近一次异常","查看发生时间、原因和现场截图","",this::showFailureScreenshot);
         body.addView(diagnostics);
         TextView about=label(getString(R.string.app_name)+"  "+version()+" · 本地运行",DETAIL);about.setGravity(Gravity.CENTER);body.addView(about);
     }
     private void showFailureScreenshot() {
-        FailureScreenshot.load(getApplicationContext(), (bitmap, savedAt) -> {
+        FailureScreenshot.load(getApplicationContext(), entry -> {
+            Bitmap bitmap=entry==null?null:entry.image;
             if (isFinishing() || isDestroyed() || tab != SETTINGS) {
-                if (bitmap != null) bitmap.recycle();
+                if(bitmap!=null)bitmap.recycle();
                 return;
             }
-            AlertDialog.Builder dialog = new AlertDialog.Builder(this)
-                    .setTitle("异常截图").setPositiveButton("关闭", null);
-            if (bitmap == null) {
-                showDialog(dialog.setMessage(savedAt == 0 ? "暂无异常截图" : "最近一次异常没有可查看的画面").create());
-                return;
-            }
-            LinearLayout preview = column();
-            preview.setPadding(dp(PAGE_GUTTER), dp(ROW_GAP), dp(PAGE_GUTTER), 0);
-            String time = java.text.DateFormat.getDateTimeInstance().format(new Date(savedAt));
-            preview.addView(label("保存于 " + time, DETAIL));
-            ImageView image = new ImageView(this);
-            image.setImageBitmap(bitmap);
-            image.setScaleType(ImageView.ScaleType.FIT_CENTER);
-            image.setContentDescription("任务异常时的截屏");
-            int height = Math.min(dp(480), getResources().getDisplayMetrics().heightPixels / 2);
-            preview.addView(image, new LinearLayout.LayoutParams(-1, height));
-            AlertDialog screenshot = dialog.setView(preview).create();
-            screenshot.setOnDismissListener(ignored -> image.setImageDrawable(null));
-            showDialog(screenshot);
+            AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("最近一次异常").setPositiveButton("关闭",null);
+            if(entry==null){showDialog(dialog.setMessage("暂无异常记录").create());return;}
+            LinearLayout preview=column();
+            preview.setPadding(dp(DIALOG_GUTTER),dp(ROW_GAP),dp(DIALOG_GUTTER),dp(ROW_GAP));
+            if(entry.time>0)preview.addView(label(java.text.DateFormat.getDateTimeInstance().format(new Date(entry.time)),DETAIL));
+            TextView heading=label("异常原因",SECTION);
+            heading.setPadding(0,dp(SPACE_LARGE),0,dp(SPACE_SMALL));
+            preview.addView(heading);
+            TextView reason=label(entry.reason.isEmpty()?"旧版只保留了截图，未保存对应原因。":entry.reason,BODY);
+            reason.setTextColor(INK);reason.setTextIsSelectable(true);preview.addView(reason);
+            ImageView image=new ImageView(this);
+            if(bitmap!=null){
+                image.setAdjustViewBounds(true);image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+                image.setPadding(0,dp(SPACE_LARGE),0,0);image.setImageBitmap(bitmap);
+                image.setContentDescription("异常现场截图");
+                preview.addView(image,new LinearLayout.LayoutParams(-1,-2));
+            }else preview.addView(label("本次未取得现场截图",DETAIL));
+            AlertDialog details=dialog.setView(scroll(preview)).create();
+            details.setOnDismissListener(ignored -> image.setImageDrawable(null));
+            showDialog(details);
         });
     }
     private void taskPreferences(){
@@ -824,18 +841,34 @@ public final class MainActivity extends Activity {
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);if(request!=101)return;
         if(result!=RESULT_OK||data==null){showRunIssue("未授权截屏，任务没有启动");return;}
-        Intent launch=getPackageManager().getLaunchIntentForPackage(store.config.optString("gamePkg"));
-        if(launch==null){showRunIssue("未找到游戏，请核对包名和安装状态");return;}
-        Intent service=new Intent(this,AutomationService.class).setAction(AutomationService.START).putExtra("result",result).putExtra("consent",data).putExtra("inspect",pendingInspect).putExtra("resume",pendingResume);
         try{
+            JSONObject serviceConfig=store.config;
+            if(pendingResume){
+                JSONObject saved=SessionRecord.read(this);
+                if(saved==null||saved.optBoolean("complete"))throw new IllegalStateException("没有可继续的未完成任务");
+                serviceConfig=saved.getJSONObject("config");
+            }
+            String pkg=serviceConfig.getString("gamePkg");
+            Intent launch=getPackageManager().getLaunchIntentForPackage(pkg);
+            if(launch==null){showRunIssue("未找到游戏，请核对包名和安装状态");return;}
+            Intent service=new Intent(this,AutomationService.class).setAction(AutomationService.START).putExtra("result",result).putExtra("consent",data).putExtra("inspect",pendingInspect).putExtra("resume",pendingResume);
+            TouchService touch=TouchService.instance;
+            boolean waitForMenuOnStart=!pendingInspect&&serviceConfig.optString("routeOnly").isEmpty()&&touch!=null&&GameRecovery.portrait(this)&&
+                    !pkg.equals(touch.foregroundPackage());
+            service.putExtra("waitForMenuOnStart",waitForMenuOnStart);
             startForegroundService(service);
-            // Match an explicit activity resume, keeping launcher-specific reinitialization out of this transition.
-            startActivity(new Intent().setComponent(launch.getComponent()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            // Launch from this visible activity. A portrait assistant is normal before the game opens.
+            try{
+                startActivity(launch);
+            }catch(RuntimeException e){
+                stopService(new Intent(this,AutomationService.class));
+                throw e;
+            }
         }catch(Exception e){showRunIssue(e.getMessage());}
     }
     private void control(String action){if(!SessionState.running)return;if(action.equals(AutomationService.STOP))SessionState.status("已手动停止");startService(new Intent(this,AutomationService.class).setAction(action));}
     private void message(String text){showDialog(new AlertDialog.Builder(this).setMessage(text==null?"操作失败":text).setPositiveButton("确定",null).create());}
     @Override protected void onResume(){super.onResume();if(store!=null&&body!=null&&tab==PREFERENCES)render();SessionState.listener=this::updateSession;SessionState.changed();}
     @Override protected void onSaveInstanceState(Bundle out){out.putInt("tab",tab);out.putBoolean("routeOnlyWithoutCode",routeOnlyWithoutCode);out.putBoolean("pendingInspect",pendingInspect);out.putBoolean("pendingResume",pendingResume);out.putString("routeSelectedTrack",routeSelectedTrack);out.putString("routeSelectedMap",routeSelectedMap);out.putStringArrayList("expandedTracks",new ArrayList<>(expandedTracks));out.putStringArrayList("collapsedFilteredTracks",new ArrayList<>(collapsedFilteredTracks));super.onSaveInstanceState(out);}
-    @Override protected void onPause(){SessionState.listener=null;super.onPause();}
+    @Override protected void onPause(){if(failureNotice!=null)failureNotice.dismiss();SessionState.listener=null;super.onPause();}
 }

@@ -1,24 +1,25 @@
 {
   "runtime_validation": "partial: cumulative 78 multiplayer races on MuMu (world 40, master 38), interrupted by updates; latest empty-fuel task skip covered offline only; not a continuous 200-race acceptance",
   "assets": {
-    "data/forms.json": "6eca720a083ebf9daf82a1ba6c93e1c7f01bd98f010913fc85c3352e64e16af5",
-    "data/map-rules.tsv": "96b45f3247babde3abf6e18c48fcfcbdfc04fc1f3d0302e330a73e48cee2db6f",
+    "data/default-projects.json": "f4d45ed210ca154670705bdbebd8070f623e7706cd2d333af25218ac296d1277",
+    "data/forms.json": "801a13a96d64b27df150264a944bf3997023e4d4c1db0d4a96c0105de7b7d65f",
+    "data/map-rules.tsv": "3851380011f0d1fc8a234092109a6414e7277e73efa6a40b4c2543de8eea03d5",
     "data/progress.lib": "1a15ef4e6e5bda467aec8b453e448b5e95a166b29529d7a186fbde4192e2c2d1",
-    "data/routes.txt": "151609f01e2e1f262a5561efccdb6ba32160bb7dbf61119d28806bd95f0d66cd",
+    "data/routes.txt": "6a7de3243dad59728ad2dbc466bf932c506ffae4fba09e0f305c22a0b4545714",
     "licenses/jnigen.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594",
     "licenses/luajava.txt": "dd002f5df5455ed5c1c320b6600d4c702637456681bfa14240365f586d11b80d",
-    "lua/bootstrap.lua": "2d4e33fe90571e916ecc1ec4e9a4505a815a71c8c59b796b99b13d18fc6453e6",
-    "lua/club.lua": "b2ce8ead53d737426c292c35d7c77fe4c05be4cc52a47cca78f5f1ec5786d11d",
-    "lua/cup.lua": "aa5e6afe4e74a09e21f123e9c90d780ebccc820216e37aca7cc6f62d12e8140c",
-    "lua/daily.lua": "9465af849c6b326ae50025ca120606f87bc683cc550bccaafa84d24827a2773f",
-    "lua/multiplayer_current.lua": "f811438d268698aed3ab21cc5bad4ac5577d5de4f6f3d4e2c3c8eced4a39f2c5",
-    "lua/multiplayer_down.lua": "b51fd534c943e57ba5f32c306e440828978b50576a50deecf7b542c81f6eb054",
-    "lua/multiplayer_up.lua": "e7ffe6fc697cff2dd5dc7def55d1c4d517efdbfbe51071a43b547c1396e34a43",
-    "lua/rewards.lua": "a81407f2e0c28af83dca4c055487f9c5e50073683cbdd83cfd8b3b6b14362d30",
+    "lua/bootstrap.lua": "0ae82a0eaa10a8b4d06ce7a1045d8513ce358ab436c15270f3bf04f2212e5402",
+    "lua/club.lua": "ccf7edc1001f4e1b186e0689eb444c21be6e1c4f3550714c968787e8785863dc",
+    "lua/cup.lua": "7d53feceab7527b8fcbf69c74cebebac616954eca21953c8d6adb1172613d8e1",
+    "lua/daily.lua": "0dd13884aabe0f711292bcf7b49b6e75226d74fab77a83de590864352e584349",
+    "lua/multiplayer_current.lua": "fbf07e4a2c3c024f90004e57d0096ebe6653469dc9dd42c9549957c7cd46c75c",
+    "lua/multiplayer_down.lua": "addd34c4fda61bb25e351c138e7df298c361886a36d675d12400c25ba9286fb3",
+    "lua/multiplayer_up.lua": "81bcbaaa6e1dea2265878400f05c172412e4fa899a11e1ebdccc2f2882f43d02",
+    "lua/rewards.lua": "7b3c8662256e5ed1f729d2ba48048bdcc09bc404e731c47af864008101f43728",
     "lua/shared.lua": "5627abce52aa42667081048e15ad2f386eb628c78aabc525404a5d7d3a56b364",
-    "lua/special.lua": "bbf1f87a66af89843b0c49aec992028c9a8185b79a8ac23188721e4b0734d8ad",
-    "lua/utilities.lua": "f4698fd8f3257158975690ad435c5146074ca4a56c8b9a65a56bd42bb4202e0e",
-    "lua/workflows.lua": "913f655feee0945995d626475a3618364378ea859ad740ccd89609a500ba51e4"
+    "lua/special.lua": "611ac7599d7e1e6e074ef82fbff28b36c25096e78015b2e5951a6b8ffac8869d",
+    "lua/utilities.lua": "0cd82eb1bb60014bb5f5b662589c2f54681547ed64fa75256f4bdbe006eb39f2",
+    "lua/workflows.lua": "8db697fa94cd86c2a0ac1b91ab5121c54d146e54806148001019ce4b94475a17"
   },
   "publication": {
     "date": "2026-11-07",
@@ -27,12 +28,13 @@
     "scope": "Bundled runtime scripts, route data, map rules, digit dictionary and configuration forms."
   },
   "map_name_validation": "2026-11-09: 21 maintainer-supplied screenshot catalogs visually verified. The 252 screenshot entries resolved to 251 distinct tracks after the maintainer removed duplicate 海港博物馆/博物馆竞速 and confirmed 欢迎来到樱花港. The check verified 202 keys for configuration compatibility and parsed all 202 nonempty catalog scripts. The 49 empty scripts used left-swipe fallback. This check covered offline validation.",
+  "route_validation": "2026-11-21: Added the maintainer-supplied 狮城/狮城竞速 script and selected it for the default special-event task. Validation covers offline parsing and template references.",
   "catalog": {
     "regions": 21,
     "tracks": 251,
-    "parseable_scripts": 202,
-    "maintainer_scripts": 8,
-    "empty_scripts": 49,
+    "parseable_scripts": 203,
+    "maintainer_scripts": 9,
+    "empty_scripts": 48,
     "legacy_records_retained": 202,
     "screenshot_files": [
       {

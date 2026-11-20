@@ -56,6 +56,7 @@ public final class DailyEventUi {
         if(ProfileUnlockUi.prompt(text))return "profileUnlock";
         if(DynamicRewards.prompt(text))return "rewardChoice";
         if(t.contains("立即购买")||t.contains("立即入手"))return "unknown";
+        if(VehicleUnlockGuard.lockedDetail(text))return "lockedCar";
         if(VehicleUnlockGuard.pendingDetail(text))return "car";
         if(t.toUpperCase(java.util.Locale.ROOT).contains("TOUCHDRIVE")&&t.contains("性能分")&&
                 (t.contains("开始")||t.contains("跳过")))return "car";
@@ -85,10 +86,6 @@ public final class DailyEventUi {
                 (t.contains("仓库")||t.contains("倉庫"))&&
                 (t.contains("阶段")||t.contains("升級")||t.contains("升级"))&&
                 !t.toUpperCase(java.util.Locale.ROOT).contains("TOUCHDRIVE"))return "vehicleUpgrade";
-        if(t.contains("获取图纸")&&t.contains("图纸以解锁"))return "lockedCar";
-        if(t.contains("性能分")&&t.contains("取图纸")&&
-                (t.contains("立刻获取")||t.contains("图纸以解锁")))return "lockedCar";
-        if(t.contains("性能分")&&t.contains("获取钥匙")&&t.contains("车钥匙以解锁"))return "lockedCar";
         if(t.contains("立即购买")||t.contains("立即入手"))return "unknown";
         if((t.contains("车辆选择")||t.contains("车辅选择"))&&
                 t.contains("选择参与此赛事的车辆"))return "cars";

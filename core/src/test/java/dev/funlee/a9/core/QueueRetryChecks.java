@@ -96,7 +96,8 @@ final class QueueRetryChecks {
         try (LuaRuntime lua = new LuaRuntime((name, stack) -> 0, List.of("_hud"))) {
             lua.load("queue", bootstrap);
             lua.load("clock", "UIconfig={routeOnly=''};data={['心跳时间']=1000,['等待时间']=420};" +
-                    "now=1420;os.time=function()return now end");
+                    "now=1420;os.time=function()return now end;" +
+                    "function _requestGameRestart(reason) error('restart:'..reason) end");
             lua.start("monitor");
             check(lua.step(0), "Seven-minute threshold is measured from the business heartbeat");
             lua.load("home in progress", "queueRecovering=true;now=2000");
@@ -108,7 +109,7 @@ final class QueueRetryChecks {
                 lua.step(3000);
                 throw new AssertionError("Hung business must leave the VM even if its own loop never checks the flag");
             } catch (RuntimeException failure) {
-                check(failure.getMessage().contains("7 分钟"), "Hung work reports a business timeout");
+                check(failure.getMessage().contains("restart:heartbeat"), "Hung work requests a heartbeat restart");
             }
         }
     }

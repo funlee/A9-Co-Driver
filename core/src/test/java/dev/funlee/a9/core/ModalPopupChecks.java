@@ -87,6 +87,68 @@ final class ModalPopupChecks {
                 "A generic Claim button is not authorization");
         count += 2;
 
+        int[] blueprint = new int[720*1280];
+        fill(blueprint,285,135,488,176,0xff0053);
+        fill(blueprint,770,530,975,609,0x9afe00);
+        var banner=word("超能福利免要送",393,155);
+        var headline=word("万能图纸随心升级",450,203);
+        var immediate=word("立即领取！",874,567);
+        expect("万能图纸福利领取".equals(action(blueprint,List.of(banner,headline,immediate)).get("label")),
+                "Recognize the campaign even when OCR misreads the small banner");
+        expect(action(blueprint,List.of(immediate))==null,"Generic claim buttons do not identify the campaign");
+        expect(action(blueprint,List.of(banner,headline,word("立即购买",874,567))).isEmpty(),
+                "A purchase button cannot advance the blueprint gift");
+        count+=3;
+
+        for (int halfWidth : new int[]{388, 486}) {
+            int right = 640 + halfWidth;
+            int[] offer = panel(640 - halfWidth, 72, right, 647, 0x10082e);
+            fill(offer, 1190, 320, 1240, 380, 0xdde6e3);
+            fill(offer, right - halfWidth * 3 / 5, 540, right - halfWidth / 12, 617, 0x9afe00);
+            var purchase = word("立即购买", right - halfWidth / 3, 578);
+            expect(Map.of().equals(action(offer, List.of(purchase))),
+                    "The league offer waits when its close control has not appeared");
+            cross(offer, right - 35, 114, 0xffffff);
+            var close = action(offer, List.of());
+            expect(close != null && "×".equals(close.get("label")) &&
+                    Math.abs((int) close.get("x") - (right - 35)) <= 3 && Math.abs((int) close.get("y") - 114) <= 3,
+                    "Dark promotional artwork can be closed even without OCR text");
+            expect(close.equals(action(offer, List.of(purchase, word("赛季赛事", 490, 645)))),
+                    "Purchase and lobby labels do not change the close target");
+            count += 3;
+        }
+
+        int[] series = panel(222, 92, 1054, 560, 0x915032);
+        fill(series, 486, 92, 507, 560, 0x080a18);
+        fill(series, 772, 92, 793, 560, 0x080a18);
+        fill(series, 0, 58, 1279, 66, 0x405898);
+        fill(series, 0, 596, 1279, 605, 0x405898);
+        expect(ModalPopup.locate(new PixelFrame(720,1280,series))==null,
+                "Series card edges and full-width navigation bars must not form a blocking dialog");
+        count++;
+
+        fill(series, 0, 58, 1279, 66, 0x080a18);
+        fill(series, 445, 80, 969, 147, 0x222e3a);
+        fill(series, 648, 604, 840, 608, 0xff0054);
+        fill(series, 648, 618, 840, 705, 0xffffff);
+        expect(ModalPopup.locate(new PixelFrame(720,1280,series))==null,
+                "The recovery countdown above three series cards is not a blocking dialog");
+        fill(series, 220, 80, 1056, 605, 0x413050);
+        expect(ModalPopup.locate(new PixelFrame(720,1280,series))!=null,
+                "A real dialog covering the gutters still blocks a visible multiplayer tab");
+        count+=2;
+
+        // New artwork, no campaign text or footer button, and a mid-tone close glyph.
+        int[] redesign = panel(212, 101, 1068, 619, 0x280b18);
+        cross(redesign, 1034, 142, 0x1cb594);
+        var redesignedClose = action(redesign, List.of());
+        expect(redesignedClose != null && "×".equals(redesignedClose.get("label")) &&
+                Math.abs((int) redesignedClose.get("x") - 1034) <= 3 && Math.abs((int) redesignedClose.get("y") - 142) <= 3,
+                "An unfamiliar color scheme and a relocated panel need no OCR or campaign signature");
+        cross(redesign, 1002, 143, 0x1cb594);
+        expect(Map.of().equals(action(redesign, List.of())), "Ambiguous close glyphs do not authorize a tap");
+        count += 2;
+
         int[] goals = panel(0, 0, 1279, 719, 0x122645);
         fill(goals, 1172, 106, 1220, 165, 0xf70865);
         cross(goals, 1196, 135, 0xffffff);

@@ -39,6 +39,24 @@ final class CupSelectionChecks {
             if(!button.equals(Map.of("x",center,"y",34))||!RaceHud.homeButton(home,false).isEmpty())
                 throw new AssertionError("Find the shifted Home icon only on the supported menu layout");
         }
+        int[] standardPixels=widePixels.clone();
+        for(int[] point:new int[][]{{0,-13},{-13,2},{11,2},{-12,19},{10,19}})
+            standardPixels[(1250+point[0])*720+719-(27+point[1])]=0xffeeeeee;
+        if(!RaceHud.homeButton(new PixelFrame(720,1280,standardPixels),false).equals(Map.of("x",1250,"y",27)))
+            throw new AssertionError("Find the Home tile on the standard club subpage");
+        // Xiaomi 15 screenshot: the notice obscures the C card's sides but leaves
+        // the entry underline, upper white corners and seven ticket badges visible.
+        int[] phone=new int[720*1280];
+        for(int center:new int[]{82,230,380,530,847,997,1147}){
+            for(int x=center-64;x<center+33;x++)for(int y:new int[]{484,507})phone[x*720+719-y]=0xffed095a;
+            for(int x=center+33;x<center+65;x++)phone[x*720+719-503]=0xff06345b;
+        }
+        for(int x=610;x<=768;x++)for(int row=14;row<=18;row++)phone[x*720+row]=0xffc4ed22;
+        for(int x:new int[]{611,767})for(int y=451;y<=515;y++)phone[x*720+719-y]=0xffefe3e9;
+        var phoneCards=CupCarousel.cards(new PixelFrame(720,1280,phone),true);
+        if(phoneCards.size()!=8||!Boolean.TRUE.equals(phoneCards.get(4).get("selected"))||
+                Math.abs((int)phoneCards.get(2).get("center")-380)>3)
+            throw new AssertionError("Count six from the right despite the notice covering the selected C card");
         var wideCards=CupCarousel.cards(wideFrame,true);
         if(wideCards.size()!=3||!wideCards.get(2).get("center").equals(467))throw new AssertionError("Wide card positions changed");
         for(int x=99;x<=199;x++){
@@ -53,6 +71,24 @@ final class CupSelectionChecks {
         wideCards=CupCarousel.cards(new PixelFrame(720,1280,widePixels),true);
         if(wideCards.size()!=3||!wideCards.get(1).get("center").equals(317))
             throw new AssertionError("A bright C-class shield must not split a card into two short edges");
+        int[] spotlight=new int[720*1280];
+        for(int y=371;y<=438;y++){
+            for(int x=390;x<=398;x++)spotlight[x*720+719-y]=0xffff0054;
+            for(int x=409;x<=870;x++)spotlight[x*720+719-y]=0xffffffff;
+            for(int x=881;x<=889;x++)spotlight[x*720+719-y]=0xffff0054;
+        }
+        for(int x=562;x<=717;x++)for(int y=654;y<=684;y++)spotlight[x*720+719-y]=0xffffe923;
+        PixelFrame unlabeled=new PixelFrame(720,1280,spotlight);
+        if(CupCarousel.claimSpotlight(unlabeled)||CupCarousel.claimOnlyAt(unlabeled,639))
+            throw new AssertionError("A gold card without a claim label cannot identify a reward");
+        for(int x=626;x<=651;x++)for(int y=664;y<=678;y++)
+            if(x%5<=2)spotlight[x*720+719-y]=0xffa47823;
+        PixelFrame claim=new PixelFrame(720,1280,spotlight);
+        if(!CupCarousel.claimSpotlight(claim)||!CupCarousel.claimOnlyAt(claim,639)||CupCarousel.claimOnlyAt(claim,803))
+            throw new AssertionError("Claim spotlight applies only to the highlighted card");
+        for(int x=881;x<=889;x++)for(int y=371;y<=438;y++)spotlight[x*720+719-y]=0;
+        if(CupCarousel.claimSpotlight(new PixelFrame(720,1280,spotlight)))
+            throw new AssertionError("An unrelated single pink border is not a claim spotlight");
         String fixture="realFindCup=utils.findCup;data={};run={index=3,data={['杯赛位置']='3'}};LOCAL_ROOT='/tmp/a9-cup-check';"+
             "cached=true;stale=true;selected=9;frameSelected=9;removed=0;finds=0;taps={};snapshots={};"+
             "function keepCapture()frameSelected=selected end;function releaseCapture()end;"+
@@ -68,6 +104,15 @@ final class CupSelectionChecks {
             "utils.chooseCup('3');utils.chooseCup('3');assert(removed==1 and #snapshots==1 and selected==3,'same task lost its selected event')",
             "utils.chooseCup('3');utils.chooseCup('4');assert(removed==2 and #snapshots==2 and snapshots[2]==4 and selected==4,'position change reused wrong cached event')",
             "utils.chooseCup('1');assert(taps[#taps][1]==100 and taps[#taps][2]==150,'first cup clicks zero coordinates')",
+            "local hint=true;local swipes=0;local picked=1;local entered=0;"+
+                "function _cupClaimState()return hint and 'spotlight' or '' end;"+
+                "function swipe(x,y,x2,y2)assert(x==115 and x2==115);swipes=swipes+1;hint=false end;"+
+                "function _cupCards()return {{center=155,selected=picked==1},{center=310,selected=picked==2},{center=465,selected=picked==3}}end;"+
+                "function tap(x,y)assert(not hint and y==465 and x==115);if picked==3 then entered=entered+1 end;picked=3 end;"+
+                "assert(utils.chooseCup('3',true)==1 and entered==1 and swipes>=7,'reward hint changed configured event number')",
+            "function _cupClaimState(x)return x==310 and 'claimOnly' or '' end;"+
+                "function _cupCards()return {{center=155},{center=310,selected=true}}end;"+
+                "function tap()error('must not enter a claim-only card')end;assert(utils.chooseCup('2',true)=='cupClaimOnly')",
             "local ok=pcall(utils.chooseCup,'0');assert(not ok and #taps==0 and removed==0,'zero position emits input')",
             "local ok=pcall(utils.chooseCup,'no');assert(not ok and #taps==0 and removed==0,'invalid text silently chooses position two')",
             "local ok=pcall(utils.chooseCup,'2.5');assert(not ok and #taps==0,'fractional position emits input')",
@@ -87,6 +132,10 @@ final class CupSelectionChecks {
                 "function swipe(x,y,x2,y2)if y2<y then first=first+1 else first=1 end end;"+
                 "function tap(x,y)local target=first+(y-159)/150;if target==selected then entered=entered+1 else selected=target end end;"+
                 "assert(utils.chooseCup('5',true)==1 and selected==5 and entered==1,'wide scroll selected the wrong event')",
+            "selected=5;local entered=0;local centers={82,230,380,530,689,847,997,1147};"+
+                "function _cupCards()local cards={};for i,x in ipairs(centers)do cards[i]={center=x+(selected==3 and 9 or 0),selected=i==selected,artwork={75*i}}end;return cards end;"+
+                "function tap(x,y)local c=_cupCards()[3];assert(y==c.center,'must select sixth card from right');if selected==3 then entered=entered+1 else selected=3 end end;"+
+                "assert(utils.chooseCup('-6')==1 and selected==3 and entered==1,'legacy entry also verifies the shifted Xiaomi wide card')",
             "selected=3;local reads,entered=0,0;"+
                 "function _cupCards()reads=reads+1;local cards={{center=170,selected=selected==1}};"+
                 "if reads~=3 then cards[#cards+1]={center=320,selected=selected==2} end;"+
@@ -95,7 +144,7 @@ final class CupSelectionChecks {
                 "if selected==2 then entered=entered+1 else selected=2 end end;"+
                 "assert(utils.chooseCup('-2',true)==1 and entered==1,'transient missing card prevented a verified selection')"
         );
-        int checked=7;
+        int checked=11;
         for(String script:cases){
             try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
                 lua.load("utilities",Files.readString(assets.resolve("lua/utilities.lua")));lua.load("cup-fixture",fixture);

@@ -5,6 +5,8 @@ import android.accessibilityservice.GestureDescription;
 import android.content.*;
 import android.content.pm.*;
 import android.graphics.Path;
+import android.graphics.Point;
+import android.view.WindowManager;
 import android.graphics.Rect;
 import android.net.Uri;
 import android.os.*;
@@ -19,7 +21,23 @@ import java.util.function.BooleanSupplier;
 /** Bounded, cancellable recovery. System clicks are semantic and scoped to this game's app-info. */
 final class GameRecovery {
     private static final long STARTUP_TIMEOUT_MS = 180_000;
-    enum Reason { MATCH_TIMEOUT, FOREGROUND_LOST, INPUT_INTERRUPTED, EVENT_START_TIMEOUT }
+    enum Reason {
+        PORTRAIT("运行中游戏窗口持续为竖屏"),
+        HEARTBEAT_TIMEOUT("任务超过 7 分钟未报告进展"),
+        MATCH_TIMEOUT("多人匹配超过 "+MatchmakingWatchdog.TIMEOUT_SECONDS+" 秒"),
+        RESTART_SCREEN("启动或回主时命中原版的异常画面特征"),
+        FOREGROUND_LOST("游戏已退出到桌面或助手"),
+        INPUT_INTERRUPTED("游戏触控中断"),
+        EVENT_START_TIMEOUT("点击赛事开始后未进入选车页");
+        final String detail;
+        Reason(String detail){this.detail=detail;}
+    }
+    static boolean portrait(Context context){
+        Point size=new Point();
+        context.getSystemService(WindowManager.class).getDefaultDisplay().getRealSize(size);
+        return size.y>size.x;
+    }
+    static final class RestartScreen extends Exception {}
     static final class IncompatibleStartup extends Exception {}
     private final Context context;
     private final TouchService touch;
@@ -61,7 +79,7 @@ final class GameRecovery {
             int dialogActions=0;
             while(activeTime()<until){
                 gate();if(touch.gameInForeground()){
-                    if(homeSince>=0){if(permit!=null)permit.reserve();else recordAttempt();restartGame();awaitReady(permit==null);SessionState.log("游戏退出后已重新进入前台，恢复任务检查点");return true;}
+                    if(homeSince>=0){if(permit!=null)permit.reserve();else recordAttempt();restartGame("游戏退出后重新进入前台，需恢复任务进度",false);awaitReady(permit==null);SessionState.log("游戏退出后已重新进入前台，恢复任务检查点");return true;}
                     return false;
                 }
                 String foreground=touch.foregroundPackage();
@@ -82,63 +100,81 @@ final class GameRecovery {
                 waitBriefly();
             }
             if(homeSince<0||activeTime()-homeSince<1000)throw new IllegalStateException("无法确认游戏退出到桌面或助手，已停止恢复");
-        }else if(!touch.gameInForeground())throw new IllegalStateException("匹配重启前游戏已离开前台，已停止恢复");
+        }else if(!touch.gameInForeground())return recover(Reason.FOREGROUND_LOST,permit);
         if(permit!=null)permit.reserve();else recordAttempt();
-        switch (reason) {
-            case MATCH_TIMEOUT: status("匹配超过 "+MatchmakingWatchdog.TIMEOUT_SECONDS+" 秒，正在重启游戏"); break;
-            case INPUT_INTERRUPTED: status("触控中断，重启游戏后从检查点继续"); break;
-            case EVENT_START_TIMEOUT: status("点击赛事开始后选车未打开，重启游戏后从检查点继续"); break;
-            case FOREGROUND_LOST: status("游戏已退出到桌面或助手，正在重新启动"); break;
-        }
-        if(reason==Reason.FOREGROUND_LOST) launchGame(true);
-        else restartGame();
+        restartGame(reason.detail,reason==Reason.RESTART_SCREEN);
         awaitReady(permit==null);return true;
     }
-    private void restartGame()throws Exception{
+    private void restartGame(String reason,boolean waitAfterStop)throws Exception{
+        String message="即将重启游戏："+reason;
+        status(message);
+        while(!onMain(()->{touch.showRestartNotice(message);return true;}))gate();
+        long until=activeTime()+3000;
+        while(activeTime()<until)waitBriefly();
+        String foreground=touch.foregroundPackage();
+        if(!touch.gameInForeground()&&!context.getPackageName().equals(foreground)&&!launchers.contains(foreground))
+            throw new IllegalStateException("重启前前台已切换，请返回游戏后续跑");
         // Returning from Home may resume a live race and retain exhausted game FDs.
         // Checkpoint recovery needs a fresh process, even for FOREGROUND_LOST.
         forceStop();
+        if(waitAfterStop){long resumeAt=activeTime()+10_000;while(activeTime()<resumeAt)waitBriefly();}
         // Leave our settings task behind before relaunch; a later crash should land on Home.
         if(!onMain(()->touch.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_HOME)))
             throw new IllegalStateException("无法退出系统应用信息页，已停止恢复");
         Thread.sleep(350);
-        launchGame(false);
+        launchGame();
     }
-    private void launchGame(boolean replaceTask)throws Exception{
+    private void launchGame()throws Exception{
         gate();
         Intent launch=context.getPackageManager().getLaunchIntentForPackage(game);
         if(launch==null)throw new IllegalStateException("找不到游戏启动入口");
-        // After the game leaves for Home, start a fresh activity task. The in-game
-        // timeout paths still stop the process before launching it.
-        int flags=Intent.FLAG_ACTIVITY_NEW_TASK|
-                (replaceTask?Intent.FLAG_ACTIVITY_CLEAR_TASK:Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        onMain(()->{context.startActivity(launch.addFlags(flags));return true;});
+        int flags=Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP;
+        while(!onMain(()->{context.startActivity(launch.addFlags(flags));return true;}))gate();
     }
-    void restartForHome()throws Exception{
+    void awaitInitialForeground()throws InterruptedException{
+        if(touch.gameInForeground())return;
+        status("已请求启动游戏，等待游戏窗口就绪");
+        long until=activeTime()+STARTUP_TIMEOUT_MS;
+        while(activeTime()<until){
+            waitBriefly();
+            if(touch.gameInForeground())return;
+        }
+        throw new IllegalStateException("已请求启动游戏，但等待游戏窗口超时，请检查所选游戏能否正常打开");
+    }
+
+    void restartForHome(String cause)throws Exception{
         gate();
         if(!touch.gameInForeground())throw new IllegalStateException("游戏不在前台，无法重启并确认主界面");
-        status("回主未成功，正在重启游戏");
-        restartGame();
+        restartGame("未能返回游戏主界面："+cause,false);
         awaitReady(false);
     }
     void awaitReady()throws Exception{awaitReady(true);}
     private void awaitReady(boolean allowRelaunch)throws Exception{
-        status("等待游戏登录与菜单加载完成");
+        status("等待游戏画面就绪");
+        try{waitForMenu(allowRelaunch);}
+        finally{touch.updateRecoveryWait(null);}
+    }
+    private void waitForMenu(boolean allowRelaunch)throws Exception{
         long launchedAt=activeTime(),until=launchedAt+STARTUP_TIMEOUT_MS,stable=-1,homeSince=-1;
+        long nextHintAt=0;
         boolean loggedOcrTimeout=false;
         while(activeTime()<until){
             gate();
             if(touch.gameInForeground()){
                 homeSince=-1;
+                if(activeTime()>=nextHintAt){
+                    touch.updateRecoveryWait("游戏已进入前台，等待画面就绪");
+                    nextHintAt=activeTime()+2000;
+                }
                 boolean actionable;
                 // The foreground callback can precede the projection's landscape resize.
                 // Keep waiting within the existing startup timeout for a usable frame.
                 try{actionable=ready.call();}
-                catch(IncompatibleStartup failure){
-                    if(!allowRelaunch)throw new IllegalStateException("重启后游戏报告设备不兼容");
+                catch(IncompatibleStartup | RestartScreen failure){
+                    boolean restartScreen=failure instanceof RestartScreen;
+                    if(!allowRelaunch)throw new IllegalStateException(restartScreen?"重启后再次命中原版异常画面":"重启后游戏报告设备不兼容");
                     recordAttempt();
-                    status("游戏启动显示设备不兼容，重新启动并保留任务检查点");
-                    restartGame();
+                    restartGame(restartScreen?Reason.RESTART_SCREEN.detail:"游戏启动时报告设备不兼容",restartScreen);
                     launchedAt=activeTime();until=launchedAt+STARTUP_TIMEOUT_MS;stable=-1;
                     continue;
                 }
@@ -152,9 +188,10 @@ final class GameRecovery {
                 }
                 if(actionable){
                     if(stable<0)stable=activeTime();
-                    if(activeTime()-stable>=2000){SessionState.log("已确认游戏菜单加载完成，保留完赛数并继续剩余任务");return;}
+                    if(activeTime()-stable>=2000){SessionState.log("已确认游戏画面可操作，继续任务");return;}
                 }else stable=-1;
             }else {
+                if(nextHintAt!=0){touch.updateRecoveryWait(null);nextHintAt=0;}
                 stable=-1;
                 String foreground=touch.foregroundPackage();
                 if(foreground.equals("android"))closeCrashDialog();
@@ -164,14 +201,13 @@ final class GameRecovery {
                     if(activeTime()-launchedAt>=20_000&&activeTime()-homeSince>=5000){
                         if(!allowRelaunch)throw new IllegalStateException("恢复主界面时游戏再次退出");
                         recordAttempt();
-                        status("游戏加载期间再次退出，重新启动并保留任务检查点");
-                        restartGame();homeSince=-1;launchedAt=activeTime();
+                        restartGame("游戏加载期间再次退出到桌面或助手",false);homeSince=-1;launchedAt=activeTime();
                     }
                 }else homeSince=-1;
             }
             waitBriefly();
         }
-        throw new IllegalStateException("重启后未能确认游戏菜单加载完成，已停止；已完成局数仍保留");
+        throw new IllegalStateException("未能确认游戏菜单加载完成（已等待 3 分钟），已保留完赛进度");
     }
     private void recordAttempt(){
         long now=SystemClock.elapsedRealtime();

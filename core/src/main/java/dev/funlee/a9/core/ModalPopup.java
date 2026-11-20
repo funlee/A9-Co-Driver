@@ -40,29 +40,73 @@ public final class ModalPopup {
         }
         if (dim < 10) return null;
         int top = boundary(frame, false, 47, 300, 1, 465, 815);
-        int bottom = boundary(frame, false, 382, 682, -1, 465, 815);
-        if (top < 0 || bottom < 0 || bottom - top < 155 || Math.abs(top + bottom - 720) > 125) return null;
+        if (top < 0) return null;
+        int bottom = boundary(frame, false, Math.max(382, 720 - top - 125), Math.min(682, 720 - top + 125),
+                -1, 465, 815);
+        if (bottom < 0 || bottom - top < 155) return null;
         int inset = (bottom - top) / 8;
         int left = boundary(frame, true, 110, 510, 1, top + inset, bottom - inset);
-        int right = boundary(frame, true, 770, 1170, -1, top + inset, bottom - inset);
-        if (left < 0 || right < 0 || Math.abs(left + right - 1280) > 98) return null;
+        if (left < 0) return null;
+        int right = boundary(frame, true, Math.max(770, 1280 - left - 98), Math.min(1170, 1280 - left + 98),
+                -1, top + inset, bottom - inset);
+        if (right < 0) return null;
+        // The series cards supply two vertical edges between the game's full-width
+        // header and tab bar. Those horizontal seams continue past both card edges.
+        if (spansBothMargins(frame, top, left, right) && spansBothMargins(frame, bottom, left, right)) return null;
+        // The wait notice can supply a short top seam. Verify the selected tab
+        // and the two full-height gutters between the three series cards.
+        int third = (right - left) / 3;
+        if (selectedMultiplayerTab(frame, bottom)
+                && cardGutter(frame, left + third, top + inset, bottom - inset)
+                && cardGutter(frame, right - third, top + inset, bottom - inset)) return null;
         return new Panel(left, top, right, bottom);
+    }
+
+    private static boolean selectedMultiplayerTab(PixelFrame frame, int bottom) {
+        if (bottom < 590 || bottom > 625) return false;
+        for (int x : new int[]{680, 735, 815}) {
+            if (distance(pixel(frame, x, bottom), 0xff0054) > 70 ||
+                    distance(pixel(frame, x, bottom + 20), 0xffffff) > 60) return false;
+        }
+        return true;
+    }
+
+    private static boolean cardGutter(PixelFrame frame, int center, int top, int bottom) {
+        int end = boundary(frame, true, center - 28, center - 2, -1, top, bottom);
+        int start = boundary(frame, true, center + 2, center + 28, 1, top, bottom);
+        return end >= 0 && start - end >= 8 && start - end <= 40;
+    }
+
+    private static boolean spansBothMargins(PixelFrame frame, int y, int left, int right) {
+        int leftHits = 0, rightHits = 0;
+        for (int gap = 16; gap <= 80; gap += 8) {
+            if (distance(pixel(frame, left-gap, y-3), pixel(frame, left-gap, y+3)) >= 24) leftHits++;
+            if (distance(pixel(frame, right+gap, y-3), pixel(frame, right+gap, y+3)) >= 24) rightHits++;
+        }
+        return leftHits >= 6 && rightHits >= 6;
     }
 
     private static int boundary(PixelFrame frame, boolean vertical, int from, int to, int direction, int lo, int hi) {
         int best = 0, first = -1, last = -1;
-        for (int at = from; at <= to; at++) {
+        // With equal support prefer the outer seam over an edge inside the artwork.
+        for (int at = direction > 0 ? from : to; at >= from && at <= to; at += direction) {
             int hits = 0;
             for (int i = 0; i < 16; i++) {
                 int along = lo + (hi - lo) * i / 15;
                 int inner = axis(frame, vertical, at + 3 * direction, along);
                 int outer = axis(frame, vertical, at - 3 * direction, along);
-                if (maximum(outer) <= 108 && brightness(inner) - brightness(outer) >= 56) hits++;
+                // Look for a sharp seam against the dimmed game on either side of the color spectrum.
+                // Inside artwork and outside scenery may be equally bright.
+                int jump = distance(inner, outer);
+                if (maximum(outer) > 108 || jump < 24) continue;
+                int fartherIn = axis(frame, vertical, at + 6 * direction, along);
+                int fartherOut = axis(frame, vertical, at - 6 * direction, along);
+                if (jump >= distance(inner, fartherIn) + 10 && jump >= distance(outer, fartherOut) + 10) hits++;
             }
             if (hits > best) {
                 best = hits;
                 first = last = at;
-            } else if (hits == best && at == last + 1) last = at;
+            } else if (hits == best && at == last + direction) last = at;
         }
         return best >= 12 ? (first + last) / 2 : -1;
     }
@@ -83,12 +127,15 @@ public final class ModalPopup {
         if (conversion != null) return conversion;
         String textOnScreen = words.stream().map(value -> normalize(((Map<?, ?>) value).get("text").toString()))
                 .collect(java.util.stream.Collectors.joining());
+        if (textOnScreen.contains("超能福利") && textOnScreen.contains("万能图纸随心升级") &&
+                possibleBlueprintGift(frame))
+            return giftClaim(frame, words, true);
         if (dailyGoals(textOnScreen)) {
             if (keepDailyGoals) return null;
             int[] close = PopupCloseDetector.findDailyGoals(frame);
             return close == null ? Map.of() : Map.of("x", close[0], "y", close[1], "label", "每日目标关闭");
         }
-        if (newcomerGift(textOnScreen)) return newcomerClaim(frame, words);
+        if (newcomerGift(textOnScreen)) return giftClaim(frame, words, false);
         if (panel == null) return null;
         StringBuilder text = new StringBuilder();
         List<Map<String, Object>> later = new ArrayList<>();
@@ -185,15 +232,16 @@ public final class ModalPopup {
         return Map.of("x", laterX, "y", laterY, "label", "俱乐部里程碑稍后领取");
     }
 
-    private static Map<String, Object> newcomerClaim(PixelFrame frame, List<?> words) {
+    private static Map<String, Object> giftClaim(PixelFrame frame, List<?> words, boolean blueprint) {
         Map<String, Object> action = Map.of();
         for (Object value : words) {
             Map<?, ?> word = (Map<?, ?>) value;
             int x = ((Number) word.get("x")).intValue(), y = ((Number) word.get("y")).intValue();
             if (x < 735 || x > 1120 || y < 445 || y > 670 ||
-                    !normalize(word.get("text").toString()).equals("点击领取") || !limeButton(frame, x, y, 88)) continue;
+                    !normalize(word.get("text").toString()).equals(blueprint ? "立即领取" : "点击领取") ||
+                    !limeButton(frame, x, y, blueprint ? 84 : 88)) continue;
             if (!action.isEmpty()) return Map.of();
-            action = Map.of("x", x, "y", y, "label", "新手狂欢礼领取");
+            action = Map.of("x", x, "y", y, "label", blueprint ? "万能图纸福利领取" : "新手狂欢礼领取");
         }
         return action;
     }
@@ -235,6 +283,21 @@ public final class ModalPopup {
         return red >= 7;
     }
 
+    public static boolean possibleBlueprintGift(PixelFrame frame) {
+        if (frame.width != 720 || frame.height != 1280 || maximum(pixel(frame, 75, 250)) >= 90) return false;
+        // On the dim lobby the campaign has a pink headline above the cards and a lime footer button.
+        boolean footer = false;
+        for (int x = 770; x <= 1000; x += 16) {
+            if (lime(pixel(frame, x, 540)) && lime(pixel(frame, x, 595))) { footer = true; break; }
+        }
+        if (!footer) return false;
+        for (int x = 225; x <= 535; x += 8) {
+            int c = pixel(frame, x, 144);
+            if ((c >> 16 & 255) > 205 && (c >> 8 & 255) < 65 && (c & 255) > 45 && (c & 255) < 145) return true;
+        }
+        return false;
+    }
+
     public static boolean possibleNewcomerGift(PixelFrame frame) {
         if (frame.width != 720 || frame.height != 1280 || !limeButton(frame, 945, 539, 88)) return false;
         return maximum(pixel(frame, 88, 300)) < 90 && maximum(pixel(frame, 1192, 300)) < 90;
@@ -264,7 +327,8 @@ public final class ModalPopup {
                 .replace('認','认').replace('確','确').replace('號','号').replace('錄','录').replace('兌','兑')
                 .replace('點','点').replace('擊','击').replace('歡','欢').replace('禮','礼').replace('連','连')
                 .replace('賽','赛').replace('環','环').replace('標','标').replace('務','务').replace('還','还')
-                .replace('豐','丰').replace('７','7');
+                .replace('豐','丰').replace('７','7').replace('費','费').replace('萬','万')
+                .replace('圖','图').replace('紙','纸').replace('隨','随');
     }
 
     private static boolean button(PixelFrame frame, Panel panel, int x, int y, int length) {
@@ -285,7 +349,6 @@ public final class ModalPopup {
 
     static int pixel(PixelFrame frame, int x, int y) { return frame.pixel(719 - y, x); }
     static int maximum(int rgb) { return Math.max(rgb >> 16 & 255, Math.max(rgb >> 8 & 255, rgb & 255)); }
-    private static int brightness(int rgb) { return (rgb >> 16 & 255) + (rgb >> 8 & 255) + (rgb & 255); }
     static int distance(int a, int b) {
         return Math.abs((a >> 16 & 255) - (b >> 16 & 255))
                 + Math.abs((a >> 8 & 255) - (b >> 8 & 255)) + Math.abs((a & 255) - (b & 255));

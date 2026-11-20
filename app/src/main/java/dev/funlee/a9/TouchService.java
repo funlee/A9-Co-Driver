@@ -62,11 +62,12 @@ public final class TouchService extends AccessibilityService implements RouteEng
     @Override protected void onServiceConnected() {
         instance=this;
         if(activityHint==null)activityHint=new GameActivityHint(this,main,
-                ()->armed&&SessionState.running&&controlButton!=null&&!SessionState.inputPaused()&&!SessionState.racePanelVisible);
+                ()->armed&&SessionState.running&&!SessionState.inputPaused()&&gameInForeground());
         AccessibilityButtonController controller=getAccessibilityButtonController();
         controller.unregisterAccessibilityButtonCallback(shortcutCallback);
         controller.registerAccessibilityButtonCallback(shortcutCallback,main);
         SessionState.log("无障碍触控已连接");
+        main.post(this::showPendingTaskFailure);
     }
     @Override public void onAccessibilityEvent(AccessibilityEvent event) {
         if(event.getEventType()==AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED&&event.getPackageName()!=null){
@@ -81,6 +82,7 @@ public final class TouchService extends AccessibilityService implements RouteEng
                     }finally{window.recycle();}
                 }
             }
+            if(!SessionState.running)main.post(this::showPendingTaskFailure);
             if(armed)scheduleControlButton();
         }
     }
@@ -162,18 +164,19 @@ public final class TouchService extends AccessibilityService implements RouteEng
         if(controlMenu!=null){controlMenu.hide();controlMenu=null;}
         SessionState.controlsOpen=false;
     }
-    void showTaskFailure(String gamePackage,String detail){
-        if(gamePackage.isEmpty()||!gamePackage.equals(foregroundPackage()))return;
-        dismissTaskFailure();
-        // Keep the failure message while omitting the Lua and Java wrappers from the dialog.
-        String reason=detail.split("\n",2)[0].trim()
-                .replaceFirst("^(?:\\[string [^\\]]+\\]:\\d+:\\s*)+", "")
-                .replaceFirst("^(?:[\\w.$]+\\.)?[\\w$]*(?:Exception|Error):\\s*", "")
-                .replaceFirst("^_\\w+[：:]\\s*", "");
+    boolean showPendingTaskFailure(){
+        if(taskFailureDialog!=null)return true;
+        if(SessionState.running)return false;
+        String gamePackage=RunStatusRecord.failureGame(this);
+        if(gamePackage.isEmpty())return false;
+        if(!gamePackage.equals(foregroundPackage())&&
+                !(gamePackage.equals(allowedPackage)&&foregroundGameBounds()!=null))return false;
+        String message=RunStatusRecord.failureMessage(this);
+        if(message.isEmpty())return false;
         AlertDialog dialog=new AlertDialog.Builder(this)
                 .setTitle("任务已停止")
-                .setMessage(reason.isEmpty()?"暂时无法确定原因，请回到助手查看任务状态。":reason)
-                .setPositiveButton("确定",(ignored,which)->dismissTaskFailure())
+                .setMessage(message)
+                .setPositiveButton("确定",(ignored,which)->{RunStatusRecord.clearFailure(this);dismissTaskFailure();})
                 .setCancelable(false)
                 .create();
         dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY);
@@ -182,8 +185,10 @@ public final class TouchService extends AccessibilityService implements RouteEng
             dialog.show();
             taskFailureDialog=dialog;
             failureGamePackage=gamePackage;
+            return true;
         }catch(WindowManager.BadTokenException|SecurityException e){
             SessionState.log("无法显示任务停止提示："+e.getMessage());
+            return false;
         }
     }
     void dismissTaskFailure(){
@@ -211,13 +216,18 @@ public final class TouchService extends AccessibilityService implements RouteEng
     void offerActivityHint(String message){
         main.post(()->{if(activityHint!=null)activityHint.offer(message);});
     }
+    /** Called on the main looper before recovery opens system settings. */
+    void showRestartNotice(String message){
+        if(activityHint!=null&&armed&&gameInForeground()&&activityHint.showNow(message,3500))return;
+        android.widget.Toast.makeText(this,message,android.widget.Toast.LENGTH_LONG).show();
+    }
+    void updateRecoveryWait(String message){
+        main.post(()->{if(activityHint!=null)activityHint.updateWait(message);});
+    }
     void showTaskNotice(String message,int duration){
         main.post(()->{
             if(activityHint!=null&&armed&&SessionState.running&&gameInForeground())activityHint.showNow(message,duration);
         });
-    }
-    void clearActivityHint(){
-        main.post(()->{if(activityHint!=null)activityHint.clear();});
     }
     Rect activityHintBounds(long frameTime){
         GameActivityHint hint=activityHint;

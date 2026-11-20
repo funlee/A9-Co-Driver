@@ -28,17 +28,129 @@ public final class CupCarousel {
             boolean selected=whiteEdge(frame,left,wide)&&whiteEdge(frame,right,wide);
             if(wide&&width>175&&!selected)continue;
             int center=(left+right)/2;
-            if(wide) {
-                List<Integer> artwork=new ArrayList<>();
-                for(int offset=-40;offset<=40;offset+=20)for(int row=124;row<=184;row+=15) {
-                    int color=frame.pixel(row,center+offset);
-                    artwork.add(((color>>16)&255)+((color>>8)&255)+(color&255));
-                }
-                cards.add(Map.of("center",center,"selected",selected,"artwork",artwork));
-            } else cards.add(Map.of("center",center,"selected",selected));
+            cards.add(card(frame,center,selected,wide));
         }
+        if(wide)addBadgeCards(frame,cards);
         return cards;
     }
+    private static Map<String,Object> card(PixelFrame frame,int center,boolean selected,boolean wide){
+        if(!wide)return Map.of("center",center,"selected",selected);
+        List<Integer> artwork=new ArrayList<>();
+        for(int offset=-40;offset<=40;offset+=20)for(int row=124;row<=184;row+=15){
+            int color=frame.pixel(row,center+offset);
+            artwork.add(((color>>16)&255)+((color>>8)&255)+(color&255));
+        }
+        return Map.of("center",center,"selected",selected,"artwork",artwork);
+    }
+    // Thin outlines can disappear after scaling. A full timer badge has two pink
+    // rails and a blue ticket tile; the enlarged selected card instead has a lime
+    // underline and white sides above the area covered by the task notice.
+    private static void addBadgeCards(PixelFrame frame,List<Map<String,Object>> cards){
+        int timer=-1,strip=-1;
+        for(int x=0;x<=1280;x++){
+            boolean pink=x<1280&&timerRail(frame,x,484)&&timerRail(frame,x,507);
+            if(pink && timer<0)timer=x;
+            if(!pink && timer>=0){
+                int width=x-timer;
+                if(width>=83&&width<=109&&x+30<1280){
+                    int blue=0;
+                    for(int dx=5;dx<=29;dx+=4)if(near(frame.pixel(719-503,x+dx),0,51,93,32))blue++;
+                    if(blue>=3)mergeCard(frame,cards,(timer+x-1)/2+16,false);
+                }
+                timer=-1;
+            }
+            boolean lime=x<1280&&selectionStrip(frame,x);
+            if(lime && strip<0)strip=x;
+            if(!lime && strip>=0){
+                int width=x-strip;
+                if(width>=145&&width<=180&&strip>=3&&x+3<1280&&
+                        upperWhiteSide(frame,strip)&&upperWhiteSide(frame,x-1))
+                    mergeCard(frame,cards,(strip+x-1)/2,true);
+                strip=-1;
+            }
+        }
+        cards.sort(Comparator.comparingInt(c->(int)c.get("center")));
+    }
+    private static boolean timerRail(PixelFrame frame,int x,int y){
+        for(int dy=-2;dy<=2;dy++){
+            int c=frame.pixel(719-y-dy,x);
+            if((c>>16&255)>178&&(c>>8&255)<62&&(c&255)>45&&(c&255)<158)return true;
+        }
+        return false;
+    }
+    private static boolean selectionStrip(PixelFrame frame,int x){
+        int hits=0;
+        for(int row=14;row<=18;row+=2){
+            int color=frame.pixel(row,x);
+            if(near(color,195,248,26,46))hits++;
+        }
+        return hits>=2;
+    }
+    private static boolean upperWhiteSide(PixelFrame frame,int edge){
+        for(int x=edge-3;x<=edge+3;x++){
+            int hits=0;
+            for(int y=451;y<=515;y+=8)if(near(frame.pixel(719-y,x),255,255,255,58))hits++;
+            if(hits>=7)return true;
+        }
+        return false;
+    }
+    private static void mergeCard(PixelFrame frame,List<Map<String,Object>> cards,int center,boolean selected){
+        for(int i=0;i<cards.size();i++){
+            Map<String,Object> old=cards.get(i);
+            if(Math.abs((int)old.get("center")-center)>16)continue;
+            if(selected && !Boolean.TRUE.equals(old.get("selected")))cards.set(i,card(frame,center,true,true));
+            return;
+        }
+        cards.add(card(frame,center,selected,true));
+    }
+    /** A white caption flanked by pink rails directly above the highlighted claim card. */
+    public static boolean claimSpotlight(PixelFrame frame){
+        if(frame.width!=720||frame.height!=1280)return false;
+        int firstRail=-1;
+        for(int x=0;x<1280;x+=3){
+            if(!pinkRail(frame,x))continue;
+            if(firstRail>=0){
+                int width=x-firstRail;
+                if(width<16)continue;
+                int center=(firstRail+x)/2;
+                if(width>=380&&width<=665&&claimOnlyAt(frame,center)
+                        &&whiteCaption(frame,firstRail+32)&&whiteCaption(frame,x-32))return true;
+            }
+            firstRail=x;
+        }
+        return false;
+    }
+
+    private static boolean whiteCaption(PixelFrame frame,int x){
+        return near(frame.pixel(719-385,x),255,255,255,20)&&near(frame.pixel(719-421,x),255,255,255,20);
+    }
+
+    private static boolean pinkRail(PixelFrame frame,int x){
+        return near(frame.pixel(719-385,x),255,0,84,45)&&near(frame.pixel(719-421,x),255,0,84,45);
+    }
+
+    /** Bottom yellow strip with a centered two-character label, on an already selected event. */
+    public static boolean claimOnlyAt(PixelFrame frame,int center){
+        if(frame.width!=720||frame.height!=1280||center<65||center>=1215)return false;
+        for(int x=center-54;x<=center+54;x+=108){
+            if(!claimGold(frame.pixel(719-658,x))||!claimGold(frame.pixel(719-680,x))
+                    ||claimGold(frame.pixel(719-691,x)))return false;
+        }
+        int ink=0;
+        for(int x=center-20;x<=center+20;x+=2){
+            for(int y=663;y<=677;y+=2){
+                int color=frame.pixel(719-y,x);
+                if((color>>16&255)<215&&(color>>8&255)<165&&(color&255)<108)ink++;
+            }
+        }
+        return ink>=10;
+    }
+
+    private static boolean claimGold(int color){
+        int r=color>>16&255,g=color>>8&255,b=color&255;
+        return r>=227&&g>=190&&r>=g-7&&b<145;
+    }
+
     private static boolean whiteEndpoints(PixelFrame frame,int y){
         int tolerance=whiteTolerance(frame,y,true);
         // A light shape in the card artwork can pass the count but ends

@@ -13,14 +13,26 @@ final class RecoveryChecks {
         check(!RecoveryReadiness.ready("VS 正在搜索其他玩家和地点"),"Stalled match is not startup completion");
         check(RecoveryReadiness.ready("单人模式 多人游戏 每日赛事 俱乐部"),"Loaded home authorizes recovery completion");
         check(RecoveryReadiness.ready("世界系列赛 大师系列赛"),"Series menu authorizes recovery completion");
+        String club="里程碑 俱乐部排行榜 成员 俱乐部经验 在线成员 俱乐部赛事 领取";
+        check(RecoveryReadiness.ready(club,"unknown",true)&&!RecoveryReadiness.ready(club,"unknown",false),
+                "Club subpage needs navigation evidence, not a home-menu OCR match");
+        check(!RecoveryReadiness.ready("加载中 "+club,"unknown",true)&&
+                !RecoveryReadiness.ready("VS 正在搜索其他玩家和地点","matching",true),
+                "Background navigation cannot release loading or matchmaking");
         String sale="限时发售 开启赛道制霸征程 把握 传奇促销 入手 PORSCHE 718 CAYMAN 一举成名";
         check(MultiplayerUi.classify(sale).equals("promo")&&RecoveryReadiness.ready(sale),"Limited sale is a recognized recovery overlay");
         check(!MultiplayerUi.limitedSalePromo("PORSCHE 718 CAYMAN 传奇促销"),"Vehicle text alone cannot authorize a promotion close");
+        int[] pixels=new int[720*1280];
+        pixels[1251*720+689]=0xff303e54;pixels[1251*720+678]=0xffd5d5da;
+        pixels[1252*720+701]=0xffffffff;pixels[1262*720+690]=0xfff4f4f4;
+        check(RecoveryReadiness.restartScreen(new PixelFrame(720,1280,pixels)),"Original restart screen signature");
+        pixels[1252*720+701]=0xff303e54;
+        check(!RecoveryReadiness.restartScreen(new PixelFrame(720,1280,pixels)),"All four restart pixels must match");
         MatchmakingWatchdog w=new MatchmakingWatchdog();
-        check(!w.observe(true,0,1)&&!w.observe(true,90_001,2)&&!w.observe(true,120_000,3),
-                "No recovery at or below 120 seconds");
-        check(!w.observe(true,120_001,3)&&w.observe(true,120_002,4),
-                "Recovery after 120 seconds requires a fresh matching frame");
+        check(!w.observe(true,0,1)&&!w.observe(true,30_001,2)&&!w.observe(true,60_000,3),
+                "No recovery at or below 60 seconds");
+        check(!w.observe(true,60_001,3)&&w.observe(true,60_002,4),
+                "Recovery after 60 seconds requires a fresh matching frame");
         check(!w.observe(false,121_000,5)&&!w.active()&&w.elapsed(200_000)==0,
                 "A recognized nonmatching page resets the timer");
         check(!w.observe(true,200_000,6),"Next match starts a new clock");
@@ -39,7 +51,7 @@ final class RecoveryChecks {
         check(MultiplayerUi.classify("其他玩家 圈").equals("unknown"),"Loading roster is not matching");
         TaskStats stats=new TaskStats();stats.project("多人上");stats.matching(92_800);
         check(stats.currentActivity("多人流程：matching · 1/3").equals("匹配中 · 92 秒")&&
-                stats.panel("").contains("匹配等待 92 秒 / 120 秒"),"Both matching displays show elapsed time and the current limit");
+                stats.panel("").contains("匹配等待 92 秒 / 60 秒"),"Both matching displays show elapsed time and the current limit");
         check(stats.currentActivity("已暂停").equals("已暂停"),"A paused task keeps its paused status");
         stats.begin("sample",false);stats.result(2);
         stats.recovered();stats.resumeProject(30,1);stats.result(1);stats.returned();

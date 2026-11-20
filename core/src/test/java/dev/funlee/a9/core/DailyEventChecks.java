@@ -29,6 +29,16 @@ final class DailyEventChecks {
         if(!RaceRewards.totalCoinsLabel("总全币")||RaceRewards.totalCoinsLabel("总全币 4,200")||
                 RaceRewards.page("总全币 4,200 继续"))
             throw new AssertionError("Accept the observed OCR error in the total label without weakening its boundaries");
+        String camaro="CAMARO LT 30/30 加速 操控性 氮气 提升车辆星級来解锁更多升级阶段 性能分 556/1,238 升呈!";
+        if(!VehicleUnlockGuard.pendingDetail(camaro)||!DailyEventUi.classifySolo(camaro).equals("car")||
+                !MultiplayerUi.classify(camaro).equals("car"))throw new AssertionError("Camaro star-up detail misread as unknown");
+        String pending="性能分 加速 操控性 氮气 解锁车辆";
+        if(!DailyEventUi.classifySolo(pending).equals("lockedCar")||!MultiplayerUi.classify(pending).equals("lockedCar")||
+                !MultiplayerUi.classify("车辆选择 选择参与此赛事的车辆 解锁就绪").equals("cars"))
+            throw new AssertionError("Pending unlock detail or ribbon misread as a popup");
+        if(!VehicleUnlockGuard.trialStart(pending+" 免费试驾",List.of(Map.of("text","开始","x",1100,"y",650)))||
+                VehicleUnlockGuard.trialStart(pending+" 免费试驾",List.of(Map.of("text","解锁车辆","x",1100,"y",650))))
+            throw new AssertionError("A game-provided trial needs an actual Start action");
         String attributes="性能分 最大速度 加速 操控性 氮气";
         if(!DailyEventUi.classifySolo(attributes+" 最高阶段 仓库 你已达到最高等级").equals("vehicleUpgrade")||
                 !DailyEventUi.classifySolo(attributes+" TOUCHDRIVE 升级 开始 7/8").equals("car"))

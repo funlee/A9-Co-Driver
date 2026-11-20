@@ -32,7 +32,7 @@ function _recoveryUi()
       words={{text='再玩一会',x=570,y=520},{text='退出游戏',x=790,y=520}}} end
     if reads<=4 then return {scene='unknown',frameId=reads} end
   elseif scenario=='popup' then
-    if #taps==0 then return {scene='interruptingPopup',frameId=reads,homeEvidence=2,
+    if #taps==0 then return {scene='interruptingPopup',frameId=reads,homeEvidence=2,returnOverlay='ad',legacyPopup='fixture',
       dismissPopup={x=880,y=90,label='×'}} end
     if #taps==1 then return {scene='unknown',frameId=reads,legacyPopup='fixture'} end
   elseif scenario=='originalActions' then

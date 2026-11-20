@@ -191,7 +191,7 @@ public final class CoreChecks {
             if(catalogRoute.valid())catalogScripts++;else if(catalogRoute.raw.isEmpty())catalogEmpty++;else catalogInvalid++;
         }
         check(observedRegions.equals(regions),"All 21 screenshot regions have their confirmed track counts");
-        check(catalogScripts==202&&catalogEmpty==49&&catalogInvalid==0,"Catalog has 202 executable scripts and 49 empty entries");
+        check(catalogScripts==203&&catalogEmpty==48&&catalogInvalid==0,"Catalog has 203 executable scripts and 48 empty entries");
         check(matcher.match("花都疾驰城市穿梭 1圈").unique()&&matcher.match("樱花港城市穿梭 1圈").unique()
             &&!matcher.match("城市穿梭 1圈").unique(),"Region-qualified shared titles stay distinct; bare shared title is not guessed");
         check(matcher.match("西部牧场龙卷风! 1圈").unique()&&matcher.match("西部牧场龙卷风！ 1圈").unique(),"Full/half-width punctuation selects the same screenshot title");
@@ -278,6 +278,7 @@ public final class CoreChecks {
         checks+=OrchestrationRecoveryChecks.run(assets);
         checks+=QueueRetryChecks.run(assets);
         checks+=SpecialEventListChecks.run(assets);
+        ActivityHintChecks.run();
         checks+=ModalPopupChecks.run(assets);
         checks+=DailyTaskChecks.run(assets);
         checks+=TaskRouteChecks.run(assets);

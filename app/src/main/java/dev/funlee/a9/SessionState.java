@@ -19,12 +19,9 @@ public final class SessionState {
     public static volatile boolean resultOverlay;
     public static volatile boolean overlayMenuCompact;
     public static volatile boolean racePanelVisible;
-    static volatile long lastScreenChange;
     public static void racePanel(boolean visible) {
         if(racePanelVisible==visible)return;
         racePanelVisible=visible;
-        TouchService touch=TouchService.instance;
-        if(visible&&touch!=null)touch.clearActivityHint();
         Runnable refresh=overlayRefresh;if(refresh!=null)main.post(refresh);
     }
     public static volatile Runnable overlayRefresh;
@@ -50,29 +47,17 @@ public final class SessionState {
     }
     public static synchronized String logs() { return String.join("\n",lines); }
     public static void hud(String value){
-        String previous=hintLine(hud);
+        String previous=hud;
         hud=value;
-        String message=hintLine(value);
-        if(!message.equals(previous))hint(message);
+        if(!value.equals(previous))hint(value);
         changed();
     }
-    private static String hintLine(String value){
-        if(value==null)return "";
-        int end=value.indexOf('\n');
-        String first=(end<0?value:value.substring(0,end)).trim();
-        if(first.startsWith("匹配 "))return "正在匹配对手";
-        if(first.startsWith("设置车库筛选"))return "正在设置选车筛选";
-        return first;
-    }
     static void hint(String value){
+        if(!racePanelVisible)activity(dev.funlee.a9.core.ActivityHintPolicy.fromHud(value));
+    }
+    static void activity(String message){
         TouchService touch=TouchService.instance;
-        if(running&&!inspecting&&!racePanelVisible&&touch!=null){
-            String message=hintLine(value);
-            if(message.startsWith("多人流程：")||message.startsWith("智能选路 ")
-                    ||message.equals("比赛中")||message.equals("多人选路执行中")
-                    ||message.equals("等待可靠的进度画面"))return;
-            touch.offerActivityHint(message);
-        }
+        if(!message.isEmpty()&&running&&!inspecting&&touch!=null)touch.offerActivityHint(message);
     }
     public static void status(String value) { status=value; log(value);hint(value); }
     public static void failure(String detail) {

@@ -2,7 +2,7 @@ package dev.funlee.a9.core;
 
 /** Only positively identified matching frames can request recovery. Times exclude pauses. */
 public final class MatchmakingWatchdog {
-    public static final int TIMEOUT_SECONDS=120;
+    public static final int TIMEOUT_SECONDS=60;
     private long since=-1,lastFrame=-1,lastMatching=-1;
     private int matchingFrames;
     public void reset(){since=-1;matchingFrames=0;lastFrame=-1;lastMatching=-1;}

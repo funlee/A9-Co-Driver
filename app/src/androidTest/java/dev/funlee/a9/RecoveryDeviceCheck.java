@@ -28,12 +28,14 @@ public final class RecoveryDeviceCheck extends Instrumentation {
         try{
             if(mode.equals("panel-window"))PanelWindowCheck.run(this,report);
             else if(mode.equals("panel-visibility"))PanelVisibilityDeviceCheck.run(this,report);
+            else if(mode.equals("failure-record"))failureRecord(report);
             else if(mode.equals("reward-menus"))RewardMenuCheck.run(this,report);
             else if(mode.equals("panel-layout"))PanelLayoutCheck.run(this,report);
             else if(mode.equals("custom-maps"))CustomMapDeviceCheck.run(this,report);
             else if(mode.equals("route-reset"))RouteResetDeviceCheck.run(this,report);
             else if(mode.equals("task-queue"))TaskQueueDeviceCheck.run(this,report);
             else if(mode.equals("queue-retry")||mode.equals("queue-notices"))QueueRetryDeviceCheck.run(this,report,mode.equals("queue-notices"));
+            else if(mode.equals("blueprint-gift"))QueueRetryDeviceCheck.blueprintGift(this,report);
             else if(mode.equals("task-editing"))TaskEditingDeviceCheck.run(this,report);
             else if(mode.equals("account-login"))accountLogin(report);
             else if(mode.equals("screenshots"))screenshots(report);
@@ -83,6 +85,32 @@ public final class RecoveryDeviceCheck extends Instrumentation {
             }else throw new IllegalArgumentException("Unknown mode");
             finish(0,report);
         }catch(Throwable e){report.putString("result","FAIL: "+e);finish(1,report);}
+    }
+    private void failureRecord(Bundle report)throws Exception{
+        File directory=java.nio.file.Files.createTempDirectory(getTargetContext().getCacheDir().toPath(),"failure-check").toFile();
+        android.content.Context context=new android.content.ContextWrapper(getTargetContext()){
+            @Override public File getFilesDir(){return directory;}
+        };
+        try{
+            if(FailureScreenshot.read(context)!=null)throw new AssertionError("Expected empty record");
+            Bitmap image=Bitmap.createBitmap(16,9,Bitmap.Config.ARGB_8888);image.eraseColor(0xffcc3311);
+            java.util.concurrent.CompletableFuture<Boolean> saved=new java.util.concurrent.CompletableFuture<>();
+            FailureScreenshot.save(context,image,"恢复时未确认菜单",saved::complete);
+            if(!saved.get(5,TimeUnit.SECONDS))throw new AssertionError("Missing screenshot");
+            FailureScreenshot.Entry entry=FailureScreenshot.read(context);
+            if(entry.image.getPixel(3,3)!=0xffcc3311 || !entry.reason.equals("恢复时未确认菜单") || entry.time<=0)
+                throw new AssertionError("Screenshot, time and reason must belong to the same failure");
+            entry.image.recycle();
+            java.util.concurrent.CompletableFuture<Boolean> missing=new java.util.concurrent.CompletableFuture<>();
+            FailureScreenshot.save(context,null,"截屏授权已结束",missing::complete);
+            if(missing.get(5,TimeUnit.SECONDS))throw new AssertionError("Unexpected image");
+            entry=FailureScreenshot.read(context);
+            if(entry.image!=null||!entry.reason.equals("截屏授权已结束"))throw new AssertionError("Stale screenshot attached");
+            report.putString("result","PASS: empty, screenshot with cause and timestamp, and new cause without a screenshot");
+        }finally{
+            File[] files=directory.listFiles();if(files!=null)for(File f:files)f.delete();
+            directory.delete();
+        }
     }
     private void leagueDemotionReplay(Bundle report)throws Exception{
         File image=new File(getTargetContext().getFilesDir(),"league-demotion.png");

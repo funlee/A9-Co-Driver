@@ -153,9 +153,9 @@ final class OrchestrationRecoveryChecks {
             "function tap(x,y)assert(x==69 and y==1100);taps=taps+1 end;function test()"+
             "for _,mode in ipairs({'杯赛','特殊赛事'}) do data['项目']=mode;assert(utils.startRace()==1) end;"+
             "zeroTicket=true;assert(utils.startRace()==1);data['项目']='杯赛';assert(not pcall(utils.startRace));zeroTicket=false;"+
-            "data['项目']='多人上';assert(not pcall(utils.startRace));data['项目']='杯赛';fuel=0;assert(utils.startRace()=='fuelEmpty');"+
+            "for _,mode in ipairs({'每日战利品','车联'}) do data['项目']=mode;assert(utils.startRace()==1) end;data['项目']='杯赛';fuel=0;assert(utils.startRace()=='fuelEmpty');"+
             "star=true;fuel=6;for _,mode in ipairs({'杯赛','特殊赛事','每日战利品','车联'}) do data['项目']=mode;assert(utils.startRace()=='fuelEmpty') end;"+
-            "assert(taps==3);done=true end");
+            "assert(taps==5);done=true end");
         script(assets,List.of("utilities"),String.join("\n",
             "data={['项目']='特殊赛事'};local reads,taps=0,0;function print()end;utils.mycolor=function()return 1 end",
             "function _soloEventUi()reads=reads+1;local start={text='开始0',x=1100,y=650}",
@@ -169,25 +169,33 @@ final class OrchestrationRecoveryChecks {
             "function test()assert(dailyCup.settle('特殊赛事',_soloEventUi)==0 and taps==1);done=true end");
         script(assets,List.of("utilities"),"data={};function _soloEventUi()return {scene='unknown',text='世界系列賽 試驾挑战 大师系列赛 对决'} end;"+
                 "function toast()end;function tap()error('Series selector already on home')end;function test()utils.backToMain();done=true end");
+        script(assets,List.of("utilities"),String.join("\n",
+                "data={};local taps=0;function toast()end;function keepCapture()end;function releaseCapture()end",
+                "function _soloEventUi() if taps==1 then return {scene='home'} end",
+                "return {scene='unknown',text='俱乐部里程碑 领取',homeButton={x=1249,y=26}} end",
+                "function cmpColorEx(pattern)return pattern:find('690|1240',1,true) and 1 or 0 end",
+                "function tap(y,x)assert(y==693 and x==1249);taps=taps+1 end",
+                "function test()utils.backToMain();assert(taps==1);done=true end"));
         int fuelScenarios=0;
-        for(String project:List.of("多人上","多人下"))for(String scenario:List.of("mixed","allEmpty","detailEmpty","starCard","starDetail","rotate","detailOcr","wrongCar","lateRewards","blockedRewards","longRewards")){
+        for(String project:List.of("多人上","多人下"))for(String scenario:List.of("mixed","allEmpty","detailEmpty","starCard","starDetail","lockedCard","lockedDetail","trialCard","rotate","detailOcr","wrongCar","lateRewards","blockedRewards","longRewards")){
             String series=project.equals("多人上")?"世界系列赛":"大师系列赛";
             script(assets,List.of("multiplayer_current"),
                 "local scenario='"+scenario+"';local series='"+series+"';local count=scenario=='rotate' and 2 or 1;"+
                 "data={['项目']='"+project+"',['多人']=0};run={data={['次数']=count,['用车模式']=(scenario=='rotate' or scenario=='detailOcr') and '1' or '0',['青铜用车']={1,2},['多人下用车']={1,2}}};"+
-                "utils={defultCfg=function(v,d)return v or d end};local phase='series';local frame=0;local selected=0;local choices={};local finished=0;local rewardSince=nil;local exitAt=nil;local rewardTaps=0;local bonusAt=nil;local bonusTaps=0;"+
+                "utils={defultCfg=function(v,d)return v or d end};local phase='series';local frame=0;local selected=0;local choices={};local notices=0;local finished=0;local rewardSince=nil;local exitAt=nil;local rewardTaps=0;local bonusAt=nil;local bonusTaps=0;"+
                 "function print()end;function _hud()end;function swipe()end;function cmpColor()return 1 end;function _sessionProject()return 0 end;function _sessionRaceBegin()end;function _sessionRaceResult()end;function _sessionRaceRewards()end;function _fallbackBegin()end;function _fallbackStep()return 99 end;function _sessionOperation()end;"+
                 "function _sessionRaceReturned()finished=finished+1;phase='series' end;"+
                 "function tap(y,x)y=719-y;if x==350 and y==450 then phase='event' elseif x==1100 and y==650 then if phase=='event' then phase='cars' elseif phase=='car' then phase='race' elseif phase=='result' then phase=(scenario=='lateRewards' or scenario=='blockedRewards' or scenario=='longRewards') and 'reward' or 'returned' elseif phase=='reward' then phase='rewardLeaving';exitAt=tickCount();rewardTaps=rewardTaps+1 elseif phase=='bonus' then bonusTaps=bonusTaps+1;bonusAt=tickCount();if bonusTaps==3 then phase='returned' end end elseif x==410 and (y==305 or y==542)then selected=y==305 and 1 or 2;choices[#choices+1]=selected;phase='car' elseif x==38 and y==29 then phase='cars' end end;"+
-                "function _multiplayerUi()frame=frame+2000;local s={scene=phase,text=series,frameId=frame,words={},worldLeague='青铜'};"+
+                "function _taskNotice(msg,duration)assert(phase=='event' and msg==(series=='世界系列赛' and '青铜' or scenario=='rotate' and '铂金' or '无段位') and duration>0);notices=notices+1 end;"+
+                "function _multiplayerUi()frame=frame+2000;local s={scene=phase,text=series,frameId=frame,words={},worldLeague='青铜',masterLeague=scenario=='rotate' and '白金' or nil};"+
                 "if phase=='series' then s.text='世界系列赛 大师系列赛';s.words={{text=series,x=350,y=450}} " +
-                "elseif phase=='event' or phase=='car' then s.words={{text='开始',x=1100,y=650}};s.carDetail={name='LANCER',performance=((scenario=='detailOcr' and #choices==1) or scenario=='wrongCar') and '1/9' or '1/2'};s.fuel=scenario=='detailEmpty' and selected==1 and 0 or 3;s.starUpPending=scenario=='starDetail' and selected==1 " +
-                "elseif phase=='cars' then s.garage={start=true,key='origin',rank='青铜',cards={}};for i=1,2 do s.garage.cards[i]={index=i,x=410,y=i==1 and 305 or 542,availability=(scenario=='allEmpty' or scenario=='mixed' and i==1)and 'empty' or scenario=='starCard' and i==1 and 'starUp' or 'ready'}end " +
+                "elseif phase=='event' or phase=='car' then s.words={{text='开始',x=1100,y=650}};s.carDetail={name='LANCER',performance=((scenario=='detailOcr' and #choices==1) or scenario=='wrongCar') and '1/9' or '1/2'};s.fuel=scenario=='detailEmpty' and selected==1 and 0 or 3;s.starUpPending=scenario=='starDetail' and selected==1;if phase=='car' and selected==1 and scenario=='lockedDetail' then s.scene='lockedCar' end " +
+                "elseif phase=='cars' then s.garage={start=true,key='origin',rank='青铜',cards={}};for i=1,2 do s.garage.cards[i]={index=i,x=410,y=i==1 and 305 or 542,availability=(scenario=='allEmpty' or scenario=='mixed' and i==1)and 'empty' or scenario=='starCard' and i==1 and 'starUp' or scenario=='lockedCard' and i==1 and 'locked' or scenario=='trialCard' and i==1 and 'trial' or 'ready'}end " +
                 "elseif phase=='race' then phase='result' elseif phase=='result' then s.text='你的排名';s.words={{text='继续',x=1100,y=650}} elseif phase=='reward' or phase=='rewardLeaving' then rewardSince=rewardSince or tickCount();s.scene='result';s.rewardPage=true;s.rewardCanContinue=phase=='reward' and ((scenario=='lateRewards' and tickCount()-rewardSince>=14000) or (scenario=='longRewards' and tickCount()-rewardSince>=28000));s.rewardReady=true;s.words={{text='继续',x=1100,y=650}};if phase=='rewardLeaving' and tickCount()-exitAt>=10000 then phase=scenario=='longRewards' and 'bonus' or 'returned';bonusAt=tickCount() end elseif phase=='bonus' then s.scene='unknown';s.text=({'名人堂奖励','新赛季奖励','你获得了卡包奖励'})[bonusTaps+1];if tickCount()-bonusAt>=10000 then s.words={{text='继续',x=1100,y=650}}end elseif phase=='returned' then s.scene='event' end;return s end;"+
-                "function test()local ok,result=pcall(currentMultiplayer.run);if scenario=='blockedRewards' then assert(not ok and finished==0 and rewardTaps==0,'Unusable reward exit still times out');done=true;return end;assert(ok,result);if scenario=='longRewards' then assert(finished==1 and rewardTaps==1 and bonusTaps==3,'Wait past 20 seconds and advance each distinct reward page') elseif scenario=='lateRewards' then assert(finished==1 and rewardTaps==1,'Late-ready reward gets a separate exit transition window');elseif scenario=='detailOcr' or scenario=='wrongCar' then assert(finished==1 and table.concat(choices,',')=='1','Start the unlocked fueled slot without reading detail text');elseif scenario=='allEmpty' then assert(result=='fuelEmpty' and finished==0 and #choices==0) elseif scenario=='rotate' then assert(finished==2 and table.concat(choices,',')=='1,2') elseif scenario=='detailEmpty' or scenario=='starDetail' then assert(finished==1 and table.concat(choices,',')=='1,2') else assert(finished==1 and table.concat(choices,',')=='2')end;done=true end");
+                "function test()local ok,result=pcall(currentMultiplayer.run);assert(notices==count);if scenario=='blockedRewards' then assert(not ok and finished==0 and rewardTaps==0,'Unusable reward exit still times out');done=true;return end;assert(ok,result);if scenario=='longRewards' then assert(finished==1 and rewardTaps==1 and bonusTaps==3,'Wait past 20 seconds and advance each distinct reward page') elseif scenario=='lateRewards' then assert(finished==1 and rewardTaps==1,'Late-ready reward gets a separate exit transition window');elseif scenario=='trialCard' or scenario=='detailOcr' or scenario=='wrongCar' then assert(finished==1 and table.concat(choices,',')=='1','Start the unlocked fueled slot without reading detail text');elseif scenario=='allEmpty' then assert(result=='fuelEmpty' and finished==0 and #choices==0) elseif scenario=='rotate' then assert(finished==2 and table.concat(choices,',')=='1,2') elseif scenario=='detailEmpty' or scenario=='starDetail' or scenario=='lockedDetail' then assert(finished==1 and table.concat(choices,',')=='1,2') else assert(finished==1 and table.concat(choices,',')=='2')end;done=true end");
             fuelScenarios++;
         }
-        return 52+fuelScenarios+wideHome(assets)+strictHome(assets);
+        return 53+fuelScenarios+wideHome(assets)+strictHome(assets);
     }
     private static int wideHome(Path assets)throws Exception{
         List<Object> tabs=List.of(Map.of("text","每日","x",593,"y",626),Map.of("text","多人","x",787,"y",626),

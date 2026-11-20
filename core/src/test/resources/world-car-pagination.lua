@@ -18,6 +18,11 @@ if wideCar10 then run.data['青铜用车']={10} end
 local resets=0
 utils={defultCfg=function(v,d)return v or d end}
 function print()end
+local notices=0
+function _taskNotice(message,duration)
+  assert(phase=='event' and message==(unreadableAfterRace and firstSwipes and '未能确认当前段位' or '青铜') and duration>0)
+  notices=notices+1
+end
 function _hud()end
 function _sessionProject()return 0 end
 function _sessionRaceBegin()end
@@ -106,6 +111,7 @@ end
 function test()
   local ok,message=pcall(currentMultiplayer.run)
   assert(not ok)
+  assert(notices==(repeatRace and 2 or 1),'One notice per confirmed race')
   if unreadableAfterRace then
     assert(message:find('未确认世界系列赛当前段位') and phase=='event' and swipes==firstSwipes,message)
   elseif scenario=='overshoot' or scenario=='stuckPage' or scenario=='targetMoved' then

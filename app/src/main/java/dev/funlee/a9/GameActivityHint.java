@@ -11,18 +11,17 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.TextView;
 import java.util.function.BooleanSupplier;
+import dev.funlee.a9.core.ActivityHintPolicy;
 
-/** A non-touchable game message shown once when work continues on a still screen. */
+/** Non-touchable operation hints and immediate task notices share one game overlay. */
 final class GameActivityHint {
-    static final long STILL_MS=8000;
-    private static final long SHOW_MS=1000;
+    private final ActivityHintPolicy policy=new ActivityHintPolicy();
     private final Context context;
     private final Handler main;
     private final WindowManager windows;
     private final BooleanSupplier canShow;
     private TextView view;
-    private String last="",pending="";
-    private long pendingSince,shownForScreen=-1;
+    private boolean waiting;
     private final Runnable showPending=this::showPending;
     private final Runnable dismiss=this::hide;
     private static final class FrameArea {
@@ -38,34 +37,43 @@ final class GameActivityHint {
     }
 
     void offer(String message){
-        if(message.isEmpty()||message.equals("nil")||message.equals(last)||!canShow.getAsBoolean())return;
-        last=message;
-        if(pending.isEmpty()){
-            pendingSince=SystemClock.elapsedRealtime();
-            main.postDelayed(showPending,STILL_MS);
-        }
-        pending=message;
+        if(waiting)return;
+        policy.offer(message);
+        main.removeCallbacks(showPending);
+        long delay=policy.delay(SystemClock.elapsedRealtime());
+        if(delay==0)showPending();else main.postDelayed(showPending,delay);
     }
 
     private void showPending(){
-        if(!canShow.getAsBoolean()||pending.isEmpty()){pending="";return;}
-        long changed=SessionState.lastScreenChange;
-        long wait=Math.max(changed,pendingSince)+STILL_MS-SystemClock.elapsedRealtime();
-        if(wait>0){main.postDelayed(showPending,wait);return;}
-        if(shownForScreen==changed){pending="";return;}
-        shownForScreen=changed;
-        String message=pending;
-        pending="";
-        show(message,SHOW_MS,2);
+        if(!canShow.getAsBoolean())return;
+        long now=SystemClock.elapsedRealtime();
+        long delay=policy.delay(now);
+        if(delay>0){main.postDelayed(showPending,delay);return;}
+        String message=policy.take(now);
+        if(!message.isEmpty())show(message,ActivityHintPolicy.SHOW_MS,2);
     }
 
-    void showNow(String message,long duration){
+    boolean showNow(String message,long duration){
         clear();
-        last=message;
+        policy.reset(SystemClock.elapsedRealtime()+duration);
         show(message,duration,4);
+        return view!=null;
+    }
+
+    void updateWait(String message){
+        if(message==null||!canShow.getAsBoolean()){
+            if(waiting)clear();
+            return;
+        }
+        if(waiting&&view!=null){view.setText(message);return;}
+        clear();
+        waiting=true;
+        show(message,0,2);
     }
 
     private void show(String message,long duration,int maxLines){
+        main.removeCallbacks(dismiss);
+        hide();
         TextView label=new TextView(context);
         label.setText(message);
         label.setTextColor(0xfff5fafb);
@@ -85,9 +93,9 @@ final class GameActivityHint {
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
                 PixelFormat.TRANSLUCENT);
-        params.gravity=Gravity.BOTTOM|Gravity.CENTER_HORIZONTAL;
-        params.y=dp(32);
-        params.setTitle("A9 当前操作提示");
+        params.gravity=(waiting?Gravity.TOP:Gravity.BOTTOM)|Gravity.CENTER_HORIZONTAL;
+        params.y=dp(waiting?40:32);
+        params.setTitle(waiting?"A9 游戏恢复等待":"A9 当前操作提示");
         label.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{
             int[] location=new int[2];
             label.getLocationOnScreen(location);
@@ -97,7 +105,7 @@ final class GameActivityHint {
         try{
             windows.addView(label,params);
             view=label;
-            main.postDelayed(dismiss,duration);
+            if(duration>0)main.postDelayed(dismiss,duration);
         }catch(WindowManager.BadTokenException|SecurityException e){
             SessionState.log("无法显示当前操作提示："+e.getMessage());
         }
@@ -113,11 +121,11 @@ final class GameActivityHint {
     }
 
     void clear(){
+        waiting=false;
         main.removeCallbacks(showPending);
         main.removeCallbacks(dismiss);
         hide();
-        pending=last="";
-        pendingSince=0;shownForScreen=-1;
+        policy.reset(0);
     }
 
     Rect boundsAt(long frameTime){

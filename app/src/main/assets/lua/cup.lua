@@ -76,7 +76,9 @@ cup.operation = {
     config.selectMission,
     function()
       data["信息"] = "选择指定杯赛"
-      if utils.chooseCup(utils.defultCfg(run.data["杯赛位置"], "2")) == 0 then
+      local chosen=utils.chooseCup(utils.defultCfg(run.data["杯赛位置"], "2"))
+      if type(chosen)=="string" then return chosen end
+      if chosen == 0 then
         return -1
       end
       data["信息"] = "选择杯赛完毕"

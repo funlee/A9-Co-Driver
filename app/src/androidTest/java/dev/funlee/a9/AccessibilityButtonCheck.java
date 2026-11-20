@@ -85,15 +85,11 @@ public final class AccessibilityButtonCheck extends Instrumentation {
     }
     private void checkActivityHint(TouchService service)throws Exception{
         await(()->service.activityHintBounds(SystemClock.elapsedRealtime())==null);
-        SessionState.lastScreenChange=SystemClock.elapsedRealtime();
-        service.offerActivityHint("正在选择车辆");
-        Thread.sleep(GameActivityHint.STILL_MS-500);
-        if(service.activityHintBounds(SystemClock.elapsedRealtime())!=null)throw new AssertionError("Transient step displayed a hint");
-        SessionState.lastScreenChange=SystemClock.elapsedRealtime();
-        Thread.sleep(GameActivityHint.STILL_MS-500);
-        if(service.activityHintBounds(SystemClock.elapsedRealtime())!=null)throw new AssertionError("Moving page displayed a hint");
+        long offeredAt=SystemClock.elapsedRealtime();
+        service.offerActivityHint("正在选择配置车辆");
         await(()->service.activityHintBounds(SystemClock.elapsedRealtime())!=null);
         long visibleAt=SystemClock.elapsedRealtime();
+        if(visibleAt-offeredAt>1000)throw new AssertionError("First phase was delayed");
         var hintField=TouchService.class.getDeclaredField("activityHint");
         hintField.setAccessible(true);
         var viewField=GameActivityHint.class.getDeclaredField("view");
@@ -107,10 +103,10 @@ public final class AccessibilityButtonCheck extends Instrumentation {
             }catch(ReflectiveOperationException e){throw new AssertionError(e);}
         });
         Thread.sleep(350);
-        service.offerActivityHint("正在选择车辆");
+        service.offerActivityHint("正在选择配置车辆");
         await(()->service.activityHintBounds(SystemClock.elapsedRealtime())==null);
         long duration=SystemClock.elapsedRealtime()-visibleAt;
-        if(duration<700||duration>1350)throw new AssertionError("Unexpected activity hint duration: "+duration);
+        if(duration<1550||duration>2400)throw new AssertionError("Unexpected activity hint duration: "+duration);
         Thread.sleep(250);
         if(service.activityHintBounds(SystemClock.elapsedRealtime())!=null)
             throw new AssertionError("Duplicate activity hint appeared again");

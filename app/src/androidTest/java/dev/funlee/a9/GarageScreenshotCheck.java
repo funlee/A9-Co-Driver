@@ -20,9 +20,15 @@ public final class GarageScreenshotCheck extends Instrumentation {
     @Override public void onStart(){
         Bundle report=new Bundle();TextRecognizer ocr=TextRecognition.getClient(new ChineseTextRecognizerOptions.Builder().build());
         try{
+            boolean solo=arguments.containsKey("soloPendingIndex");
             Map<String,Object> garage=null,detail=null;
             for(String scene:List.of("cars","car")){
-                Bitmap side=BitmapFactory.decodeFile(new File(getTargetContext().getFilesDir(),"runtime/"+(scene.equals("cars")?arguments.getString("carsFrame","multiplayer-cars.png"):"multiplayer-car.png")).getPath());
+                String name=scene.equals("cars")?arguments.getString("carsFrame","multiplayer-cars.png"):"multiplayer-car.png";
+                Bitmap side;
+                if(solo&&scene.equals("car")){
+                    FailureScreenshot.Entry entry=FailureScreenshot.read(getTargetContext());
+                    side=entry==null?null:entry.image;
+                }else side=BitmapFactory.decodeFile(new File(getTargetContext().getFilesDir(),"runtime/"+name).getPath());
                 if(side==null)throw new AssertionError("Missing retained "+scene+" frame");
                 if(side.getWidth()==1280){Matrix m=new Matrix();m.postRotate(90);Bitmap normalized=Bitmap.createBitmap(side,0,0,side.getWidth(),side.getHeight(),m,false);side.recycle();side=normalized;}
                 Matrix rotation=new Matrix();rotation.postRotate(270);Bitmap image=Bitmap.createBitmap(side,0,0,720,1280,rotation,false);
@@ -31,7 +37,16 @@ public final class GarageScreenshotCheck extends Instrumentation {
                 for(Text.TextBlock block:text.getTextBlocks())for(Text.Line line:block.getLines()){
                     Rect b=line.getBoundingBox();if(b!=null)words.add(Map.of("text",line.getText(),"x",b.centerX(),"y",b.centerY()));
                 }
-                if(scene.equals("cars")){
+                if(solo){
+                    if(scene.equals("cars")){
+                        int[] pixels=new int[720*1280];side.getPixels(pixels,0,720,0,0,720,1280);
+                        garage=MultiplayerGarage.soloSlots(new PixelFrame(720,1280,pixels),words,16.0/9);
+                        if(!DailyEventUi.classifySolo(text.getText()).equals("cars"))throw new AssertionError("Not a vehicle list");
+                    }else if(!DailyEventUi.classifySolo(text.getText()).equals("car")||
+                            !VehicleUnlockGuard.pendingDetail(text.getText())||VehicleUnlockGuard.trialStart(text.getText(),words)){
+                        throw new AssertionError("Pending detail not recognized: "+text.getText());
+                    }
+                }else if(scene.equals("cars")){
                     Bitmap crop=Bitmap.createBitmap(side,250,90,86,111);Bitmap rot=Bitmap.createBitmap(crop,0,0,86,111,rotation,true);Bitmap scaled=Bitmap.createScaledBitmap(rot,rot.getWidth()*3,rot.getHeight()*3,true);
                     String rank=Tasks.await(ocr.process(InputImage.fromBitmap(scaled,0)),15,TimeUnit.SECONDS).getText();
                     int[] pixels=new int[720*1280];side.getPixels(pixels,0,720,0,0,720,1280);
@@ -43,6 +58,23 @@ public final class GarageScreenshotCheck extends Instrumentation {
                     if(!Boolean.TRUE.equals(garage.get("start")))throw new AssertionError("Retained first-page screenshot was not confirmed: "+garage+" OCR="+words);
                 }else{detail=MultiplayerGarage.detail(words);report.putString("detail",new JSONObject(detail).toString());}
                 image.recycle();side.recycle();
+            }
+            if(solo){
+                int index=Integer.parseInt(arguments.getString("soloPendingIndex"));
+                if(!Boolean.TRUE.equals(garage.get("start")))throw new AssertionError("Expected the first garage page");
+                try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
+                    LocalStore store=new LocalStore(getTargetContext());
+                    lua.load("utilities",store.asset("lua/utilities.lua"));
+                    lua.load("grid",store.asset("lua/multiplayer_current.lua"));
+                    lua.set("garage",garage);lua.set("index",index);
+                    lua.load("replay","data={['项目']='每日战利品',['用车次数']={}};run={data={}};local frame=0;"+
+                            "function _soloGarageUi(fast)frame=frame+1;return {scene='cars',frameId=frame,gridOnly=fast,garage=garage}end;"+
+                            "function test()assert(utils.chooseCarCup({index})=='fuelEmpty');done=true end");
+                    lua.start("test");for(int i=0;i<100&&lua.step(i*1000L);i++){}
+                    lua.load("result","assert(done)");
+                }
+                report.putString("result","PASS: production selection skipped pending car "+index+" without any touch; OCR recognized the star-up detail");
+                finish(-1,report);return;
             }
             Map<?,?> first=(Map<?,?>)((List<?>)garage.get("cards")).get(0);
             if(((Number)first.get("fuel")).intValue()<=0)throw new AssertionError("Retained first car fuel not recognized: "+first);

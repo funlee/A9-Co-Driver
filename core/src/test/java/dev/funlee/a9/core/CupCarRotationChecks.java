@@ -14,6 +14,8 @@ final class CupCarRotationChecks {
             "dailyCup={};run.data['杯赛用车']={1,1,1,2,3,4,5};utils.mycolor=function()return 1 end;utils.dailyPrize();assert(table.concat(dailyCup.carList,',')=='1,1,1,2,3,4,5');for i=1,8 do assert(utils.chooseCarCup(dailyCup.carList))end;assert(table.concat(calls,',')=='1,1,1,2,3,4,5,1');assert(#run.data['杯赛用车']==7)",
             "local cars={1,1,2};for i=1,4 do assert(utils.chooseCarCup(cars))end;assert(table.concat(calls,',')=='1,1,2,1')",
             "local cars={1,2,3};empty[1]=true;assert(utils.chooseCarCup(cars));assert(utils.chooseCarCup(cars));assert(table.concat(calls,',')=='1,2,1,3')",
+            "for _,mode in ipairs({'每日战利品','杯赛','特殊赛事','车联'}) do data['项目']=mode;data['用车次数']={};calls={};local frame=0;_soloEventUi=function()frame=frame+1;return {scene=selected==1 and 'lockedCar' or 'car',fuel=2,frameId=frame}end;assert(utils.chooseCarCup({1,2})==true and table.concat(calls,',')=='1,2') end",
+            "local frame,taps=0,0;function _soloEventUi()frame=frame+1;return frame==1 and {scene='vehicleUnlock',unlockLater={x=410,y=640}} or {scene='cars'} end;function tap(y,x)assert(x==410 and y==79);taps=taps+1 end;local status,detail=utils.carFuel(true);assert(status=='vehicleLocked' and detail.scene=='cars' and taps==1)",
             "local cars={1,2};empty[1]=true;empty[2]=true;assert(utils.chooseCarCup(cars)=='fuelEmpty');assert(table.concat(calls,',')=='1,2')",
             "run.data['用车模式']='0';local cars={1,2};assert(utils.chooseCarCup(cars));assert(utils.chooseCarCup(cars));assert(table.concat(calls,',')=='1,1')",
             "run.data['选车方式']='0';function findMultiColor()return -1,-1 end;utils.carSwipe=function()end;function tap()selected=selected+1;calls[#calls+1]=selected end;utils.backToGarage=function()end;empty[1]=true;assert(utils.chooseCarCup({1,2})==true and table.concat(calls,',')=='1,2')",
@@ -52,7 +54,7 @@ final class CupCarRotationChecks {
         try(var input=CupCarRotationChecks.class.getResourceAsStream("/daily-car-grid.lua")){
             fixture=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
         }
-        for(String scenario:List.of("ordered","stuck","mismatch","model","large","locked","locked-only","locked-detail"))
+        for(String scenario:List.of("at-start","filtered-click","filtered-slide","ordered","stuck","mismatch","model","large","locked","locked-only","locked-detail","star-card","star-detail","star-only"))
                 try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
             lua.set("scenario",scenario);
             lua.load("utilities",Files.readString(assets.resolve("lua/utilities.lua")));
@@ -85,6 +87,6 @@ final class CupCarRotationChecks {
         for(int x=46;x<87;x++)for(int y=195;y<670;y++)pixels[x*720+719-y]=0xff963815;
         if(Boolean.TRUE.equals(MultiplayerGarage.soloSlots(new PixelFrame(720,1280,pixels),List.of(),16.0/9).get("start")))
             throw new AssertionError("A clipped preceding card cannot be counted as the origin");
-        return 10;
+        return 16;
     }
 }

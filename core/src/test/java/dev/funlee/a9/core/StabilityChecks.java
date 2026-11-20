@@ -284,7 +284,11 @@ final class StabilityChecks {
                 int page=capturedPage[0];
                 String phase=page==race?"race":page==results?"result":page<rewards.size()?"bonus":"event";
                 Map<String,Object> screen=MultiplayerGarageChecks.fixture(transitionScreen(phase));
-                if(phase.equals("bonus"))screen.put("text","恭喜！你获得了这些奖励 "+rewards.get(page)+" 继续");
+                if(phase.equals("bonus")){
+                    // The import-parts card animates while Continue stays at the same position.
+                    String detail=page==3?(frame[0]/1000%2==0?"进口零件 氮气推进":"|进口零件 氮气摧进"):rewards.get(page);
+                    screen.put("text","恭喜！你获得了这些奖励 "+detail+" 继续");
+                }
                 screen.put("frameId",frame[0]);
                 if(page==race)livePage[0]=results;
                 LuaRuntime.push(l,screen);return 1;

@@ -81,7 +81,7 @@ local function recoverModal(screen,read,...)
       print('关闭游戏弹窗：'..action.label)
       tap(719-action.y,action.x)
       clicks=clicks+1;previous=nil
-      local reward=action.label=='红币兑换确定' or action.label=='新手狂欢礼领取'
+      local reward=action.label=='红币兑换确定' or action.label=='新手狂欢礼领取' or action.label=='万能图纸福利领取'
       sleep(1);sleep(reward and 1600 or 850)
     elseif not action and _handleLegacyTips() then
       previous=nil
@@ -134,7 +134,6 @@ function localInit()
   utils.releseRecourse=function() end
   utils.checkCar=function() error('请在项目设置中填写车辆序号') end
   utils.checkGame=function() return true end
-  utils.rebootGame=function() error('游戏超时或需要重启，请手动恢复后重新开始') end
   utils.stopGame=function() error('此本地版使用系统无障碍，强制关闭游戏需要手动操作') end
   utils.findApkList=function(pkg) return pkg==UIconfig.gamePkg end
   utils.getInstallPkg=function() return {UIconfig.gamePkg} end
@@ -214,7 +213,7 @@ function localInit()
     ['每日战利品']=function(screen)utils.openHomeTab(screen,'daily')end,
     ['特殊赛事']=function(screen)return spCup.operation[2][2](screen)end,
     ['车联']=function(screen)return dsCup.operation[1][2](screen)end}
-  run.rebootHandle=function() if data['超时状态'] then error('界面停留超过设定时限，请检查游戏') end end
+  run.rebootHandle=function() if data['超时状态'] then _requestGameRestart('heartbeat') end end
   run.restHandle=function() sleep(1000) end
 end
 
@@ -225,7 +224,7 @@ function monitor()
     monitorLegacyPopup()
     if not queueRecovering and data['心跳时间']>0 and os.time()-data['心跳时间']>data['等待时间'] then
       data['超时状态']=true
-      if UIconfig.routeOnly=='' then error('任务超过 7 分钟未报告进展') end
+      _requestGameRestart('heartbeat')
     end
     sleep(500)
   end
@@ -246,6 +245,8 @@ end
 local skipReasons={
   dailyQuietHours='每日战利品在 00:00–00:30 暂停执行',
   dailyExpired='赛事仅剩奖励页',
+  cupClaimOnly='配置位置仅可领取奖励，已保留奖励',
+  cupListObscured='待领奖励提示持续遮挡赛事位置，已保留奖励',
   fuelEmpty='配置车辆均无油或暂不可用',
   vehicleLocked='配置车辆尚未解锁',
   vehicleUnavailable='没有可开赛的配置车辆',
@@ -259,6 +260,7 @@ function main()
   if UIconfig.routeOnly~='' then
     data['项目']='手动跑图';data['多人地图']=UIconfig.routeOnly;data['线路']=assert(ROUTES[UIconfig.routeOnly],'路线不存在')
     data['心跳时间']=os.time();data['信息']='请手动进入比赛，等待比赛画面'
+    _hud(data['信息'])
     local ready=false
     for i=1,360 do keepCapture();if cmpColorEx('680|50|FFFFFF-101010,660|70|FFFFFF-101010',1)==1 then ready=true;break end;sleep(500) end
     if not ready then error('等待比赛超时') end
@@ -314,7 +316,7 @@ function main()
         local completed=_queueEnter and _queueEnter(cycle,i,tonumber(cfg.data['次数']) or 1) or 0
         print('第 '..cycle..' 轮，开始项目 '..i..'：'..cfg['项目']..'，目标 '..tostring(cfg.data['次数'])..' 局')
         run.index=i;run.data=cfg.data;data['项目']=cfg['项目'];data['心跳时间']=os.time()
-        _hud('项目 '..i..'：'..data['项目'])
+        data['信息']=string.format('项目 %d：%s',i,data['项目']);_hud(data['信息'])
         local outcome=nil
         if data['项目']=='每日战利品' then outcome=dailyCup.skipReason() end
         if outcome and outcome~='' then
@@ -336,12 +338,13 @@ function main()
             local resumingTutorial=atCheckpoint
               and data['项目']=='特殊赛事' and spCup and spCup.atStartTutorial and spCup.atStartTutorial(savedScreen)
             local resumingSpecialStage=savedScreen and data['项目']=='特殊赛事' and utils.specialMissionContinue(savedScreen)
-            if savedScreen and savedScreen.scene=='lockedCar' and
-                (data['项目']~='每日战利品' or #utils.taskCars()<=1) then
+            if savedScreen and savedScreen.scene=='lockedCar' and #utils.taskCars()<=1 then
               outcome='vehicleLocked'
             else
               if not resumingTutorial and not resumingSpecialStage then
-                utils.backToMain();utils.checkAuto();utils.initCar()
+                local cupTask=data['项目']=='每日战利品' or data['项目']=='杯赛'
+                if utils.backToMain(false,cupTask)~='cupClaimSpotlight' then utils.checkAuto() end
+                utils.initCar()
               end
               outcome=run.project()
             end

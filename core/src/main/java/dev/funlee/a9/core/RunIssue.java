@@ -12,6 +12,17 @@ public final class RunIssue {
         for(String word:words)if(text.contains(word))return true;
         return false;
     }
+    public static String reason(String detail){
+        String reason=(detail==null?"":detail).split("\n",2)[0].trim()
+                    .replaceFirst("^(?:\\[string [^\\]]+\\]:\\d+:\\s*)+", "")
+                    .replaceFirst("^(?:[\\w.$]+\\.)?[\\w$]*(?:Exception|Error):\\s*", "")
+                    .replaceFirst("^_\\w+[：:]\\s*", "");
+        if(reason.isEmpty())reason="暂时无法确定原因，请回到助手查看任务状态。";
+        return reason;
+    }
+    public static String stopMessage(String detail,boolean saved){
+        return reason(detail)+"\n\n"+(saved?"异常界面已截图保存，可在程序【偏好设置 → 问题排查】中查看。":"本次异常未能保存截图。");
+    }
     public static RunIssue from(String detail) {
         String text=detail==null?"":detail;
         if(text.contains(AccountLoginDialog.STOP_REASON))
@@ -32,7 +43,7 @@ public final class RunIssue {
             return new RunIssue("尚未开启游戏内控制","请在偏好设置中允许悬浮窗或通知，以便在游戏中暂停或停止任务。","开启控制权限",Action.SETTINGS);
         if(has(text,"至少启用一个项目","没有可继续的未完成任务","无法读取此版本的任务记录"))
             return new RunIssue("请先选择要运行的项目","在下方项目队列中启用需要运行的项目，然后点击“开始”。","查看项目队列",Action.QUEUE);
-        if(has(text,"10 分钟内已尝试恢复","重启后未能确认","强行停止","系统应用信息页"))
+        if(has(text,"10 分钟内已尝试恢复","重启后未能确认","未能确认游戏菜单加载完成","强行停止","系统应用信息页"))
             return new RunIssue("游戏自动恢复未成功","请手动打开游戏，确认可以正常操作，再返回任务编排；若显示“续跑”，可继续未完成的任务。","打开游戏",Action.GAME);
         if(has(text,"锁屏","前台","已停止恢复"))
             return new RunIssue("游戏没有保持在前台","请解锁设备并打开游戏。运行时保持游戏可见，再返回任务编排启动任务。","打开游戏",Action.GAME);

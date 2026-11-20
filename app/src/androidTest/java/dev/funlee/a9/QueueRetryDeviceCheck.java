@@ -95,6 +95,7 @@ final class QueueRetryDeviceCheck {
             String scene = dismiss != null ? "interruptingPopup" : MainMenuUi.classify(text.getText(),words);
             Map<String,Object> page = new HashMap<>();
             page.put("scene",scene);
+            page.put("possibleBlueprintGift",ModalPopup.possibleBlueprintGift(pixels));
             page.put("text",text.getText());
             if (dismiss != null && !dismiss.isEmpty()) page.put("dismissPopup",dismiss);
             boolean obstructed = panel != null || dismiss != null || !MainMenuUi.returnOverlay(pixels).isEmpty();
@@ -104,6 +105,17 @@ final class QueueRetryDeviceCheck {
             upright.recycle();
             frame.recycle();
             raw.recycle();
+        }
+    }
+
+    static void blueprintGift(Instrumentation test,Bundle report)throws Exception{
+        try(TextRecognizer reader=TextRecognition.getClient(new ChineseTextRecognizerOptions.Builder().build())){
+            Map<String,Object> page=readPage(test.getTargetContext(),"blueprint-gift.jpg",reader);
+            Object action=page.get("dismissPopup");
+            if(!Boolean.TRUE.equals(page.get("possibleBlueprintGift"))||!(action instanceof Map)||
+                    !"万能图纸福利领取".equals(((Map<?,?>)action).get("label"))||!Integer.valueOf(0).equals(page.get("homeEvidence")))
+                throw new AssertionError("Unexpected blueprint promotion: "+page);
+            report.putString("result","PASS: "+action);
         }
     }
 

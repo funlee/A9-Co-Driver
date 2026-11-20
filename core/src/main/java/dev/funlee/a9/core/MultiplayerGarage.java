@@ -20,6 +20,31 @@ public final class MultiplayerGarage {
         return found;
     }
 
+    /** The league shield is centered above its series title on the same entry card. */
+    public static String worldEntryLeague(List<?> words) {
+        Map<?,?> title=null;
+        for(Object item:words){
+            Map<?,?> w=(Map<?,?>)item;
+            if(leagueText(w.get("text").toString()).equals("世界系列赛")){
+                if(title!=null)return "";
+                title=w;
+            }
+        }
+        if(title==null)return "";
+        String found="";
+        for(Object item:words){
+            Map<?,?> w=(Map<?,?>)item;
+            int dy=pos(title,"y")-pos(w,"y");
+            if(Math.abs(pos(title,"x")-pos(w,"x"))>65||dy<145||dy>270)continue;
+            String label=leagueText(w.get("text").toString());
+            if(label.endsWith("联赛"))label=label.substring(0,label.length()-2);
+            if(!LEAGUES.contains(label))continue;
+            if(!found.isEmpty()&&!found.equals(label))return "";
+            found=label;
+        }
+        return found;
+    }
+
     private static String leagueText(String text) {
         return MapMatcher.normalize(text).replace('銅','铜').replace('銀','银')
                 .replace('鑽','钻').replace('傳','传').replace('黃','黄').replace('鉑','铂')
@@ -45,6 +70,8 @@ public final class MultiplayerGarage {
         return new int[]{wide?66:72,y<0?(wide?265:283):y-21,120,y<0?(wide?409:347):y+38};
     }
 
+    public static boolean hasEventRating(List<?> words){return eventRatingRow(words)>=0;}
+
     private static int eventRatingRow(List<?> words) {
         int row=-1;
         for(Object item:words){
@@ -67,7 +94,24 @@ public final class MultiplayerGarage {
             int y=ratingY+offset;
             if(leagueStripe(frame,left,y,right,y+6).equals("黄金"))return "黄金";
         }
+        if(badge.isEmpty()&&silverEmblem(frame,left,right,ratingY))return "白银";
         return badge;
+    }
+
+    // Silver has a low-saturation face between a pale blue crest and a darker blue base.
+    // Checking all three regions keeps a grey panel or a solid diamond stripe from matching.
+    private static boolean silverEmblem(PixelFrame frame,int left,int right,int ratingY) {
+        int crest=0,face=0,base=0;
+        int inset=(right-left)/8,width=right-left-2*inset;
+        for(int dy=-8;dy<25;dy++)for(int x=left+inset;x<right-inset;x++){
+            int rgb=frame.pixel(719-ratingY-dy,x);
+            int r=(rgb>>16)&255,g=(rgb>>8)&255,b=rgb&255;
+            if(g<r||b<g)continue;
+            if(dy< -2&&b>=165&&g>=115&&b-r>=55)crest++;
+            if(dy>=0&&dy<13&&r>=68&&r<=225&&b-r>=3&&b-r<=52)face++;
+            if(dy>=16&&b>=100&&b-r>=55&&b-g>=28)base++;
+        }
+        return crest*4>=width*6&&face*3>=width*13*2&&base*4>=width*9;
     }
 
     private static String leagueStripe(PixelFrame frame,int left,int top,int right,int bottom) {
@@ -281,7 +325,7 @@ public final class MultiplayerGarage {
                 boolean clipped=edge+width>right;
                 cards.add(Map.of("index",2*column+row+1,"x",edge+(wide?145:190),"y",y+113,"left",edge,"top",y,
                         "signature",thumbnail(frame,edge,y),"clipped",clipped,
-                        "availability",!clipped&&soloLocked(frame,edge,y)?"locked":"unknown",
+                        "availability",clipped?"unknown":soloAvailability(frame,edge,y,words),
                         "score",scoreIn(words,edge+12,edge+169,y+27,y+78),
                         "model",modelIn(words,edge+width*2/3,edge+width-5,y+132,y+180)));
             }
@@ -291,11 +335,13 @@ public final class MultiplayerGarage {
                 "cards",cards,"pitch",pitch);
     }
 
-    private static boolean soloLocked(PixelFrame frame,int left,int top){
+    private static String soloAvailability(PixelFrame frame,int left,int top,List<?> words){
+        String ribbon=availabilityRibbon(frame,left,top,words);
+        if(!ribbon.isEmpty())return ribbon;
         // Locked cards have the same dark background under both the fuel area
         // and the artwork. Unlocked cards keep their colored background.
         return darkCardPatch(frame,left+12,left+69,top+186,top+215)&&
-                darkCardPatch(frame,left+96,left+199,top+190,top+215);
+                darkCardPatch(frame,left+96,left+199,top+190,top+215)?"locked":"unknown";
     }
 
     private static boolean darkCardPatch(PixelFrame frame,int left,int right,int top,int bottom){
@@ -417,20 +463,29 @@ public final class MultiplayerGarage {
         return hits>=36;
     }
 
-    private static String availability(PixelFrame frame,int left,int top,List<?> words){
+    private static String availabilityRibbon(PixelFrame frame,int left,int top,List<?> words){
         int starBanner=0;
         for(int y=top+5;y<=top+22;y+=3)for(int x=left+12;x<=left+154;x+=7){
             int c=frame.pixel(719-y,x),r=c>>16&255,g=c>>8&255,b=c&255;
             // The solid yellow Star Up ribbon is distinct from the darker gold maxed-card artwork.
             if(Math.abs(r-243)<=18&&Math.abs(g-187)<=15&&b<=38)starBanner++;
         }
-        if(starBanner>=70)return "starUp";
+        String state=starBanner>=70?"starUp":"";
         for(Object word:words){
             Map<?,?> w=(Map<?,?>)word;
             int x=pos(w,"x")-left,y=pos(w,"y")-top;
+            if(x<0||x>235||y<0||y>205)continue;
             String text=VehicleUnlockGuard.normalize(w.get("text").toString());
-            if(x>=30&&x<=205&&y>=0&&y<=35&&text.equals("升星就绪"))return "starUp";
+            if(text.contains("免费试驾"))return "trial";
+            if(text.contains("解锁就绪")||text.contains("已可解锁")||text.contains("未解锁"))state="locked";
+            if(y<=35&&text.contains("升星就绪"))state="starUp";
         }
+        return state;
+    }
+
+    private static String availability(PixelFrame frame,int left,int top,List<?> words){
+        String ribbon=availabilityRibbon(frame,left,top,words);
+        if(!ribbon.isEmpty())return ribbon;
         int green=0,pink=0,dark=0,samples=0;
         for(int y=top+191;y<=top+207;y+=2)for(int x=left+12;x<=left+46;x+=2){
             int c=frame.pixel(719-y,x),r=c>>16&255,g=c>>8&255,b=c&255;

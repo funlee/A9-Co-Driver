@@ -361,7 +361,7 @@ function utils.openHomeTab(screen,name)
   end
   error('点击每日赛事后仍在主菜单，请确认赛事入口后续跑')
 end
-function utils.backToMain(strict)
+function utils.backToMain(strict,acceptCupList)
   data["信息"] = "返回游戏主界面"
   local dismissedExit=false
   local sentBack=false
@@ -383,6 +383,8 @@ function utils.backToMain(strict)
   while (strict or attempts<25) and tickCount()<deadline do
     local screen
     if strict then screen=_recoveryUi() else screen=_soloEventUi() end
+    if screen.restartScreen then _requestGameRestart('returnScreen') end
+    if acceptCupList and not strict and screen.scene=='cupClaimSpotlight' then return screen.scene end
     local text=(screen.text or ''):gsub('%s','')
     local loading=screen.scene=='unknown' and
       (text:find('登录中',1,true) or text:find('加载中',1,true) or text:find('检查游戏更新',1,true)
@@ -403,7 +405,7 @@ function utils.backToMain(strict)
         return true
       end
       previousEvidence=evidence
-    elseif not strict and (screen.scene=='home' or onMultiplayerTab) then
+    elseif not strict and not screen.homeButton and (screen.scene=='home' or onMultiplayerTab) then
       toast("到达游戏主界面")
       return
     end
@@ -421,12 +423,12 @@ function utils.backToMain(strict)
         utils.dismissExitDialog(screen)
         dismissedExit=true
       else sleep(500) end
-    elseif strict and screen.legacyPopup then
+    elseif strict and screen.legacyPopup and not screen.dismissPopup then
       if tickCount()>=navigationDeadline and _legacyPopupDismiss(screen.legacyPopup) then
         navigationDeadline=tickCount()+850
       end
       sleep(350)
-    elseif strict and screen.returnOverlay then
+    elseif strict and screen.returnOverlay and not screen.dismissPopup then
       local action=screen.returnOverlay
       if tickCount()>=navigationDeadline and (action~='back' or tickCount()-lastBack>=4000) then
         if action=='back' then keyPress('back');lastBack=tickCount()
@@ -490,7 +492,7 @@ function utils.backToMain(strict)
       sleep(1200)
     else
       if not strict then keepCapture() end
-      if not strict and cmpColorEx("690|1240|FFFFFF-101010,690|1252|3B2312-101010,670|1270|3B2312-101010",1)==1 then
+      if not strict and not screen.homeButton and cmpColorEx("690|1240|FFFFFF-101010,690|1252|3B2312-101010,670|1270|3B2312-101010",1)==1 then
         releaseCapture()
         toast("到达游戏主界面")
         return
@@ -1428,8 +1430,9 @@ function utils.screenFreeze(isBack)
 end
 local function ticketedTrial(screen)
   local project=data['项目']
-  local trialText=(screen.text or ''):gsub('%s',''):find('免费试驾',1,true)
-  return (project=='杯赛' or project=='特殊赛事') and screen.scene=='car' and screen.fuel==-1 and not screen.starUpPending
+  local label=(screen.text or ''):gsub('%s','')
+  local trialText=label:find('免费试驾',1,true) or label:find('免費試駕',1,true)
+  return screen.scene=='car' and screen.fuel==-1 and not screen.starUpPending
     and (trialText or (project=='特殊赛事' and screen.zeroTicketStart)) and startButton(screen)
 end
 local function verifiedDailyDetail(slot,detail)
@@ -1443,7 +1446,7 @@ end
 
 function utils.startRace()
   local fuel,latestCar=utils.carFuel()
-  if fuel=='vehicleLocked' then return fuel end
+  if fuel=='vehicleLocked' then return fuel,latestCar end
   if fuel=='starUp' then
     print('车辆待升星，跳过本车')
     return 'fuelEmpty'
@@ -1455,6 +1458,7 @@ function utils.startRace()
   for i=1,8 do
     local screen=latestCar or _soloEventUi()
     latestCar=nil
+    if screen.scene=='lockedCar' then return 'vehicleLocked',screen end
     if screen.scene=='car' then
       if screen.starUpPending or screen.fuel==0 then return 'fuelEmpty' end
       if type(utils.verifiedDailyCar)=='table' and not verifiedDailyDetail(utils.verifiedDailyCar,screen) then
@@ -1547,11 +1551,19 @@ function utils.carFuel(allowGarage)
   local previous=nil;local frame=nil
   local garageFrame=nil;local stillInGarage=false
   local returnedFromUpgrade=false
+  local deferredPrompt=false
   local attempts=0
   while attempts<6 do
     attempts=attempts+1
     local screen=_soloEventUi()
-    if screen.scene=='lockedCar' then return 'vehicleLocked' end
+    if screen.scene=='vehicleUnlock' and screen.unlockLater and not deferredPrompt then
+      tapUiWord(screen.unlockLater)
+      deferredPrompt=true
+      sleep(1200)
+    elseif deferredPrompt and screen.scene=='cars' then
+      return 'vehicleLocked',screen
+    end
+    if screen.scene=='lockedCar' then return 'vehicleLocked',screen end
     if screen.scene=='vehicleUpgrade' and not returnedFromUpgrade then
       data['信息']='误入车辆属性升级，返回车辆详情'
       print(data['信息'])
@@ -1585,11 +1597,11 @@ function utils.taskCars()
   local key=data['项目']=='特殊赛事' and '特殊赛事用车' or data['项目']=='车联' and '车手联会用车' or '杯赛用车'
   return utils.defultCfg(run.data[key],{1})
 end
-function utils.backToGarage(wide)
+function utils.backToGarage()
   keyPress('back');sleep(1200)
   for i=1,20 do
     keepCapture()
-    if (wide or (_soloGarageUi and data['项目']=='每日战利品')) and _soloEventUi().scene=='cars' then return end
+    if _soloEventUi and _soloEventUi().scene=='cars' then return end
     if cmpColorEx('666|86|2E2E2E-101010,666|120|373737-101010,574|140|5400CF-201030',1)==1 or
         cmpColorEx('574|130|FFFFFF-101010,688|1076|6B6B6B-101010,692|1246|ECDF00-101010',1)==1 then return end
     sleep(300)
@@ -1603,12 +1615,19 @@ function utils.chooseCarCup(carList)
   local filter=utils.defultCfg(run.data['选车筛选'],'')
   if filter~='' then utils.configureGarageFilter(filter);sleep(2000) end
   local dailyGrid=data['项目']=='每日战利品' and _soloGarageUi and vehicleGrid
+  local useGrid=dailyGrid
+  if not clickMode and not useGrid and _soloGarageUi and vehicleGrid then
+    local page=_soloGarageUi(false)
+    useGrid=page.scene=='cars' and page.garage and #page.garage.cards>0
+  end
   local origin
-  if dailyGrid then
-    utils.verifiedDailyCar=false
-    origin=vehicleGrid.soloOrigin()
+  if dailyGrid then utils.verifiedDailyCar=false end
+  local entrySwipes=30
+  if data['项目']=='每日战利品' and filter~='' then entrySwipes=clickMode and 6 or 0 end
+  if useGrid then
+    origin=vehicleGrid.soloOrigin(dailyGrid and entrySwipes or 0)
   else
-    for i=1,30 do swipe(290,70,290,1200,100);sleep(100) end
+    for i=1,entrySwipes do swipe(290,70,290,1200,100);sleep(100) end
     sleep(2000)
   end
   local wide=false
@@ -1617,14 +1636,16 @@ function utils.chooseCarCup(carList)
     wide=_garageFilterState().wide==true
   end
   local lastCar=1
-  if clickMode then
+  local function openFirstCar(target)
+    lastCar=1
     if dailyGrid then
-      local first=vehicleGrid.soloCar(origin,1)
+      local first=vehicleGrid.soloCar(origin or vehicleGrid.soloOrigin(),1)
       tapUiWord(first)
     else tap(400,220) end
     sleep(1500)
-    if tonumber(carList[1])<0 then tap(360,490);sleep(700);lastCar=-1 end
+    if target<0 then tap(360,490);sleep(700);lastCar=-1 end
   end
+  if clickMode then openFirstCar(tonumber(carList[1])) end
   local empty={};local unavailable={};local locked={}
   for pass=1,2 do
     for j,raw in ipairs(carList) do
@@ -1633,20 +1654,24 @@ function utils.chooseCarCup(carList)
       if data['超时状态'] then error('选车超时，保留当前任务') end
       if not empty[car] and not unavailable[car] and not locked[car] and (not rotate or data['用车次数']['car'..j]~=1) then
         local retryX,retryY,slot,fuel,detail
-        if clickMode then utils.clickChoose(car,lastCar)
-        elseif dailyGrid then
+        if clickMode then
+          if not lastCar then openFirstCar(car) end
+          utils.clickChoose(car,lastCar)
+        elseif useGrid then
           if car<1 or car%1~=0 then error('滑动选车需要正整数车辆序号') end
           origin=origin or vehicleGrid.soloOrigin()
           slot=vehicleGrid.soloCar(origin,car)
           origin=nil
-          if slot.availability=='locked' then
-            fuel='vehicleLocked'
-            print('每日战利品第 '..car..' 辆车未解锁，已在列表跳过')
+          if slot.availability=='locked' or slot.availability=='starUp' then
+            fuel=slot.availability=='locked' and 'vehicleLocked' or 'starUp'
+            print('配置车辆 '..car..(fuel=='starUp' and ' 待升星' or ' 尚未解锁')..'，已在列表跳过')
           else
-            local focused=_soloGarageScore and _soloGarageScore(slot.left,slot.top)
-            if focused and focused~='' then slot.score=focused end
-            if (not slot.score or slot.score=='') and #(slot.model or '')<3 then
-              error('未读到每日战利品第 '..car..' 辆车的性能分或车型，已保留任务进度')
+            if dailyGrid then
+              local focused=_soloGarageScore and _soloGarageScore(slot.left,slot.top)
+              if focused and focused~='' then slot.score=focused end
+              if (not slot.score or slot.score=='') and #(slot.model or '')<3 then
+                error('未读到每日战利品第 '..car..' 辆车的性能分或车型，已保留任务进度')
+              end
             end
             tapUiWord(slot)
             sleep(1200)
@@ -1676,9 +1701,9 @@ function utils.chooseCarCup(carList)
           -- A second tap is allowed only while the original garage is still visible.
           tap(retryX,retryY)
           sleep(1500)
-          fuel=utils.carFuel(true)
+          fuel,detail=utils.carFuel(true)
         end
-        if slot and (type(fuel)=='number' or fuel=='starUp' or fuel=='trial') then
+        if dailyGrid and slot and (type(fuel)=='number' or fuel=='trial') then
           local matched=false
           for attempt=1,4 do
             if verifiedDailyDetail(slot,detail) then matched=true;break end
@@ -1693,11 +1718,13 @@ function utils.chooseCarCup(carList)
           print('每日战利品已核验第 '..car..' 辆：'..(detail.soloName or '')..' · 性能分 '..(detail.soloScore or slot.score or '未识别'))
         end
         if fuel=='vehicleLocked' then
-          if (not dailyGrid and not wide) or #carList==1 then return fuel end
+          if #carList==1 then return fuel end
           locked[car]=true
           if not (slot and slot.availability=='locked') then
             print('配置车辆 '..car..' 未解锁，尝试下一辆配置车辆')
-            if not clickMode then utils.backToGarage(wide) end
+            if detail and detail.scene=='cars' then
+              if clickMode then lastCar=nil;origin=nil end
+            elseif not clickMode then utils.backToGarage() end
           end
         elseif fuel==nil then
           unavailable[car]=true
@@ -1711,7 +1738,7 @@ function utils.chooseCarCup(carList)
         else
           empty[car]=true
           data['信息']='配置车辆 '..car..(fuel=='starUp' and ' 待升星' or ' 已无油')..'，尝试下一辆';print(data['信息'])
-          if not clickMode then utils.backToGarage(wide) end
+          if not clickMode and not (slot and slot.availability=='starUp') then utils.backToGarage() end
         end
       end
     end
@@ -1729,7 +1756,7 @@ function utils.chooseCarCup(carList)
         break
       end
       if next(locked) then return 'vehicleLocked' end
-      data['信息']='配置车辆全部无油，跳过本轮任务';print(data['信息']);return 'fuelEmpty'
+      data['信息']='配置车辆均不可出赛，跳过本轮任务';print(data['信息']);return 'fuelEmpty'
     end
     -- Once-per-car mode starts another ordered round after all used entries were visited.
     if not rotate then break end
@@ -1747,11 +1774,11 @@ function utils.startConfiguredRace()
   end
   utils.selectNextTaskCar=false
   for attempt=1,#cars+1 do
-    local result=utils.startRace()
-    if result~='fuelEmpty' then return result end
+    local result,screen=utils.startRace()
+    if result~='fuelEmpty' and result~='vehicleLocked' then return result end
     -- Some special events open the only vehicle directly, without a selection page.
-    if #cars==1 then print('配置车辆已无油，跳过本轮任务');return 'fuelEmpty' end
-    utils.backToGarage()
+    if #cars==1 then print('配置车辆不可出赛，跳过本轮任务');return result end
+    if not screen or screen.scene~='cars' then utils.backToGarage() end
     local selected=utils.chooseCarCup(cars)
     if type(selected)=='string' then return selected end
   end
@@ -1876,6 +1903,12 @@ function utils.waitCupSelected(y)
 end
 -- The carousel scrolls after a card tap. Verify the artwork before using the
 -- selected card's new center, even when it moved off its original coordinates.
+local function sameCupArtwork(a,b)
+  if not a.artwork or not b.artwork or #a.artwork==0 or #a.artwork~=#b.artwork then return false end
+  local difference=0
+  for i,value in ipairs(a.artwork) do difference=difference+math.abs(value-b.artwork[i]) end
+  return difference/#a.artwork<=115
+end
 local function waitWideCupSelected(target)
   if not target.artwork then return utils.waitCupSelected(target.center) and target.center end
   for attempt=1,10 do
@@ -1883,13 +1916,54 @@ local function waitWideCupSelected(target)
     for _,card in ipairs(cards) do
       if card.selected and card.artwork then
         if math.abs(card.center-target.center)<70 then return card.center end
-        local difference=0
-        for i,value in ipairs(target.artwork) do difference=difference+math.abs(value-card.artwork[i]) end
-        if difference/#target.artwork<=115 then return card.center end
+        if sameCupArtwork(target,card) then return card.center end
       end
     end
     sleep(500)
   end
+end
+-- At the right stop, count only a continuous row of complete cards. Selecting
+-- one enlarges it and may shift the row, so confirm the ordinal again before entry.
+local function wideCupFromRight(cards,ordinal)
+  local index=#cards-ordinal+1
+  if index<1 then return nil end
+  for i=index+1,#cards do
+    local gap=cards[i].center-cards[i-1].center
+    if gap<115 or gap>185 then return nil end
+  end
+  return cards[index]
+end
+local function waitCupFromRight(ordinal,rightEdge)
+  local lastCenter
+  for attempt=1,10 do
+    keepCapture();local cards=_cupCards();releaseCapture()
+    local target=wideCupFromRight(cards,ordinal)
+    if target and target.selected and math.abs(cards[#cards].center-rightEdge.center)<45
+        and sameCupArtwork(rightEdge,cards[#cards]) then
+      if lastCenter and math.abs(target.center-lastCenter)<=3 then return target.center end
+      lastCenter=target.center
+    else lastCenter=nil end
+    sleep(350)
+  end
+end
+-- The spotlight dims the other cards. Count positions only after the carousel is readable.
+local function cupClaimState(center)
+  if not _cupClaimState then return '' end
+  keepCapture()
+  local state=_cupClaimState(center)
+  releaseCapture()
+  return state
+end
+local function awaitCupList()
+  for attempt=1,8 do
+    if cupClaimState()~='spotlight' then return true end
+    sleep(400)
+  end
+end
+local function cupEntryGuard(center)
+  local state=cupClaimState(center)
+  if state=='claimOnly' then return 'cupClaimOnly' end
+  if state=='spotlight' then return 'cupListObscured' end
 end
 function utils.chooseCup(num,wide,configuredOnly)
   data["信息"] = "选择杯赛"
@@ -1902,9 +1976,23 @@ function utils.chooseCup(num,wide,configuredOnly)
   local ret, x, y = -1, -1, -1
   num = tonumber(num)
   if not num or num == 0 or num ~= math.floor(num) then error("杯赛位置必须为非零整数；3 表示从左起第 3 个赛事") end
+  if cupClaimState()=='spotlight' then
+    -- Move over the card artwork only. Once the hint lifts, anchor the list again
+    -- because the game can consume the first swipe to remove its dimming layer.
+    configuredOnly=true
+    local from,to=250,1020
+    if num<0 then from,to=to,from end
+    for attempt=1,3 do
+      swipe(115,from,115,to,220)
+      sleep(1);sleep(350)
+      if awaitCupList() then break end
+      if attempt==3 then return 'cupListObscured' end
+    end
+  end
   if wide and num>0 then
     for i=1,6 do swipe(115,260,115,1000,180) end
     sleep(1);sleep(1500)
+    if not awaitCupList() then return 'cupListObscured' end
     keepCapture()
     local cards=_cupCards()
     if #cards==0 or cards[1].center>210 then
@@ -1941,6 +2029,8 @@ function utils.chooseCup(num,wide,configuredOnly)
       center=waitWideCupSelected(nextCard)
       if not center then return unavailable('无法确认已选中杯赛位置 '..step) end
     end
+    local blocked=cupEntryGuard(center)
+    if blocked then return blocked end
     tap(115,center)
     return 1
   end
@@ -1958,6 +2048,7 @@ function utils.chooseCup(num,wide,configuredOnly)
     end
     -- Host gestures block; yield once so the settling delay starts after they finish.
     sleep(1);sleep(2000)
+    if not awaitCupList() then return 'cupListObscured' end
     if 7 <= num then
       print("7位以上的杯赛")
       for i = 1, num - 7 do
@@ -1981,13 +2072,39 @@ function utils.chooseCup(num,wide,configuredOnly)
     -- Anchor on real card borders, then walk the selection left one card at a time.
     for i = 1, 8 do swipe(100, 1000, 100, 200, 100) end
     sleep(1);sleep(2000)
+    if not awaitCupList() then return 'cupListObscured' end
     if not _cupCards then error("当前版本无法识别倒数赛事位置") end
     keepCapture()
     local cards = _cupCards()
     if #cards == 0 then return unavailable('无法识别赛事卡片，已停止以避免进入错误赛事') end
     local target = cards[#cards]
+    -- The legacy menu entry does not pass the viewport flag. The native reader
+    -- supplies artwork on every wide-layout card for both entry paths.
+    wide=wide or target.artwork~=nil
+    if wide and target.artwork and abs>1 then
+      local visible=wideCupFromRight(cards,abs)
+      if visible then
+        if not visible.selected then tap(100,visible.center);sleep(1);sleep(1000) end
+        local center=waitCupFromRight(abs,target)
+        if center then
+          local blocked=cupEntryGuard(center)
+          if blocked then return blocked end
+          tap(100,center);return 1
+        end
+        -- Auto-centering may have scrolled the rightmost card offscreen. Restore
+        -- the right stop before using the adjacent-card walk for longer lists.
+        for i=1,8 do swipe(100,1000,100,200,100) end
+        sleep(1);sleep(2000)
+        if not awaitCupList() then return 'cupListObscured' end
+        keepCapture();cards=_cupCards();releaseCapture()
+        target=cards[#cards]
+        if not target then return unavailable('无法重新定位最右侧赛事') end
+      end
+    end
     if not target.selected then tap(100, target.center);sleep(1);sleep(1000) end
-    if not utils.waitCupSelected(target.center) then return unavailable('无法确认最后一个赛事已选中') end
+    local anchored
+    if wide then anchored=waitWideCupSelected(target) else anchored=utils.waitCupSelected(target.center) end
+    if not anchored then return unavailable('无法确认最后一个赛事已选中') end
     for step = 2, abs do
       local previous = nil
       for attempt = 1, 6 do
@@ -2027,7 +2144,11 @@ function utils.chooseCup(num,wide,configuredOnly)
     local selected = nil
     for _, card in ipairs(cards) do if card.selected then selected = card;break end end
     if not selected then return unavailable('无法确认已选中杯赛位置 '..num) end
-    if wide then tap(100, selected.center);return 1 end
+    if wide then
+      local blocked=cupEntryGuard(selected.center)
+      if blocked then return blocked end
+      tap(100,selected.center);return 1
+    end
     xy = {100, selected.center}
   end
   if not utils.cupSelectedAt(xy[2]) then
@@ -2035,6 +2156,8 @@ function utils.chooseCup(num,wide,configuredOnly)
     sleep(1);sleep(2000)
   end
   if not utils.cupSelectedAt(xy[2]) then return unavailable('无法确认已选中杯赛位置 '..num..'，已停止以避免进入错误赛事') end
+  local blocked=cupEntryGuard(xy[2])
+  if blocked then return blocked end
   if configuredOnly then tap(xy[1],xy[2]);return 1 end
   local res = {-1, -1, -1, -1}
   if utils.fileExist(cupAddr) then res = utils.findCup(cupAddr) end
@@ -2927,7 +3050,7 @@ function utils.multipleDriver()
       return 0
     elseif 120 < j then
       toast("匹配时间太长")
-      utils.rebootGame()
+      _requestGameRestart('matching')
       data["心跳时间"] = os.time()
       data["超时状态"] = false
       return 0

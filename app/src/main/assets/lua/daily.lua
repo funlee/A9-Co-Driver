@@ -34,19 +34,6 @@ function dailyCup.openRaceGarage(screen)
   error('每日战利品点击比赛后未确认切页，保留当前任务')
 end
 
-function dailyCup.dismissClaimSpotlight(screen)
-  local title=(screen.text or ''):gsub('%s','')
-  if screen.scene~='unknown' or not title:find('每日车辆战利品活动规则',1,true) then return false end
-  for _,word in ipairs(screen.words or {}) do
-    if word.text:gsub('%s','')=='可领取' and word.x>=450 and word.x<=830 and word.y>=320 and word.y<=460 then
-      tap(68,word.x)
-      sleep(1300)
-      return true
-    end
-  end
-  return false
-end
-
 function dailyCup.dismissProfile(screen,readScreen)
   if screen.scene~='profileUnlock' then return false end
   readScreen=readScreen or _soloEventUi
@@ -269,7 +256,9 @@ dailyCup.operation = {
     config.selectMission,
     function()
       data["信息"] = "选择指定杯赛"
-      if utils.chooseCup(run.data['杯赛位置'] or '2',false,true)==1 then
+      local chosen=utils.chooseCup(run.data['杯赛位置'] or '2',false,true)
+      if type(chosen)=='string' then return chosen end
+      if chosen==1 then
         data['信息']='已进入配置位置，核对每日战利品标题'
       end
       sleep(3000)

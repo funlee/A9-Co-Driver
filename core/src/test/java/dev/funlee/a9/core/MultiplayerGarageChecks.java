@@ -49,6 +49,17 @@ final class MultiplayerGarageChecks {
         for(int x=79;x<96;x++)for(int y=304;y<320;y++)emblem[x*720+719-y]=0xffcb3242;
         require(MultiplayerGarage.eventLeagueIcon(new PixelFrame(720,1280,emblem)).isEmpty(),
                 "Conflicting emblem colors do not authorize selecting a league");checks++;
+        int[] silver=new int[720*1280];
+        for(int x=80;x<112;x++)for(int y=307;y<320;y++)silver[x*720+719-y]=0xff8890a1;
+        require(MultiplayerGarage.eventLeagueIcon(new PixelFrame(720,1280,silver)).isEmpty(),
+                "A grey patch without the silver shield borders is not a league");checks++;
+        for(int x=80;x<112;x++){
+            for(int y=299;y<305;y++)silver[x*720+719-y]=0xff82c3ea;
+            for(int y=323;y<332;y++)silver[x*720+719-y]=0xff4469ad;
+        }
+        require(MultiplayerGarage.eventLeagueIcon(new PixelFrame(720,1280,silver),
+                        List.of(word("1,133",171,307)),false).equals("白银"),
+                "Read the silver shield on the first race after demotion from gold");checks++;
         int[] protectedGoldEmblem=new int[720*1280];
         for(int x=79;x<113;x++)for(int y=306;y<320;y++)protectedGoldEmblem[x*720+719-y]=0xffdf8a17;
         for(int x=79;x<113;x++)for(int y=320;y<326;y++)protectedGoldEmblem[x*720+719-y]=0xffedb11c;
@@ -187,6 +198,28 @@ final class MultiplayerGarageChecks {
                 lua.load("verify","assert(done,scenario)");
             }
             checks++;
+        }
+        List<String> leagues=List.of("青铜","白银","黄金","白金","翡翠","钻石","精英","宗师","传奇");
+        String dropCase;
+        try(var input=MultiplayerGarageChecks.class.getResourceAsStream("/world-demotion-entry.lua")){
+            dropCase=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
+        }
+        for(int i=1;i<leagues.size();i++){
+            String current=leagues.get(i-1),previous=leagues.get(i);
+            var title=word("世界系列賽",354,455);
+            var badge=word(current.equals("白银")?"白銀":current,353,240);
+            require(MultiplayerGarage.worldEntryLeague(List.of(title,badge,word(previous,640,240))).equals(current),
+                    "Only read the badge on the World Series card");
+            require(MultiplayerGarage.worldEntryLeague(List.of(title,badge,word(previous,360,244))).isEmpty(),
+                    "Reject conflicting ranks inside the card");
+            try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
+                lua.set("previous",previous);lua.set("current",current);
+                lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));
+                lua.load("demotion",dropCase);lua.start("test");
+                for(int step=0;step<180;step++)if(!lua.step(step*1000L))break;
+                lua.load("verify","assert(done)");
+            }
+            checks+=3;
         }
         String paginationCases;
         try(var input=MultiplayerGarageChecks.class.getResourceAsStream("/world-car-pagination.lua")){

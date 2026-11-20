@@ -25,9 +25,11 @@ public final class RaceHud {
     }
 
     public static Map<String,Integer> homeButton(PixelFrame frame,boolean wide){
-        if(!wide||!backWedge(frame))return Map.of();
+        if(!backWedge(frame))return Map.of();
         int sumX=0,sumY=0,count=0;
-        for(int x=1170;x<=1245;x++)for(int y=25;y<=45;y++){
+        // Both layouts have the same house glyph. Its tile shifts inward on ultrawide screens.
+        int firstX=wide?1170:1236,lastX=wide?1245:1264;
+        for(int x=firstX;x<=lastX;x++)for(int y=25;y<=45;y++){
             boolean match=true;
             for(int[] point:HOME_WHITE_POINTS){
                 int color=frame.pixel(719-(y+point[1]),x+point[0]);
