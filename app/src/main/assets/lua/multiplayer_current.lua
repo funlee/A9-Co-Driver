@@ -1,6 +1,7 @@
 -- Current CN series cards and vehicle layout. Coordinates below are upright 1280x720.
 -- OCR guards each menu action; race commands still use the existing route engine.
 currentMultiplayer={}
+vehicleGrid={}
 local function click(x,y) tap(719-math.floor(y),math.floor(x)) end
 local function has(text,part)
   local normalized=string.gsub(string.gsub(text,'[ \t\r\n]',''),'賽','赛')
@@ -75,12 +76,12 @@ local function rememberedOffset(saved,garage)
   end
   if matches>=2 then return offset end
 end
-local function confirmCar(screen,card,index,position)
+local function confirmCar(screen,card,index,position,readFull)
   local garage=screen.garage
   local anchor={offset=position.offset,cards=garage.cards}
   local lastSlot,lastLeft,lastOffset,lastFrame
   for retry=1,5 do
-    local full=_multiplayerUi(false,false)
+    local full=readFull and readFull() or _multiplayerUi(false,false)
     if full.scene~='cars' then error('目标车位已离开车库，停止选车') end
     if full.frameId~=screen.frameId and full.frameId~=lastFrame then
       local current=full.garage
@@ -105,18 +106,18 @@ local function confirmCar(screen,card,index,position)
   end
   error('目标车位仍在移动，未选择车辆')
 end
-local function awaitGarageOverlap(previous,position,direction,afterFrame)
+local function awaitGarageOverlap(previous,position,direction,afterFrame,readGrid)
   local stableOffset,stableLeft,lastGarage
   local stableFrames=0
   for retry=1,18 do
     sleep(90)
-    local nextScreen=_multiplayerUi(false,false,true)
+    local nextScreen=readGrid and readGrid() or _multiplayerUi(false,false,true)
     if nextScreen.scene~='cars' then error('跨屏选车时已离开车库，已停止') end
     if nextScreen.frameId and nextScreen.frameId>afterFrame then
       afterFrame=nextScreen.frameId
       local nextGarage=nextScreen.garage or {};lastGarage=nextGarage
       local offset=nil
-      if direction==-1 and nextGarage.start and nextGarage.rank==position.rank then offset=0
+      if not readGrid and direction==-1 and nextGarage.start and nextGarage.rank==position.rank then offset=0
       else
         local candidates={}
         local moved=(tonumber(previous.left) or 0)-(tonumber(nextGarage.left) or 0)
@@ -154,7 +155,7 @@ local function awaitGarageOverlap(previous,position,direction,afterFrame)
   end
   return nil,nil,lastGarage,afterFrame
 end
-local function locateCar(screen,index,position)
+local function locateCar(screen,index,position,readGrid,readFull)
   local garage=screen.garage
   local attempts=0
   while true do
@@ -162,7 +163,7 @@ local function locateCar(screen,index,position)
       if card.index+position.offset==index and not card.clipped then
         if screen.gridOnly then
           -- Only the destination needs full menu OCR; the intervening columns use pixels.
-          card,screen=confirmCar(screen,card,index,position)
+          card,screen=confirmCar(screen,card,index,position,readFull)
         end
         local result={}
         for k,v in pairs(card) do result[k]=v end
@@ -173,22 +174,22 @@ local function locateCar(screen,index,position)
     attempts=attempts+1
     if attempts>60 then error('无法连续核验配置车辆 '..index..' 的跨屏位置，已停止选车') end
     local direction=index<=position.offset and -1 or 1
-    local pitch=math.min(tonumber(garage.pitch) or 359,464)
+    local pitch=math.min(tonumber(garage.pitch) or 359,readGrid and 480 or 464)
     -- Ultrawide layouts can show only two complete columns. Leave most of a column
     -- visible across the drag, and give the carousel time to settle before release.
-    local wide=pitch==359
+    local wide=pitch==359 or readGrid~=nil
     local distance=wide and math.floor(pitch*0.7) or pitch
     local duration,hold=wide and 600 or 300,wide and 180 or 100
     local from=direction==1 and 1100 or 300
     swipe(419,from,419,from-direction*distance,duration,hold)
-    local nextScreen,offset,lastGarage,lastFrame=awaitGarageOverlap(garage,position,direction,screen.frameId)
+    local nextScreen,offset,lastGarage,lastFrame=awaitGarageOverlap(garage,position,direction,screen.frameId,readGrid)
     if not nextScreen and wide and lastGarage then
       -- A short reverse drag can bring the overlap back. Keep the same verified anchor
       -- and direction until the corrected position is confirmed in consecutive frames.
       print('宽屏选车翻页重叠不足，回拖核验上一页车辆')
       local backFrom=direction==1 and 300 or 1100
       swipe(419,backFrom,419,backFrom+direction*distance,duration,hold)
-      nextScreen,offset,lastGarage=awaitGarageOverlap(garage,position,direction,lastFrame)
+      nextScreen,offset,lastGarage=awaitGarageOverlap(garage,position,direction,lastFrame,readGrid)
     end
     if not nextScreen then
       if _jsonEncode then print('翻页定位失败，起始偏移 '..position.offset..'：'.._jsonEncode(garage)..' → '.._jsonEncode(lastGarage or {})) end
@@ -197,6 +198,36 @@ local function locateCar(screen,index,position)
     position.offset=offset;screen=nextScreen;garage=nextScreen.garage
   end
 end
+
+function vehicleGrid.soloOrigin()
+  local previous=_soloGarageUi(true)
+  for attempt=1,30 do
+    swipe(414,350,414,1135,470,120)
+    sleep(500)
+    local current=_soloGarageUi(true)
+    local old,new=previous.garage,current.garage
+    if old and new and old.start and new.start and current.frameId>previous.frameId and math.abs(old.left-new.left)<=3 then
+      local matches=0
+      for _,a in ipairs(old.cards) do
+        for _,b in ipairs(new.cards) do
+          if a.index==b.index and sameCard(a,b,12,5) then matches=matches+1 end
+        end
+      end
+      if matches>=math.min(2,#new.cards) and matches>0 then
+        print('每日战利品车库已回到最左，确认第 1 列')
+        return current
+      end
+    end
+    previous=current
+  end
+  error('未确认每日战利品车库最左起点，已保留任务进度')
+end
+
+function vehicleGrid.soloCar(origin,index)
+  return locateCar(origin,index,{offset=0},
+    function()return _soloGarageUi(true)end,function()return _soloGarageUi(false)end)
+end
+
 function currentMultiplayer.run(resumingTutorial)
   local count=tonumber(run.data['次数']) or 1
   local completed=_sessionProject(data['项目'],count) or 0

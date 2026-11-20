@@ -20,8 +20,8 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     public static final List<String> FUNCTIONS=List.of("keepCapture","releaseCapture","tap","swipe","touchDown","touchMove","touchUp",
             "cmpColorEx","cmpColor","getPixelColor","findColor","findMultiColor","findPic","snapShot","rotateImage",
             "getDisplaySize","getDisplayRotate","getWorkPath","getSdPath","getPackageName","getInstalledApk","frontAppName","runApp","stopApp","keyPress",
-            "setScreenScale","setControlBarPos","rnd","toast","print","colorToRGB","_jsonEncode","_jsonDecode","_textOcr","_digit","_mapMatch","_recoverEventStart","_specialEventList","_popupUi",
-            "_validateRoute","_driverBegin","_driverStep","_driverEnd","_racePanel","_hud","_taskNotice","_finished","_multiplayerUi","_rewardUi","_fallbackBegin","_fallbackStep","_sessionCycle","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_sessionLegacyCompleted","_sessionRaceRewards","_sessionLegacyPrepare","_sessionLegacyMap","_legacyRewardSample","_sessionLegacyRewards","_sessionOperation","_routeDisplay","_cupCards","_dailyEventUi","_soloEventUi","_garageFilterState","_garageFilterPrepare","_dailyTaskStatus","_queueResume","_queueRewardsDone","_queueEnter","_queueDone");
+            "setScreenScale","setControlBarPos","rnd","toast","print","colorToRGB","_jsonEncode","_jsonDecode","_textOcr","_digit","_mapMatch","_recoverEventStart","_specialEventList","_popupUi","_soloGarageScore",
+            "_validateRoute","_driverBegin","_driverStep","_driverEnd","_racePanel","_hud","_taskNotice","_finished","_multiplayerUi","_rewardUi","_fallbackBegin","_fallbackStep","_sessionCycle","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_sessionLegacyCompleted","_sessionRaceRewards","_sessionLegacyPrepare","_sessionLegacyMap","_legacyRewardSample","_sessionLegacyRewards","_sessionOperation","_routeDisplay","_cupCards","_dailyEventUi","_soloEventUi","_soloGarageUi","_garageFilterState","_garageFilterPrepare","_dailyTaskStatus","_queueResume","_queueRewardsDone","_queueEnter","_queueDone");
     private final Context context;
     private final LocalStore store;
     private final CaptureSession capture;
@@ -445,6 +445,11 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             if(scene.equals("car")){
                 out.put("fuel",FuelAvailability.detail(words));
                 out.put("starUpPending",VehicleUnlockGuard.pendingDetail(full.getText()));
+                String detailScore=MultiplayerGarage.soloDetailScore(words);
+                if(SessionState.stats.dailyLoot()&&detailScore.isEmpty())
+                    detailScore=MultiplayerGarage.soloScore(text(557,830,625,1040,3));
+                out.put("soloScore",detailScore);
+                out.put("soloName",MultiplayerGarage.soloDetailName(words));
             }
             if(scene.equals("unknown")||scene.equals("limitedSalePromo")){
                 int[] close=scene.equals("limitedSalePromo")?PopupCloseDetector.findLimitedSale(frame):PopupCloseDetector.find(frame);
@@ -579,6 +584,25 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 }
                 case "_dailyEventUi":return result(l,dailyEventUi());
                 case "_soloEventUi":return result(l,dailyEventUi(true,l.toBoolean(1)));
+                case "_soloGarageScore":{
+                    int left=n(l,1),top=n(l,2);
+                    return result(l,MultiplayerGarage.soloScore(text(719-top-77,left+11,719-top-29,left+171,3)));
+                }
+                case "_soloGarageUi":{
+                    if(!l.toBoolean(1)){
+                        Map<String,Object> ui=dailyEventUi(true);
+                        if("cars".equals(ui.get("scene"))){
+                            List<?> words=(List<?>)ui.get("words");
+                            ui.put("garage",MultiplayerGarage.soloSlots(frame,words,viewportAspect()));
+                        }
+                        return result(l,ui);
+                    }
+                    capture();
+                    Map<String,Object> popup=popupOverPixelMenu();
+                    if(!popup.isEmpty())return result(l,popup);
+                    return result(l,Map.of("scene","cars","frameId",capture.frameId(),"gridOnly",true,
+                            "garage",MultiplayerGarage.soloSlots(frame,List.of(),viewportAspect())));
+                }
                 case "_garageFilterPrepare":
                     prepareOverlay(false,true);return 0;
                 case "_garageFilterState":{

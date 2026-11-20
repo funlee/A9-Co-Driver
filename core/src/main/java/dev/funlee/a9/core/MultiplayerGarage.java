@@ -5,6 +5,7 @@ import java.util.regex.*;
 
 /** Evidence from the current CN garage. A completed swipe alone is never a list origin. */
 public final class MultiplayerGarage {
+    private static final java.util.regex.Pattern SOLO_SCORE=java.util.regex.Pattern.compile("(?<![0-9/])([0-9]{3,4})(?![0-9])");
     private static final Pattern PAIR=Pattern.compile("(\\d[\\d,]*)\\s*/\\s*(\\d[\\d,]*)");
     private static final List<String> LEAGUES=List.of("青铜","白银","黄金","白金","翡翠","钻石","精英","宗师","传奇");
     private static final int[] BADGE_COLORS={0xd88560,0x96b2d4,0xf0ca30,0xb18eff,0x65c6a5,0x21a9ff,0xc0569f,0xc85059,0xf5e2a4};
@@ -208,6 +209,68 @@ public final class MultiplayerGarage {
         return Map.of("left",left,"start",origin,"rank",league,"key",origin?league:"","cards",cards,"pitch",pitch);
     }
 
+    /** Solo-event garages use wider cards and have no league rail. */
+    public static Map<String,Object> soloSlots(PixelFrame frame,List<?> words,double aspect){
+        boolean wide=aspect>2.07,medium=aspect>=2.0&&!wide;
+        int top=wide?216:medium?206:195,rowPitch=wide?239:medium?241:244;
+        int pitch=wide?371:medium?424:474,width=pitch-10;
+        int left=-1;
+        for(int x=18;x<674;x++){
+            if(slotEdge(frame,x,top,true)&&slotEdge(frame,x,top+rowPitch,true)){left=x;break;}
+        }
+        if(left<0){
+            for(int x=87;x<=132;x++)if(slotEdge(frame,x,top,true)){left=x;break;}
+        }
+        List<Object> cards=new ArrayList<>();
+        int right=wide?1260:1280;
+        for(int column=0,x=left;left>=0&&x+190<=right;column++,x+=pitch){
+            for(int row=0;row<2;row++){
+                int y=top+row*rowPitch;
+                int edge=-1;
+                for(int dx=-4;dx<=4&&edge<0;dx++)if(slotEdge(frame,x+dx,y,true))edge=x+dx;
+                if(edge<0)continue;
+                boolean clipped=edge+width>right;
+                cards.add(Map.of("index",2*column+row+1,"x",edge+(wide?145:190),"y",y+113,"left",edge,"top",y,
+                        "signature",thumbnail(frame,edge,y),"clipped",clipped,
+                        "score",scoreIn(words,edge+12,edge+169,y+27,y+78)));
+            }
+        }
+        return Map.of("left",left,"start",left>=87&&left<=132,"cards",cards,"pitch",pitch);
+    }
+
+    public static String soloDetailScore(List<?> words){
+        return scoreIn(words,800,1170,78,178);
+    }
+
+    public static String soloDetailName(List<?> words){
+        List<String> parts=new ArrayList<>();
+        for(Object value:words){
+            Map<?,?> word=(Map<?,?>)value;
+            int x=pos(word,"x"),y=pos(word,"y");
+            String text=word.get("text").toString().trim();
+            if(x>=150&&x<=550&&y>=80&&y<=192&&text.matches("[A-Za-z0-9 .+'’\\-]+"))parts.add(text);
+        }
+        return String.join(" ",parts);
+    }
+
+    private static String scoreIn(List<?> words,int left,int right,int top,int bottom){
+        String score="";
+        for(Object value:words){
+            Map<?,?> word=(Map<?,?>)value;
+            int x=pos(word,"x"),y=pos(word,"y");
+            if(x<left||x>right||y<top||y>bottom)continue;
+            String number=soloScore(word.get("text").toString());
+            if(number.isEmpty())continue;
+            if(!score.isEmpty()&&!score.equals(number))return "";
+            score=number;
+        }
+        return score;
+    }
+    public static String soloScore(String text){
+        java.util.regex.Matcher number=SOLO_SCORE.matcher(text.replaceAll("[,，\\s]",""));
+        return number.find()?number.group(1):"";
+    }
+
     private static boolean masterRail(PixelFrame frame,List<?> words){
         for(Object value:words){
             Map<?,?> word=(Map<?,?>)value;
@@ -235,18 +298,25 @@ public final class MultiplayerGarage {
         return r<=48&&g<=65&&b<=95&&r<g&&g<b;
     }
     private static boolean slotEdge(PixelFrame frame,int x,int top){
+        return slotEdge(frame,x,top,false);
+    }
+    private static boolean slotBorder(int color,boolean solo){
+        int r=color>>16&255,g=color>>8&255,b=color&255;
+        return borderColor(color)||solo&&r>=100&&g<=80&&b<=80&&r>=g+65&&r>=b+65;
+    }
+    private static boolean slotEdge(PixelFrame frame,int x,int top,boolean solo){
         // The horizontal line must begin here. A right border or a clipped card has no such corner.
         boolean corner=false;
         for(int y=top-4;y<=top+5&&!corner;y++)
-            corner=borderColor(frame.pixel(719-y,x+2))&&borderColor(frame.pixel(719-y,x+5))
-                    &&borderColor(frame.pixel(719-y,x+10))&&borderColor(frame.pixel(719-y,x+76))
-                    &&!borderColor(frame.pixel(719-y,x-5));
+            corner=slotBorder(frame.pixel(719-y,x+2),solo)&&slotBorder(frame.pixel(719-y,x+5),solo)
+                    &&slotBorder(frame.pixel(719-y,x+10),solo)&&slotBorder(frame.pixel(719-y,x+76),solo)
+                    &&!slotBorder(frame.pixel(719-y,x-5),solo);
         if(!corner)return false;
         int hits=0;
         for(int y=top+14;y<top+204;y+=4){
             int gap=frame.pixel(719-y,x-5);
             boolean gutter=(gap>>16&255)<24&&(gap>>8&255)<50&&(gap&255)<80;
-            if((gutter||blueGutter(gap))&&borderColor(frame.pixel(719-y,x)))hits++;
+            if((gutter||blueGutter(gap))&&slotBorder(frame.pixel(719-y,x),solo))hits++;
         }
         return hits>=36;
     }

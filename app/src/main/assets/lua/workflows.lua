@@ -156,12 +156,14 @@ function run.project()
       run.dataList[data["项目"]]()
       _sessionLegacyCompleted()
       utils.selectNextTaskCar=true
+      utils.verifiedDailyCar=false
     end
   end
   return ret
 end
 function run.nitro()
   utils.selectNextTaskCar=false
+  utils.verifiedDailyCar=false
   data["氮气漂流"] = false
   data["用车情况"] = {
     0,

@@ -45,6 +45,38 @@ final class CupCarRotationChecks {
             lua.start("test");boolean alive=true;for(int i=0;i<30&&alive;i++)alive=lua.step(i*1000L);
             if(alive)throw new AssertionError("Obscured nitro start did not terminate");
         }
-        return cases.size()+1;
+        return cases.size()+1+dailyGrid(assets);
+    }
+    private static int dailyGrid(Path assets)throws Exception {
+        String fixture;
+        try(var input=CupCarRotationChecks.class.getResourceAsStream("/daily-car-grid.lua")){
+            fixture=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
+        }
+        for(String scenario:List.of("ordered","stuck","mismatch"))try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
+            lua.set("scenario",scenario);
+            lua.load("utilities",Files.readString(assets.resolve("lua/utilities.lua")));
+            lua.load("grid",Files.readString(assets.resolve("lua/multiplayer_current.lua")));
+            lua.load("fixture",fixture);
+            lua.start("test");
+            for(int t=0;t<200;t++)if(!lua.step(t*1000L))break;
+            lua.load("verify","assert(done,scenario)");
+        }
+        int[] pixels=new int[720*1280];
+        for(int column=0;column<2;column++){
+            int left=97+column*474;
+            for(int top:new int[]{195,439}){
+                int color=column==0?0xffb40b1c:0xffefdfab;
+                for(int y=top;y<top+220;y++)pixels[left*720+719-y]=color;
+                for(int x=left;x<left+120;x++)pixels[x*720+719-top]=color;
+            }
+        }
+        var page=MultiplayerGarage.soloSlots(new PixelFrame(720,1280,pixels),List.of(
+                Map.of("x",650,"y",480,"text","4,998"),
+                Map.of("x",720,"y",578,"text","99,999")),16.0/9);
+        var cards=(List<?>)page.get("cards");
+        if(!Boolean.TRUE.equals(page.get("start"))||cards.size()!=4||
+                !"4998".equals(((Map<?,?>)cards.get(3)).get("score")))
+            throw new AssertionError("Daily garage counts red and gold tiles and reads the expected lower card");
+        return 4;
     }
 }

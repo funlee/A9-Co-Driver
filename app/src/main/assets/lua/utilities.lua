@@ -1396,7 +1396,9 @@ function utils.startRace()
     latestCar=nil
     if screen.scene=='car' then
       if screen.starUpPending or screen.fuel==0 then return 'fuelEmpty' end
-      if fuel=='trial' and not ticketedTrial(screen) then
+      if type(utils.verifiedDailyCar)=='string' and screen.soloScore~=utils.verifiedDailyCar then
+        data['信息']='等待再次核对每日战利品车辆性能分'
+      elseif fuel=='trial' and not ticketedTrial(screen) then
         data['信息']='等待重新确认赛事试驾按钮'
       elseif utils.mycolor(50,830,'12FBC3-303030')~=1 then
         tap(50,830);print('打开TouchDrive');sleep(1000)
@@ -1521,7 +1523,7 @@ function utils.backToGarage(wide)
   keyPress('back');sleep(1200)
   for i=1,20 do
     keepCapture()
-    if wide and _soloEventUi().scene=='cars' then return end
+    if (wide or (_soloGarageUi and data['项目']=='每日战利品')) and _soloEventUi().scene=='cars' then return end
     if cmpColorEx('666|86|2E2E2E-101010,666|120|373737-101010,574|140|5400CF-201030',1)==1 or
         cmpColorEx('574|130|FFFFFF-101010,688|1076|6B6B6B-101010,692|1246|ECDF00-101010',1)==1 then return end
     sleep(300)
@@ -1534,8 +1536,15 @@ function utils.chooseCarCup(carList)
   local rotate=tostring(utils.defultCfg(run.data['用车模式'],'0'))=='1'
   local filter=utils.defultCfg(run.data['选车筛选'],'')
   if filter~='' then utils.configureGarageFilter(filter);sleep(2000) end
-  for i=1,30 do swipe(290,70,290,1200,100);sleep(100) end
-  sleep(2000)
+  local dailyGrid=data['项目']=='每日战利品' and _soloGarageUi and vehicleGrid
+  local origin
+  if dailyGrid then
+    utils.verifiedDailyCar=false
+    origin=vehicleGrid.soloOrigin()
+  else
+    for i=1,30 do swipe(290,70,290,1200,100);sleep(100) end
+    sleep(2000)
+  end
   local wide=false
   if not clickMode and _garageFilterState then
     keepCapture()
@@ -1543,7 +1552,11 @@ function utils.chooseCarCup(carList)
   end
   local lastCar=1
   if clickMode then
-    tap(400,220);sleep(1500)
+    if dailyGrid then
+      local first=vehicleGrid.soloCar(origin,1)
+      tapUiWord(first)
+    else tap(400,220) end
+    sleep(1500)
     if tonumber(carList[1])<0 then tap(360,490);sleep(700);lastCar=-1 end
   end
   local empty={};local unavailable={};local locked={}
@@ -1553,8 +1566,17 @@ function utils.chooseCarCup(carList)
       if not car or car==0 then error('车辆序号无效，保留当前任务') end
       if data['超时状态'] then error('选车超时，保留当前任务') end
       if not empty[car] and not unavailable[car] and not locked[car] and (not rotate or data['用车次数']['car'..j]~=1) then
-        local retryX,retryY
+        local retryX,retryY,slot
         if clickMode then utils.clickChoose(car,lastCar)
+        elseif dailyGrid then
+          if car<1 or car%1~=0 then error('滑动选车需要正整数车辆序号') end
+          origin=origin or vehicleGrid.soloOrigin()
+          slot=vehicleGrid.soloCar(origin,car)
+          origin=nil
+          if slot.score=='' and _soloGarageScore then slot.score=_soloGarageScore(slot.left,slot.top) end
+          if not slot.score or slot.score=='' then error('未读到每日战利品第 '..car..' 辆车的性能分，已保留任务进度') end
+          tapUiWord(slot)
+          sleep(1200)
         else
           local slot=utils.getCarHL(car);local previous=utils.getCarHL(lastCar)
           utils.carSwipe(slot[2],previous[2]);keepCapture()
@@ -1575,12 +1597,24 @@ function utils.chooseCarCup(carList)
           sleep(1500)
         end
         lastCar=car
-        local fuel=utils.carFuel(not clickMode)
+        local fuel,detail=utils.carFuel(not clickMode)
         if fuel==nil and retryX then
           -- A second tap is allowed only while the original garage is still visible.
           tap(retryX,retryY)
           sleep(1500)
           fuel=utils.carFuel(true)
+        end
+        if slot and (type(fuel)=='number' or fuel=='starUp' or fuel=='trial') then
+          local matched=false
+          for attempt=1,4 do
+            if detail and detail.scene=='car' and detail.soloScore==slot.score then matched=true;break end
+            sleep(300)
+            detail=_soloEventUi()
+          end
+          if not matched then
+            error('每日战利品第 '..car..' 辆车的卡片与详情性能分不一致，已保留任务进度')
+          end
+          print('每日战利品已核验第 '..car..' 辆：'..(detail.soloName or '')..' · 性能分 '..slot.score)
         end
         if fuel=='vehicleLocked' then
           if not wide or #carList==1 then return fuel end
@@ -1592,6 +1626,7 @@ function utils.chooseCarCup(carList)
           print('配置车辆 '..car..' 未打开详情，尝试下一辆配置车辆')
         elseif fuel=='trial' or (type(fuel)=='number' and fuel>0) then
           data['用车次数']['car'..j]=1
+          if dailyGrid then utils.verifiedDailyCar=slot and slot.score or true end
           utils.selectNextTaskCar=false
           data['信息']='使用配置车辆 '..car..(fuel=='trial' and '（免费试驾）' or '，剩余燃油 '..fuel)
           print(data['信息']);return true
@@ -1626,7 +1661,8 @@ function utils.chooseCarCup(carList)
 end
 function utils.startConfiguredRace()
   local cars=utils.taskCars()
-  if utils.selectNextTaskCar and #cars>1 then
+  local verifyDaily=data['项目']=='每日战利品' and _soloGarageUi and vehicleGrid
+  if (utils.selectNextTaskCar and #cars>1) or (verifyDaily and not utils.verifiedDailyCar) then
     utils.backToGarage()
     local selected=utils.chooseCarCup(cars)
     if type(selected)=='string' then return selected end

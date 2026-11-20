@@ -58,6 +58,7 @@ local function withPopupRecovery(read)
   end
 end
 _soloEventUi=withPopupRecovery(_soloEventUi)
+_soloGarageUi=withPopupRecovery(_soloGarageUi)
 _dailyEventUi=withPopupRecovery(_dailyEventUi)
 _multiplayerUi=withPopupRecovery(_multiplayerUi)
 _rewardUi=withPopupRecovery(_rewardUi)
