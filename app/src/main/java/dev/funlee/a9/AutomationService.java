@@ -126,6 +126,9 @@ public final class AutomationService extends Service {
                 long origin=SystemClock.elapsedRealtime()-SessionState.stats.elapsedMillis(),pauseAt=0,pausedTotal=0;
                 while(!stopping&&!host.finished){
                     boolean restarted=false;
+                    boolean rebuildForQueue=false;
+                    boolean restartForHome=false;
+                    GameRecovery.Reason interruptedAction=null;
                     try(LuaRuntime lua=new LuaRuntime(host,AndroidHost.FUNCTIONS)) {
                         runtime=lua;lua.set("LOCAL_ROOT",host.workPath());lua.set("UIconfig",store.luaConfig());
                         Map<String,Object> routes=new LinkedHashMap<>();for(Route route:store.routes.values())routes.put(route.name,route.raw);lua.set("ROUTES",routes);
@@ -140,7 +143,7 @@ public final class AutomationService extends Service {
                             if(pauseAt>0){pausedTotal+=now-pauseAt;pauseAt=0;lua.load("resume","data['心跳时间']=os.time()");}
                             if(!touch.gameInForeground()){
                                 long recoveryAt=SystemClock.elapsedRealtime();
-                                restarted=recovery.recover(GameRecovery.Reason.FOREGROUND_LOST);
+                                restarted=recoverInterrupted(host,recovery,GameRecovery.Reason.FOREGROUND_LOST);
                                 pausedTotal+=SystemClock.elapsedRealtime()-recoveryAt;
                                 if(restarted)break;
                                 host.pause();continue;
@@ -148,21 +151,45 @@ public final class AutomationService extends Service {
                             host.clock=now-origin-pausedTotal;
                             SessionState.stats.elapsed(host.clock);
                             host.periodicSave();
-                            if(!lua.step(host.clock))break;
+                            try{
+                                if(!lua.step(host.clock))break;
+                            }catch(RuntimeException failed){
+                                if(stopping)throw failed;
+                                host.checkRecoveryAvailable();
+                                boolean queueWork=host.runningQueueWork()||host.needsHome();
+                                if(host.recoveryReason==GameRecovery.Reason.FOREGROUND_LOST ||
+                                        (!queueWork&&host.recoveryReason!=null)){
+                                    interruptedAction=host.recoveryReason;
+                                    break;
+                                }
+                                if(!queueWork)throw failed;
+                                String message=businessReason(failed);
+                                if(host.needsHome()){
+                                    SessionState.log("回主未成功："+message);
+                                    host.reserveHomeRestart();
+                                    restartForHome=true;
+                                }else{
+                                    host.recordQueueFailure(message);
+                                }
+                                rebuildForQueue=true;
+                                break;
+                            }
                             Thread.sleep(10);
                         }
-                    }catch(RuntimeException e){
-                        if(stopping)throw e;
-                        host.checkAccountLogin();
-                        if(host.recoveryReason==null)throw e;
-                        long recoveryAt=SystemClock.elapsedRealtime();
-                        restarted=recovery.recover(host.recoveryReason);
-                        pausedTotal+=SystemClock.elapsedRealtime()-recoveryAt;
-                        // The failed Lua instruction cannot be replayed. Re-enter from its saved
-                        // task checkpoint only after a clean game launch and confirmed menu.
-                        if(!restarted)restarted=recovery.recover(GameRecovery.Reason.INPUT_INTERRUPTED);
                     }finally{runtime=null;}
-                    if(restarted){host.recovered();continue;}
+                    if(interruptedAction!=null){
+                        long recoveryAt=SystemClock.elapsedRealtime();
+                        restarted=recoverInterrupted(host,recovery,interruptedAction);
+                        if(!restarted)restarted=recoverInterrupted(host,recovery,GameRecovery.Reason.INPUT_INTERRUPTED);
+                        pausedTotal+=SystemClock.elapsedRealtime()-recoveryAt;
+                    }
+                    if(restartForHome){
+                        long recoveryAt=SystemClock.elapsedRealtime();
+                        recovery.restartForHome();
+                        pausedTotal+=SystemClock.elapsedRealtime()-recoveryAt;
+                        restarted=true;
+                    }
+                    if(restarted||rebuildForQueue){host.resetWorkflow(restarted);continue;}
                     break;
                 }
                 if(!stopping)SessionState.status("本轮任务已完成");
@@ -177,6 +204,18 @@ public final class AutomationService extends Service {
         }
         finally{main.post(()->{if(!stopping)stopRun();});}
     }
+    private boolean recoverInterrupted(AndroidHost host,GameRecovery recovery,GameRecovery.Reason reason)throws Exception{
+        return recovery.recover(reason,host.needsHome()?host::reserveHomeRestart:null);
+    }
+    private static String businessReason(RuntimeException failure){
+        String message=failure.getMessage();
+        if(message==null||message.isEmpty())return failure.getClass().getSimpleName();
+        int trace=message.indexOf("\nstack traceback:");
+        if(trace>=0)message=message.substring(0,trace);
+        // The scheduler and the failing Lua chunk can both prefix their source locations.
+        return message.replaceFirst("(?s)^.*?\\]:[0-9]+: (?:.*\\]:[0-9]+: )?","").trim();
+    }
+
     private void failRun(String detail) {
         if (stopping) return;
         Bitmap frame = null;

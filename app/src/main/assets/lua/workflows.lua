@@ -57,6 +57,7 @@ function run.project()
     data["心跳时间"] = os.time()
     local soloRaceSeen=false
     utils.soloStartAt=nil;run.challengeConfirmed=false
+    ::observeRace::
     while true do
       local carHandler=run.carDetails and run.carDetails[data['项目']]
       local screen=carHandler and _soloEventUi()
@@ -154,8 +155,10 @@ function run.project()
     elseif type(ret) == "string" then
       return ret
     else
+      -- A monitor dismissal can invalidate the final action. Observe this race again
+      -- without increasing its count or resetting the confirmed start.
+      if _sessionLegacyCompleted()==false then goto observeRace end
       run.dataList[data["项目"]]()
-      _sessionLegacyCompleted()
       utils.selectNextTaskCar=true
       utils.verifiedDailyCar=false
     end

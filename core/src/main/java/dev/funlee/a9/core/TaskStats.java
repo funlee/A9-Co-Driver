@@ -22,7 +22,8 @@ public final class TaskStats {
     public synchronized void resumeProject(int n,int completed){projectTarget=n;projectBase=finished-completed;}
     public synchronized void matching(long ms){matchingSeconds=ms<0?-1:ms/1000;}
     public synchronized boolean isMatching(){return matchingSeconds>=0;}
-    public synchronized void recovered(){restarts++;active=false;resultRecorded=false;returnRecorded=false;matchingSeconds=-1;operation="重启后继续剩余任务";}
+    public synchronized void recovered(){interrupted();restarts++;operation="重启后继续剩余任务";}
+    public synchronized void interrupted(){active=false;resultRecorded=false;returnRecorded=false;matchingSeconds=-1;operation="正在恢复任务";}
     public synchronized int restartCount(){return restarts;}
     public synchronized boolean masterSeries(){return modeKey.equals("多人下");}
     public synchronized boolean dailyLoot(){return modeKey.equals("每日战利品");}

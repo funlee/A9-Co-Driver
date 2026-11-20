@@ -63,7 +63,7 @@ final class DailyTaskChecks {
                 "UIconfig={routeOnly='',maxCycles=2,ActiveProj={true,true},projects={{['项目']='每日战利品',data={['次数']='10'}},{['项目']='多人下',data={['次数']='1'}}}};"+
                 "function localInit()end;function monitor()end;function _hud()end;function print()end;function _sessionCycle(cycle)if cycle==3 then assert(not finished and queueDone==4 and multiplayer==2);assert(inputs==(reason=='' and 6 or 2));verified=true;sleep(999999)end end;"+
                 "function _sessionProject()end;function _queueDone()queueDone=queueDone+1 end;function _finished()finished=true end;"+
-                "function _dailyTaskStatus(index)assert(index==1);return reason end;"+
+                "function _taskNotice(msg,ms)assert(msg:find('本轮跳过项目 1') and ms==4000)end;function _dailyTaskStatus(index)assert(index==1);return reason end;"+
                 "utils={backToMain=function()inputs=inputs+1 end,checkAuto=function()end,initCar=function()end};"+
                 "run.project=function()inputs=inputs+1 end;currentMultiplayer={run=function()multiplayer=multiplayer+1 end};"+
                 "function test()main()end");

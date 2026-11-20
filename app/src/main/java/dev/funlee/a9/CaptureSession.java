@@ -11,11 +11,17 @@ import android.os.*;
 import android.util.DisplayMetrics;
 import android.view.WindowManager;
 import dev.funlee.a9.core.GameViewport;
+import dev.funlee.a9.core.LegacyPopup;
 import java.nio.ByteBuffer;
 import java.util.function.Supplier;
 
 /** Captures the full display. Owns every Image/Bitmap and closes them promptly. */
 public final class CaptureSession implements AutoCloseable {
+    static final class Unavailable extends IllegalStateException {
+        Unavailable(String message){super(message);}
+    }
+    private volatile boolean authorizationEnded;
+    boolean authorizationEnded(){return authorizationEnded;}
     static final class OrientationPending extends IllegalStateException {
         OrientationPending(String message){super(message);}
     }
@@ -38,7 +44,7 @@ public final class CaptureSession implements AutoCloseable {
     private final DisplayManager displays;
     private final Runnable onStopped;
     private final MediaProjection.Callback callback=new MediaProjection.Callback() {
-        @Override public void onStop() { onStopped.run(); }
+        @Override public void onStop() { authorizationEnded=true;onStopped.run(); }
         @Override public void onCapturedContentResize(int w,int h) { resize(w,h); }
     };
     private final DisplayManager.DisplayListener displayListener=new DisplayManager.DisplayListener() {
@@ -170,7 +176,7 @@ public final class CaptureSession implements AutoCloseable {
             long remaining = until - SystemClock.elapsedRealtime();
             if (display == null || remaining <= 0) {
                 if (pending != null) throw pending;
-                throw new IllegalStateException("未收到截屏画面，请停止后重新授权截屏");
+                throw new Unavailable("未收到截屏画面，请停止后重新授权截屏");
             }
             // Accessibility window bounds can settle after the first landscape frame.
             try { wait(remaining); }
@@ -208,6 +214,30 @@ public final class CaptureSession implements AutoCloseable {
         return scaled==source?scaled.copy(Bitmap.Config.ARGB_8888,false):scaled;
     }
     public synchronized long frameId(){return lastReadFrame;}
+
+    static final class PopupSample {
+        final LegacyPopup rule;
+        final long frameId;
+        PopupSample(LegacyPopup rule,long frameId){this.rule=rule;this.frameId=frameId;}
+    }
+
+    /** Read just the original sample points without replacing the workflow's captured frame or ID. */
+    synchronized PopupSample peekLegacyPopup(GameViewport viewport,boolean backgroundOnly) {
+        if(!hasViewport(viewport))return null;
+        LegacyPopup rule=LegacyPopup.match((x,y)->{
+            float[] point=viewport.toScreen(x,y);
+            return latest.getPixel(Math.round(point[0]),Math.round(point[1]));
+        },backgroundOnly);
+        return rule==null?null:new PopupSample(rule,frameTime);
+    }
+
+    synchronized Bitmap copyPopupFrame(GameViewport viewport) {
+        return hasViewport(viewport)?normalizeFrame(latest,viewport):null;
+    }
+
+    private boolean hasViewport(GameViewport viewport) {
+        return latest!=null&&viewport!=null&&viewport.isFullHeightWindow(latest.getWidth(),latest.getHeight());
+    }
 
     // Inspect just the opaque navy header and the pink close-button area before spending an OCR pass.
     // Capture coordinates here are the upright display, independent of the automation's rotation setting.

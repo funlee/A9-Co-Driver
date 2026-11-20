@@ -20,8 +20,8 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     public static final List<String> FUNCTIONS=List.of("keepCapture","releaseCapture","tap","swipe","touchDown","touchMove","touchUp",
             "cmpColorEx","cmpColor","getPixelColor","findColor","findMultiColor","findPic","snapShot","rotateImage",
             "getDisplaySize","getDisplayRotate","getWorkPath","getSdPath","getPackageName","getInstalledApk","frontAppName","runApp","stopApp","keyPress",
-            "setScreenScale","setControlBarPos","rnd","toast","print","colorToRGB","_jsonEncode","_jsonDecode","_textOcr","_digit","_mapMatch","_recoverEventStart","_specialEventList","_popupUi","_soloGarageScore","_soloDetailScore",
-            "_validateRoute","_driverBegin","_driverStep","_driverEnd","_racePanel","_hud","_taskNotice","_finished","_multiplayerUi","_rewardUi","_fallbackBegin","_fallbackStep","_sessionCycle","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_sessionLegacyCompleted","_sessionRaceRewards","_sessionLegacyPrepare","_sessionLegacyMap","_legacyRewardSample","_sessionLegacyRewards","_sessionOperation","_routeDisplay","_cupCards","_dailyEventUi","_soloEventUi","_soloGarageUi","_garageFilterState","_garageFilterPrepare","_dailyTaskStatus","_queueResume","_queueRewardsDone","_queueEnter","_queueDone");
+            "setScreenScale","setControlBarPos","rnd","toast","print","colorToRGB","_jsonEncode","_jsonDecode","_textOcr","_digit","_mapMatch","_recoverEventStart","_specialEventList","_recoveryUi","_popupUi","_legacyPopupProbe","_legacyPopupDismiss","_soloGarageScore","_soloDetailScore",
+            "_validateRoute","_driverBegin","_driverStep","_driverEnd","_racePanel","_hud","_taskNotice","_finished","_multiplayerUi","_rewardUi","_fallbackBegin","_fallbackStep","_sessionCycle","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_sessionLegacyCompleted","_sessionRaceRewards","_sessionLegacyPrepare","_sessionLegacyMap","_legacyRewardSample","_sessionLegacyRewards","_sessionOperation","_routeDisplay","_cupCards","_dailyEventUi","_soloEventUi","_soloGarageUi","_garageFilterState","_garageFilterPrepare","_dailyTaskStatus","_queueResume","_queueRewardsDone","_queueEnter","_queueDone","_queueBeginRewards","_queueHomeConfirmed","_requirePlayerAction");
     private final Context context;
     private final LocalStore store;
     private final CaptureSession capture;
@@ -46,6 +46,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     private long lastSavedClock;
     private long nextAccountCheck;
     private boolean accountDisplaced;
+    private long lastPopupInput;
 
     private void checkAccountText(String text){
         if(AccountLoginDialog.matches(text)){
@@ -76,20 +77,56 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     private final RaceRewards.Stable rewardStable=new RaceRewards.Stable();
     private boolean legacyPrepared,legacyRaceSeen,legacyRewardDone,legacyInvalid;
     private String legacyMap="";
-    private long legacyCoins=-1,legacyFame=-1;
     public GameRecovery.Reason recoveryReason;
-    public void recovered() throws InterruptedException{
+    private boolean runningQueueWork;
+    private String hardStop;
+    boolean needsHome(){return checkpoint.needsHome();}
+    boolean runningQueueWork(){return runningQueueWork;}
+
+    void checkRecoveryAvailable() throws Exception {
+        if(hardStop!=null)throw new IllegalStateException(hardStop);
+        if(capture.authorizationEnded())throw new IllegalStateException("截屏授权已结束");
+        if(touch==null||touch!=TouchService.instance)throw new IllegalStateException("无障碍服务已断开，请重新连接");
+        if(context.getSystemService(android.app.KeyguardManager.class).isKeyguardLocked())
+            throw new IllegalStateException("设备已锁屏，无法继续操作游戏");
+        checkAccountLogin();
+    }
+    void recordQueueFailure(String reason)throws Exception{
+        checkpoint.failure(reason);
+        runningQueueWork=false;
+        persist(false);
+        SessionState.status(checkpoint.failureSummary());
+        saveRecoveryFrame();
+    }
+    void reserveHomeRestart()throws Exception{
+        if(!checkpoint.beginHomeRestart())throw new IllegalStateException("重启后仍未能确认游戏主界面，任务进度已保留");
+        persist(false);
+    }
+    void saveRecoveryFrame(){
+        try{FailureScreenshot.save(context,capture.copyLatestFrame());}
+        catch(RuntimeException e){SessionState.log("无法保存恢复前画面："+e.getMessage());}
+    }
+    public void resetWorkflow(boolean gameRestarted) throws InterruptedException{
+        runningQueueWork=false;
+        touch.releaseAll();
         driver=null;driverFallback=false;frame=null;progress.reset();matching.reset();lastUiScene="";finished=false;recoveryReason=null;
-        SessionState.racePanel(false);SessionState.overlayMode(false,false);SessionState.stats.recovered();rewardStable.reset();legacyPrepared=legacyRaceSeen=legacyRewardDone=false;
+        SessionState.racePanel(false);SessionState.overlayMode(false,false);
+        if(gameRestarted)SessionState.stats.recovered();else SessionState.stats.interrupted();
+        rewardStable.reset();legacyPrepared=legacyRaceSeen=legacyRewardDone=false;
     }
     public void restoreQueue(JSONObject saved)throws Exception{
         JSONObject q=saved.getJSONObject("queue");
         int cycle=q.getInt("cycle");
         // Sessions from before round-based rewards resume at their existing task.
         checkpoint.restore(cycle,q.getInt("index"),q.getInt("completed"),q.optInt("rewardCycle",cycle));
+        checkpoint.restoreRecovery(q.optInt("failures"),q.optBoolean("needsHome"),q.optBoolean("homeRestarted"),
+                q.optBoolean("rewardWork"),q.optString("firstFailure"),q.optString("lastFailure"));
         restoredQueue=true;
     }
-    public void persist(boolean complete)throws Exception{SessionRecord.write(context,store.config,checkpoint,SessionState.stats,complete);lastSavedClock=clock;}
+    public void persist(boolean complete)throws Exception{
+        try{SessionRecord.write(context,store.config,checkpoint,SessionState.stats,complete);lastSavedClock=clock;}
+        catch(Exception e){hardStop="无法保存任务进度："+e.getMessage();throw e;}
+    }
     public void periodicSave()throws Exception{if(clock-lastSavedClock>=5000)persist(finished);}
     public AndroidHost(Context context,LocalStore store,CaptureSession capture,TouchService touch) {
         this.context=context;this.store=store;this.capture=capture;this.touch=touch;
@@ -153,6 +190,8 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     public boolean recoveryReady()throws Exception{
         Map<String,Object> screen=rewardUi(false);
         String text=(String)screen.get("text");
+        if(needsHome()&&"loginHistory".equals(screen.get("scene")))throw new IllegalStateException("登录历史需要玩家确认，请检查登录状态");
+        if(needsHome()&&"rewardChoice".equals(screen.get("scene")))throw new IllegalStateException("请先手动选择画面上的动态奖励，再续跑");
         if(RecoveryReadiness.incompatibleDevice(text))throw new GameRecovery.IncompatibleStartup();
         if("interruptingPopup".equals(screen.get("scene")))return screen.containsKey("dismissPopup");
         if(MultiplayerUi.limitedSalePromo(text))return PopupCloseDetector.findLimitedSale(frame)!=null;
@@ -193,35 +232,84 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         long before=SystemClock.elapsedRealtime();
         if(SessionState.overlayMode(result,menu))capture.awaitFrameAfter(before);
     }
-    private boolean addInterruptingPopup(Map<String,Object> screen,ModalPopup.Panel panel,List<?> words) {
+    private boolean addInterruptingPopup(Map<String,Object> screen,ModalPopup.Panel panel,List<?> words)throws Exception {
         return addInterruptingPopup(screen,panel,words,false);
     }
-    private boolean addInterruptingPopup(Map<String,Object> screen,ModalPopup.Panel panel,List<?> words,boolean keepDailyGoals) {
+    private boolean addInterruptingPopup(Map<String,Object> screen,ModalPopup.Panel panel,List<?> words,boolean keepDailyGoals)throws Exception {
         if(screen.containsKey("demotionConfirm")||touch!=null&&touch.unlockGuard.active())return false;
         Map<String,Object> action=ModalPopup.dismiss(frame,panel,words,viewportAspect(),keepDailyGoals);
+        if(action==null&&ModalPopup.possibleClubMilestone(frame)){
+            List<Object> focused=new ArrayList<>(words);
+            focused.add(Map.of("text",text(494,300,689,980,2),"x",640,"y",130));
+            action=ModalPopup.dismiss(frame,panel,focused,viewportAspect(),keepDailyGoals);
+        }
         if(action==null)return false;
         screen.put("scene","interruptingPopup");
         if(!action.isEmpty())screen.put("dismissPopup",action);
         return true;
     }
     private Map<String,Object> popupOverPixelMenu()throws Exception{
-        if(ModalPopup.locate(frame())==null&&!ModalPopup.possibleRedCoinConversion(frame)&&
+        if(ModalPopup.locate(frame())==null&&!ModalPopup.possibleClubMilestone(frame)&&!ModalPopup.possibleRedCoinConversion(frame)&&
                 !ModalPopup.possibleNewcomerGift(frame)&&PopupCloseDetector.findDailyGoals(frame)==null)return Map.of();
         Map<String,Object> screen=dailyEventUi(true);
         return "interruptingPopup".equals(screen.get("scene"))?screen:Map.of();
+    }
+    private CaptureSession.PopupSample legacyPopup(boolean backgroundOnly) {
+        if(touch==null||SessionState.inputPaused()||!touch.gameInForeground())return null;
+        CaptureSession.PopupSample sample=capture.peekLegacyPopup(viewport,backgroundOnly);
+        if(sample!=null&&sample.rule==LegacyPopup.ACCOUNT){
+            accountDisplaced=true;
+            throw new IllegalStateException(AccountLoginDialog.STOP_REASON);
+        }
+        return touch.unlockGuard.active()?null:sample;
+    }
+    private boolean dismissLegacyPopup(String name,boolean continuation)throws Exception{
+        CaptureSession.PopupSample sample=legacyPopup(false);
+        if(sample==null||!sample.rule.name().equals(name))return false;
+        LegacyPopup rule=sample.rule;
+        if(continuation&&rule!=LegacyPopup.TIP_SEQUENCE)return false;
+        Bitmap bitmap=capture.copyPopupFrame(viewport);
+        if(bitmap==null)return false;
+        Task<Text> task=null;
+        try{
+            task=recognizer.process(InputImage.fromBitmap(bitmap,270));
+            String words=Tasks.await(task,12,TimeUnit.SECONDS).getText();
+            checkAccountText(words);
+            if(!rule.permitsInput(words))return false;
+        }finally{
+            if(task!=null&&!task.isComplete())task.addOnCompleteListener(Runnable::run,done->bitmap.recycle());
+            else bitmap.recycle();
+        }
+        // OCR may span a page transition. Recheck the live game immediately before dispatch.
+        sample=legacyPopup(false);
+        if(sample==null||sample.rule!=rule)return false;
+        if(driver!=null)driver.clear();
+        touch.releaseAll();
+        if(rule==LegacyPopup.AD_BACK)touch.key("back");
+        else touch.tap(8,continuation?30:rule.tapX,continuation?1240:rule.tapY);
+        lastPopupInput=SystemClock.elapsedRealtime();
+        frame=null;
+        SessionState.log("已处理原版弹窗："+rule.name());
+        return true;
+    }
+    private boolean freshAfterPopup(){
+        // A sleeping task may still hold a button or swipe from the covered page.
+        // Only a later observation by that task can authorize more input or a completion.
+        return lastPopupInput==0||frame!=null&&capture.frameId()>lastPopupInput;
     }
     private Map<String,Object> multiplayerUi(boolean readSeriesScore,boolean raceExpected,boolean sampleGrid) throws Exception {
         boolean master=SessionState.stats.masterSeries();
         capture();
         ModalPopup.Panel panel=ModalPopup.locate(frame);
-        if(panel==null&&sampleGrid&&!master&&lastUiScene.equals("cars")){
+        boolean unobstructed=panel==null&&!ModalPopup.possibleClubMilestone(frame);
+        if(unobstructed&&sampleGrid&&!master&&lastUiScene.equals("cars")){
             Map<String,Object> garage=MultiplayerGarage.slots(frame,List.of(),"",viewportAspect());
             if(!((List<?>)garage.get("cards")).isEmpty()&&!MultiplayerGarage.leagueTabs(frame).isEmpty())
                 return Map.of("frameId",capture.frameId(),"scene","cars","garage",garage,"gridOnly",true);
         }
         Map<String,Object> out=new LinkedHashMap<>();out.put("frameId",capture.frameId());
         // Menu transitions may look like the wide race HUD before verified vehicle Start.
-        if(panel==null&&raceExpected&&(touch==null||!touch.unlockGuard.active())&&RaceHud.visible(frame,wideViewport())) {
+        if(unobstructed&&raceExpected&&(touch==null||!touch.unlockGuard.active())&&RaceHud.visible(frame,wideViewport())) {
             matching.reset();SessionState.stats.matching(-1);
             SessionState.overlayMode(false,false);out.put("scene","race");out.put("text","");out.put("words",List.of());return out;
         }
@@ -323,7 +411,8 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         }
         if(!master&&scene.equals("event")&&
                 MapMatcher.normalize(text).replace('賽','赛').contains("世界系列赛")){
-            addWorldLeague(out,words);
+            String league=worldLeague(words);
+            if(!league.isEmpty())out.put("worldLeague",league);
         }
         if(scene.equals("unknown")&&!text.isEmpty()&&!text.equals(lastUnknownText)&&clock-lastUnknownLog>=5000){
             lastUnknownLog=clock;lastUnknownText=text;SessionState.log("待识别界面文字："+text);
@@ -373,35 +462,13 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         long score=RaceRewards.amount(text(719-bottom,left,719-top,right,2),false);
         if(score>=0)out.put("seriesScore",score);
     }
-    private void addWorldLeague(Map<String,Object> out,List<?> words)throws Exception {
-        String league=MultiplayerGarage.eventLeagueIcon(frame,words,wideViewport());
-        if(league.isEmpty())league=MultiplayerGarage.leagueBadge(text(324,53,460,146,4));
-        if(!league.isEmpty()){
-            out.put("worldLeague",league);
-            return;
-        }
-        int rating=MultiplayerGarage.eventRatingScore(words);
-        if(rating<0)rating=MultiplayerGarage.eventRatingScore(focusedWords(105,263,281,412,3));
-        league=MultiplayerGarage.leagueForRating(rating);
-        if(!league.isEmpty()){
-            out.put("worldRating",rating);
-            out.put("worldLeagueByRating",league);
-            return;
-        }
-        league=MultiplayerGarage.eventLeagueBanner(words);
-        // The banner moves with the camera and can sit higher or farther left in emulators.
-        if(league.isEmpty())league=MultiplayerGarage.eventLeagueBanner(focusedWords(425,75,1065,297,3));
-        if(!league.isEmpty())out.put("worldLeague",league);
-    }
-    private List<Object> focusedWords(int left,int top,int right,int bottom,int scale)throws Exception {
-        Text region=readText(719-bottom,left,719-top,right,scale);
-        List<Object> focused=new ArrayList<>();
-        if(region!=null)for(Text.TextBlock block:region.getTextBlocks())for(Text.Line line:block.getLines()){
-            Rect bounds=line.getBoundingBox();
-            if(bounds!=null)focused.add(Map.of("text",line.getText(),
-                    "x",left+bounds.centerX()/scale,"y",top+bounds.centerY()/scale));
-        }
-        return focused;
+    private String worldLeague(List<?> words)throws Exception {
+        boolean wide=wideViewport();
+        String color=MultiplayerGarage.eventLeagueIcon(frame,words,wide);
+        int[] badge=MultiplayerGarage.eventLeagueBadgeBounds(words,wide);
+        String label=MultiplayerGarage.leagueBadge(text(719-badge[3],badge[0],719-badge[1],badge[2],5));
+        if(color.isEmpty())return label;
+        return label.isEmpty()||label.equals(color)?color:"";
     }
     private boolean addLeagueDemotion(Map<String,Object> out,List<?> words)throws Exception {
         if(!MultiplayerUi.leagueDemotionLayout(frame))return false;
@@ -416,12 +483,43 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         out.put("demotionConfirm",button);
         return true;
     }
+    private Map<String,Object> recoveryUi() throws Exception {
+        Map<String,Object> out=new LinkedHashMap<>(dailyEventUi(true));
+        // All detectors below use the frame that produced this OCR, including early scene returns.
+        out.put("frameId",capture.frameId());
+        String text=(String)out.getOrDefault("text","");
+        List<?> words=(List<?>)out.getOrDefault("words",List.of());
+        String scene=(String)out.get("scene");
+        String menu=MultiplayerUi.classify(text);
+        if (menu.equals("exitGame") || menu.equals("loginHistory") || menu.equals("rewardChoice"))
+            out.put("scene",scene=menu);
+        // Full-screen confirmations and game subpages have their own actions. Their
+        // ordinary buttons can share the legacy overlay's colors.
+        boolean canShowOverlay=scene.equals("unknown") || scene.equals("home") || scene.equals("interruptingPopup");
+        String overlay=canShowOverlay ? MainMenuUi.returnOverlay(frame) : "";
+        if (!overlay.isEmpty()) out.put("returnOverlay",overlay);
+        LegacyPopup legacy=LegacyPopup.match(frame);
+        if (legacy==LegacyPopup.ACCOUNT) {
+            accountDisplaced=true;
+            throw new IllegalStateException(AccountLoginDialog.STOP_REASON);
+        }
+        if (legacy!=null && !legacy.permitsInput(text)) legacy=null;
+        if (legacy!=null) out.put("legacyPopup",legacy.name());
+        boolean panelVisible=ModalPopup.locate(frame)!=null;
+        if (panelVisible) out.put("panelVisible",true);
+        boolean obstructed=legacy!=null || !overlay.isEmpty() || out.containsKey("closeX")
+                || out.containsKey("homeButton") || panelVisible
+                || !(menu.equals("unknown") || menu.equals("home") || menu.equals("series"));
+        out.put("homeEvidence",MainMenuUi.homeEvidence(frame,text,words,scene,obstructed));
+        return out;
+    }
+
     private Map<String,Object> dailyEventUi()throws Exception { return dailyEventUi(false); }
     private Map<String,Object> dailyEventUi(boolean solo)throws Exception { return dailyEventUi(solo,false); }
     private Map<String,Object> dailyEventUi(boolean solo,boolean specialLoading)throws Exception {
         capture();
         ModalPopup.Panel panel=ModalPopup.locate(frame);
-        if(panel==null&&RaceHud.visible(frame,wideViewport()))return Map.of("scene","race","words",List.of());
+        if(panel==null&&!ModalPopup.possibleClubMilestone(frame)&&RaceHud.visible(frame,wideViewport()))return Map.of("scene","race","words",List.of());
         Bitmap side=Bitmap.createBitmap(frame.copyPixels(),720,1280,Bitmap.Config.ARGB_8888);Matrix m=new Matrix();m.postRotate(270);
         Bitmap upright=Bitmap.createBitmap(side,0,0,720,1280,m,false);
         Task<Text> task=null;Runnable cleanup=()->{upright.recycle();side.recycle();};
@@ -462,7 +560,11 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 Map<String,Integer> explore=MainMenuUi.dailyExplore(full.getText(),frame);
                 if(!explore.isEmpty())out.put("dailyExplore",explore);
             }
-            if(solo&&SpecialEventList.activeTab(frame))out.put("specialSeasonTab",true);
+            if(solo&&SpecialEventList.activeTab(frame)){
+                out.put("specialSeasonTab",true);
+                Map<String,Integer> button=SpecialEventList.entryButton(frame);
+                if(!button.isEmpty())out.put("specialEntryButton",button);
+            }
             if(solo)addWideHomeButton(out);
             out.put("words",words);
             if(scene.equals("car")){
@@ -492,6 +594,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 }
             }
             if(addInterruptingPopup(out,panel,words))return out;
+            if(scene.equals("results")||scene.equals("rewards"))recordLegacyResult();
             if(solo&&scene.equals("missionRewards"))out.put("stageLabel",specialStageLabel());
             if(specialLoading&&(scene.equals("unknown")||scene.equals("loading"))){
                 String header=text(445,0,675,430,3);
@@ -537,7 +640,9 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     }
     private String specialStageLabel()throws Exception {
         // This badge is vertical in landscape. The rotated capture already has its text upright.
-        int left=335,top=25,width=160,height=230;
+        return redLabel(335,25,160,230,0);
+    }
+    private String redLabel(int left,int top,int width,int height,int rotation)throws Exception {
         int[] pixels=new int[width*height];
         for(int y=0;y<height;y++)for(int x=0;x<width;x++){
             int color=frame.pixel(left+x,top+y);
@@ -548,7 +653,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         Bitmap zoom=Bitmap.createScaledBitmap(badge,width*3,height*3,true);
         badge.recycle();
         try{
-            Task<Text> read=recognizer.process(InputImage.fromBitmap(zoom,0));
+            Task<Text> read=recognizer.process(InputImage.fromBitmap(zoom,rotation));
             read.addOnCompleteListener(Runnable::run,done->zoom.recycle());
             String label=Tasks.await(read,12,TimeUnit.SECONDS).getText();
             android.util.Log.d("A9SpecialStage",label);
@@ -568,6 +673,13 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         boolean canContinue=!exitButton.isEmpty();
         String exit=(String)exitButton.getOrDefault("label","");
         return Map.of("rewardPage",true,"rewardCoins",stable.coins,"rewardFame",stable.fame,"rewardCanContinue",canContinue,"rewardExit",exit,"rewardExitButton",exitButton,"rewardReady",stable.coins>=0&&stable.fame>=0);
+    }
+    // After an observed race, the results screen settles its quota even if returning to the event fails.
+    private void recordLegacyResult()throws Exception{
+        if(!legacyPrepared||!legacyRaceSeen||SessionState.stats.awaitingRewards())return;
+        int before=SessionState.stats.finished();
+        checkpoint.recordResult(SessionState.stats,0);
+        if(SessionState.stats.finished()>before)persist(false);
     }
     private Map<String,Object> legacyRewardSample()throws Exception{
         if(!legacyPrepared||!legacyRaceSeen||legacyRewardDone)return Map.of("rewardPage",false);
@@ -606,6 +718,11 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                     Map<String,Object> popup=popupOverPixelMenu();
                     return popup.isEmpty()?result(l,CupCarousel.cards(frame(),wideViewport())):result(l,popup);
                 }
+                case "_legacyPopupProbe":{
+                    CaptureSession.PopupSample sample=legacyPopup(l.toBoolean(1));
+                    return sample==null?result(l,(Object)null):result(l,Map.of("rule",sample.rule.name(),"frameId",sample.frameId));
+                }
+                case "_legacyPopupDismiss":return result(l,dismissLegacyPopup(s(l,1),l.toBoolean(2)));
                 case "_popupUi":return result(l,popupOverPixelMenu());
                 case "_specialEventList":{
                     capture();
@@ -615,6 +732,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                     list.put("frameId",capture.frameId());
                     return result(l,list);
                 }
+                case "_recoveryUi":return result(l,recoveryUi());
                 case "_dailyEventUi":return result(l,dailyEventUi());
                 case "_soloEventUi":{
                     Map<String,Object> ui=dailyEventUi(true,l.toBoolean(1));
@@ -624,14 +742,18 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                     Map<String,Object> stage=new LinkedHashMap<>(ui);
                     stage.put("stageRail",rail);
                     if(Boolean.TRUE.equals(rail.get("clear"))){
-                        int x=(int)rail.get("x");
+                        int x=(int)rail.get("x"),y=(int)rail.get("y");
                         List<?> words=(List<?>)ui.get("words");
                         boolean badge=words.stream().map(value->(Map<?,?>)value).anyMatch(word->{
                             int wx=(int)word.get("x"),wy=(int)word.get("y");
                             return wx>=x+32&&wx<=x+114&&wy>=185&&wy<=300&&
                                     MapMatcher.normalize(word.get("text").toString()).replace("|","").equals("阶段1");
                         });
-                        if(!badge)stage.put("stageFirstLabel",text(445,x+20,519,x+119,3));
+                        if(!badge){
+                            // Crop inside the badge so the red card artwork stays outside the mask.
+                            int badgeBottom=y-7;
+                            stage.put("stageFirstLabel",redLabel(719-badgeBottom,x+39,26,60,270));
+                        }
                     }
                     return result(l,stage);
                 }
@@ -661,13 +783,14 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                     Map<String,Object> popup=popupOverPixelMenu();
                     return popup.isEmpty()?result(l,GarageFilter.read(frame(),viewportAspect())):result(l,popup);
                 }
-                case "keepCapture": capture();return 0;
+                case "keepCapture": capture();return result(l,ModalPopup.possibleClubMilestone(frame));
                 case "releaseCapture": return 0;
-                case "tap": touch.tap(8,n(l,1),n(l,2));return 0;
-                case "touchDown": touch.down(n(l,1),n(l,2),n(l,3));return 0;
-                case "touchMove": touch.move(n(l,1),n(l,2),n(l,3));return 0;
+                case "tap":if(!freshAfterPopup())return 0; touch.tap(8,n(l,1),n(l,2));return 0;
+                case "touchDown":if(!freshAfterPopup())return 0; touch.down(n(l,1),n(l,2),n(l,3));return 0;
+                case "touchMove":if(!freshAfterPopup())return 0; touch.move(n(l,1),n(l,2),n(l,3));return 0;
                 case "touchUp": touch.up(n(l,1));return 0;
                 case "swipe":
+                    if(!freshAfterPopup())return 0;
                     if(!l.isNoneOrNil(6))touch.dragColumn(n(l,1),n(l,2),n(l,3),n(l,4),n(l,5),n(l,6));
                     else touch.swipe(n(l,1),n(l,2),n(l,3),n(l,4),n(l,5));
                     return 0;
@@ -695,7 +818,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 case "frontAppName":return result(l,TouchService.foreground);
                 case "runApp":launch(s(l,1));return 0;
                 case "stopApp":throw new IllegalStateException("请手动关闭或重启游戏");
-                case "keyPress":touch.key(s(l,1));return 0;
+                case "keyPress":if(!freshAfterPopup())return 0;touch.key(s(l,1));return 0;
                 case "setScreenScale":case "setControlBarPos":return 0;
                 case "rnd": {int a=n(l,1),b=n(l,2);return result(l,a+new Random().nextInt(Math.max(1,b-a+1)));}
                 case "toast":case "print": {
@@ -729,10 +852,18 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                     restoredQueue=false;
                     return result(l,saved);
                 }
-                case "_queueRewardsDone":checkpoint.rewardsDone(n(l,1));persist(false);return 0;
-                case "_queueEnter":checkpoint.enter(n(l,1),n(l,2),n(l,3));persist(false);return result(l,checkpoint.completed());
+                case "_requirePlayerAction":
+                    hardStop=s(l,1);throw new IllegalStateException(hardStop);
+                case "_queueHomeConfirmed":
+                    SessionState.log("已确认游戏主界面。"+checkpoint.failureSummary());
+                    checkpoint.homeConfirmed();persist(false);return result(l,checkpoint.resume());
+                case "_queueBeginRewards":
+                    checkpoint.beginRewards(n(l,1));runningQueueWork=true;persist(false);return 0;
+                case "_queueRewardsDone":runningQueueWork=false;checkpoint.rewardsDone(n(l,1));persist(false);return 0;
+                case "_queueEnter":checkpoint.enter(n(l,1),n(l,2),n(l,3));runningQueueWork=true;persist(false);return result(l,checkpoint.completed());
                 case "_queueDone":
-                    legacyPrepared=legacyRaceSeen=legacyRewardDone=false;legacyCoins=legacyFame=-1;rewardStable.reset();
+                    runningQueueWork=false;
+                    legacyPrepared=legacyRaceSeen=legacyRewardDone=false;rewardStable.reset();
                     checkpoint.projectDone();persist(false);return 0;
                 case "_sessionProject":SessionState.stats.project(s(l,1));SessionState.stats.resumeProject(l.getTop()>1?n(l,2):0,checkpoint.completed());return result(l,checkpoint.completed());
                 case "_sessionRaceBegin":{
@@ -743,22 +874,33 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 case "_sessionRaceRewards":
                     if(SessionState.stats.rewards(l.toInteger(1),l.toInteger(2))){SessionState.log("本局收益：金币 "+l.toInteger(1)+" · 名人堂 "+l.toInteger(2)+"（-1 为未识别）");persist(false);}return 0;
                 case "_sessionLegacyPrepare":
-                    SessionState.racePanel(false);legacyPrepared=true;legacyRaceSeen=legacyRewardDone=legacyInvalid=false;legacyMap="";legacyCoins=legacyFame=-1;rewardStable.reset();SessionState.overlayMode(false,false);return 0;
+                    SessionState.racePanel(false);legacyPrepared=true;legacyRaceSeen=legacyRewardDone=legacyInvalid=false;legacyMap="";rewardStable.reset();SessionState.overlayMode(false,false);return 0;
                 case "_sessionLegacyMap":
                     if(legacyPrepared){legacyMap=s(l,1);legacyInvalid=l.toBoolean(2);SessionState.stats.routeMap(legacyMap,legacyInvalid);}return 0;
                 case "_legacyRewardSample":return result(l,legacyRewardSample());
                 case "_sessionLegacyRewards":
-                    if(legacyPrepared&&legacyRaceSeen&&!legacyRewardDone){legacyCoins=l.toInteger(1);legacyFame=l.toInteger(2);legacyRewardDone=true;SessionState.log("本局收益识别：金币 "+(legacyCoins<0?"未识别":legacyCoins)+" / 名人堂 "+(legacyFame<0?"未识别":legacyFame));}return 0;
+                    if(legacyPrepared&&legacyRaceSeen&&!legacyRewardDone&&freshAfterPopup()){
+                        long coins=l.toInteger(1),fame=l.toInteger(2);
+                        recordLegacyResult();
+                        if(SessionState.stats.rewards(coins,fame))persist(false);
+                        legacyRewardDone=true;
+                        SessionState.log("本局收益识别：金币 "+(coins<0?"未识别":coins)+" / 名人堂 "+(fame<0?"未识别":fame));
+                    }
+                    return 0;
                 case "_sessionRaceResult":{
-                    int before=SessionState.stats.finished(),beforeRanked=SessionState.stats.rankedCount();SessionState.stats.result(l.getTop()>0?n(l,1):0);
-                    checkpoint.completed(SessionState.stats.finished()-before);
+                    int before=SessionState.stats.finished(),beforeRanked=SessionState.stats.rankedCount();
+                    checkpoint.recordResult(SessionState.stats,l.getTop()>0?n(l,1):0);
                     if(SessionState.stats.finished()>before)SessionState.log("任务累计完赛 "+SessionState.stats.finished()+" · 世界 "+SessionState.stats.count("多人上")+" / 大师 "+SessionState.stats.count("多人下")+" · 自动重启 "+SessionState.stats.restartCount());
                     if(SessionState.stats.finished()!=before||SessionState.stats.rankedCount()!=beforeRanked)persist(false);
                     return 0;
                 }
                 case "_sessionLegacyCompleted":
+                    if(!freshAfterPopup())return result(l,false);
                     if(!legacyPrepared||!legacyRaceSeen)throw new IllegalStateException("未确认本任务实际比赛，拒绝累计完赛或切换任务");
-                    SessionState.stats.legacyCompleted(legacyCoins,legacyFame);legacyPrepared=legacyRaceSeen=false;legacyCoins=legacyFame=-1;SessionState.overlayMode(false,false);checkpoint.completed(1);persist(false);return 0;
+                    recordLegacyResult();
+                    SessionState.stats.returned();
+                    legacyPrepared=legacyRaceSeen=false;SessionState.overlayMode(false,false);
+                    persist(false);return 0;
                 case "_sessionOperation":SessionState.stats.operation(s(l,1));return 0;
                 case "_sessionRaceReturned":SessionState.racePanel(false);SessionState.stats.returned();persist(false);return 0;
                 case "_fallbackBegin":
@@ -794,12 +936,14 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 default:throw new UnsupportedOperationException("尚未实现的运行接口："+name);
             }
         } catch(Exception e) {
+            if(e instanceof CaptureSession.Unavailable||e instanceof SecurityException)hardStop=e.getMessage();
             if(e instanceof TouchService.ForegroundLost)recoveryReason=GameRecovery.Reason.FOREGROUND_LOST;
             throw new IllegalStateException(name+"："+e.getMessage(),e);
         }
     }
     private int step(Lua l) throws Exception {
         if(driver==null&&!driverFallback)throw new IllegalStateException("跑图尚未初始化");capture();
+        if(ModalPopup.possibleClubMilestone(frame)&&!popupOverPixelMenu().isEmpty())return interruptDriver(l);
         boolean end=ColorPattern.color(frame.pixel(68,812),"5400FF-050505",1)||ColorPattern.color(frame.pixel(708,288),"5400FF",1);
         if(end){if(driver!=null)driver.stop();return result(l,true,-1,"比赛结束");}
         int rawProgress=store.digits.progress(frame,store.config.optInt("accuracy",80)/100.0,viewportAspect());
@@ -812,11 +956,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             prepareOverlay(true,false);
             Map<String,Object> observed=legacyRaceSeen?dailyEventUi(true):multiplayerUi(false,false,false);
             String scene=(String)observed.get("scene");
-            if(scene.equals("interruptingPopup")){
-                if(driver!=null)driver.clear();
-                lastDigitTime=clock;lastProgressTime=clock;
-                return result(l,false,-1,"正在处理游戏弹窗",false,true);
-            }
+            if(scene.equals("interruptingPopup"))return interruptDriver(l);
             boolean settlement=scene.equals("results")||scene.equals("rewards");
             if(legacyRaceSeen?settlement:MultiplayerUi.raceEnded(scene)){
                 if(driver!=null)driver.stop();
@@ -848,6 +988,11 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             lastLoggedProgress=p;SessionState.log("跑图进度 "+p+"% · 已执行动作 "+driver.nextEvent()+"/"+driver.eventCount());
         }
         return result(l,driver.stopped(),p,p<0?"等待可靠的进度画面":"智能选路 "+p+"% · "+driver.nextEvent()+"/"+driver.eventCount());
+    }
+    private int interruptDriver(Lua l) {
+        if(driver!=null)driver.clear();
+        lastDigitTime=clock;lastProgressTime=clock;
+        return result(l,false,-1,"正在处理游戏弹窗",false,true);
     }
     private IllegalStateException failure(String reason) {
         try{snapshot(new File(root,"diagnostic.png").getAbsolutePath(),0,0,719,1279);SessionState.log("已保存停止时画面");}

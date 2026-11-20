@@ -50,7 +50,9 @@ final class GameRecovery {
     private void status(String message){SessionState.hud=message;SessionState.status(message);}
     private void waitBriefly()throws InterruptedException{gate();Thread.sleep(200);}
     /** false means a transient window change resolved itself; the existing VM can continue. */
-    boolean recover(Reason reason)throws Exception{
+    interface RestartPermit { void reserve() throws Exception; }
+    boolean recover(Reason reason)throws Exception{return recover(reason,null);}
+    boolean recover(Reason reason,RestartPermit permit)throws Exception{
         gate();touch.releaseAll();
         if(reason==Reason.FOREGROUND_LOST){
             status("游戏离开前台，确认闪退状态");
@@ -59,7 +61,7 @@ final class GameRecovery {
             int dialogActions=0;
             while(activeTime()<until){
                 gate();if(touch.gameInForeground()){
-                    if(homeSince>=0){recordAttempt();restartGame();awaitReady();SessionState.log("游戏退出后已重新进入前台，恢复任务检查点");return true;}
+                    if(homeSince>=0){if(permit!=null)permit.reserve();else recordAttempt();restartGame();awaitReady(permit==null);SessionState.log("游戏退出后已重新进入前台，恢复任务检查点");return true;}
                     return false;
                 }
                 String foreground=touch.foregroundPackage();
@@ -81,7 +83,7 @@ final class GameRecovery {
             }
             if(homeSince<0||activeTime()-homeSince<1000)throw new IllegalStateException("无法确认游戏退出到桌面或助手，已停止恢复");
         }else if(!touch.gameInForeground())throw new IllegalStateException("匹配重启前游戏已离开前台，已停止恢复");
-        recordAttempt();
+        if(permit!=null)permit.reserve();else recordAttempt();
         switch (reason) {
             case MATCH_TIMEOUT: status("匹配超过 "+MatchmakingWatchdog.TIMEOUT_SECONDS+" 秒，正在重启游戏"); break;
             case INPUT_INTERRUPTED: status("触控中断，重启游戏后从检查点继续"); break;
@@ -90,7 +92,7 @@ final class GameRecovery {
         }
         if(reason==Reason.FOREGROUND_LOST) launchGame(true);
         else restartGame();
-        awaitReady();return true;
+        awaitReady(permit==null);return true;
     }
     private void restartGame()throws Exception{
         // Returning from Home may resume a live race and retain exhausted game FDs.
@@ -112,7 +114,15 @@ final class GameRecovery {
                 (replaceTask?Intent.FLAG_ACTIVITY_CLEAR_TASK:Intent.FLAG_ACTIVITY_CLEAR_TOP);
         onMain(()->{context.startActivity(launch.addFlags(flags));return true;});
     }
-    void awaitReady()throws Exception{
+    void restartForHome()throws Exception{
+        gate();
+        if(!touch.gameInForeground())throw new IllegalStateException("游戏不在前台，无法重启并确认主界面");
+        status("回主未成功，正在重启游戏");
+        restartGame();
+        awaitReady(false);
+    }
+    void awaitReady()throws Exception{awaitReady(true);}
+    private void awaitReady(boolean allowRelaunch)throws Exception{
         status("等待游戏登录与菜单加载完成");
         long launchedAt=activeTime(),until=launchedAt+STARTUP_TIMEOUT_MS,stable=-1,homeSince=-1;
         boolean loggedOcrTimeout=false;
@@ -125,6 +135,7 @@ final class GameRecovery {
                 // Keep waiting within the existing startup timeout for a usable frame.
                 try{actionable=ready.call();}
                 catch(IncompatibleStartup failure){
+                    if(!allowRelaunch)throw new IllegalStateException("重启后游戏报告设备不兼容");
                     recordAttempt();
                     status("游戏启动显示设备不兼容，重新启动并保留任务检查点");
                     restartGame();
@@ -151,6 +162,7 @@ final class GameRecovery {
                     if(homeSince<0)homeSince=activeTime();
                     // The installer and login activity can briefly give focus back to Home.
                     if(activeTime()-launchedAt>=20_000&&activeTime()-homeSince>=5000){
+                        if(!allowRelaunch)throw new IllegalStateException("恢复主界面时游戏再次退出");
                         recordAttempt();
                         status("游戏加载期间再次退出，重新启动并保留任务检查点");
                         restartGame();homeSince=-1;launchedAt=activeTime();

@@ -187,7 +187,7 @@ final class OrchestrationRecoveryChecks {
                 "function test()local ok,result=pcall(currentMultiplayer.run);if scenario=='blockedRewards' then assert(not ok and finished==0 and rewardTaps==0,'Unusable reward exit still times out');done=true;return end;assert(ok,result);if scenario=='longRewards' then assert(finished==1 and rewardTaps==1 and bonusTaps==3,'Wait past 20 seconds and advance each distinct reward page') elseif scenario=='lateRewards' then assert(finished==1 and rewardTaps==1,'Late-ready reward gets a separate exit transition window');elseif scenario=='detailOcr' or scenario=='wrongCar' then assert(finished==1 and table.concat(choices,',')=='1','Start the unlocked fueled slot without reading detail text');elseif scenario=='allEmpty' then assert(result=='fuelEmpty' and finished==0 and #choices==0) elseif scenario=='rotate' then assert(finished==2 and table.concat(choices,',')=='1,2') elseif scenario=='detailEmpty' or scenario=='starDetail' then assert(finished==1 and table.concat(choices,',')=='1,2') else assert(finished==1 and table.concat(choices,',')=='2')end;done=true end");
             fuelScenarios++;
         }
-        return 52+fuelScenarios+wideHome(assets);
+        return 52+fuelScenarios+wideHome(assets)+strictHome(assets);
     }
     private static int wideHome(Path assets)throws Exception{
         List<Object> tabs=List.of(Map.of("text","每日","x",593,"y",626),Map.of("text","多人","x",787,"y",626),
@@ -275,6 +275,32 @@ final class OrchestrationRecoveryChecks {
             "function tap(x,y)taps[#taps+1]=y end",
             "function test()assert(utils.startRace()==1);assert(table.concat(taps,',')=='1088,1088,1110',table.concat(taps,','));done=true end"));
         return 16;
+    }
+    private static int strictHome(Path assets) throws Exception {
+        String fixture;
+        try (var input=OrchestrationRecoveryChecks.class.getResourceAsStream("/strict-home.lua")) {
+            fixture=new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        }
+        List<String> scenarios=List.of("sameRule","masked","exit","originalActions","popup","nestedBack",
+                "unknownTimeout","stale","unconfirmedHome","rewardChoice","loginHistory");
+        for (String scenario:scenarios)
+            script(assets,List.of("utilities"),"scenario='"+scenario+"'\n"+fixture);
+        int[] pixels=new int[720*1280];
+        PixelFrame frame=new PixelFrame(720,1280,pixels);
+        List<Object> tabs=List.of(Map.of("text","每日","x",586,"y",630),Map.of("text","多人","x",771,"y",630),
+                Map.of("text","俱乐部","x",989,"y",656));
+        if (MainMenuUi.homeEvidence(frame,"",tabs,"home",false)!=2) throw new AssertionError("Observed bottom navigation");
+        pixels[690+1240*720]=0xffffffff;
+        pixels[690+1252*720]=pixels[670+1270*720]=0xff12233b;
+        frame=new PixelFrame(720,1280,pixels);
+        if (MainMenuUi.homeEvidence(frame,"",tabs,"home",false)!=3 ||
+                MainMenuUi.homeEvidence(frame,"确定退出游戏",tabs,"home",false)!=0 ||
+                MainMenuUi.homeEvidence(frame,"",tabs,"home",true)!=0 ||
+                MainMenuUi.homeEvidence(frame,"",tabs,"cars",false)!=0)
+            throw new AssertionError("Home pixels and tab evidence must use the unobstructed frame");
+        pixels[493+416*720]=0xff5678ff; pixels[493+425*720]=0xff5679ff; pixels[506+441*720]=0xff57a1ff;
+        if (!MainMenuUi.returnOverlay(new PixelFrame(720,1280,pixels)).equals("back")) throw new AssertionError("Original blue overlay signature");
+        return scenarios.size()+2;
     }
     private static void script(Path assets,List<String> modules,String fixture)throws Exception {
         try(LuaRuntime lua=new LuaRuntime((n,l)->0,List.of())) {

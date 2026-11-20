@@ -8,7 +8,6 @@ public final class MultiplayerGarage {
     private static final java.util.regex.Pattern SOLO_SCORE=java.util.regex.Pattern.compile("(?<![0-9/])([0-9]{3,4})(?![0-9])");
     private static final Pattern PAIR=Pattern.compile("(\\d[\\d,]*)\\s*/\\s*(\\d[\\d,]*)");
     private static final List<String> LEAGUES=List.of("青铜","白银","黄金","白金","翡翠","钻石","精英","宗师","传奇");
-    private static final int[] MIN_LEAGUE_RATING={1000,1075,1175,1300,1450,1625,1825,2050,2300};
     private static final int[] BADGE_COLORS={0xd88560,0x96b2d4,0xf0ca30,0xb18eff,0x65c6a5,0x21a9ff,0xc0569f,0xc85059,0xf5e2a4};
 
     public static String leagueBadge(String text) {
@@ -28,73 +27,47 @@ public final class MultiplayerGarage {
                 .replace("铂金","白金");
     }
 
-    /** Locate text on the animated event banner, including glyphs split at its panel seam. */
-    public static String eventLeagueBanner(List<?> words) {
-        Set<String> candidates=new HashSet<>();
-        List<Map<?,?>> letters=new ArrayList<>();
-        for(Object item:words){
-            Map<?,?> word=(Map<?,?>)item;
-            int x=pos(word,"x"),y=pos(word,"y");
-            if(x<425||x>1065||y<77||y>292)continue;
-            String label=leagueText(word.get("text").toString()).replace("|","").replace("丨","");
-            if(label.endsWith("联赛"))label=label.substring(0,label.length()-2);
-            if(LEAGUES.contains(label))candidates.add(label);
-            if(label.length()==1)letters.add(Map.of("text",label,"x",x,"y",y));
-        }
-        for(Map<?,?> left:letters)for(Map<?,?> right:letters){
-            int dx=pos(right,"x")-pos(left,"x");
-            if(dx<18||dx>185||Math.abs(pos(right,"y")-pos(left,"y"))>35)continue;
-            String combined=leagueText(left.get("text").toString()+right.get("text"));
-            if(LEAGUES.contains(combined))candidates.add(combined);
-        }
-        return candidates.size()==1?candidates.iterator().next():"";
-    }
-
-    /** Read the number above the rating caption, away from placement and series points. */
-    public static int eventRatingScore(List<?> words) {
-        Set<Integer> ratings=new HashSet<>();
-        for(Object entry:words){
-            Map<?,?> caption=(Map<?,?>)entry;
-            int x=pos(caption,"x"),y=pos(caption,"y");
-            String label=MapMatcher.normalize(caption.get("text").toString());
-            // A photographed caption may read “我的阳及分”; its location and the number above it still agree.
-            if(x<107||x>274||y<286||y>408||!label.matches("我的\\p{IsHan}{2}分"))continue;
-            for(Object item:words){
-                Map<?,?> word=(Map<?,?>)item;
-                int sx=pos(word,"x"),sy=pos(word,"y"),dy=y-sy;
-                if(sx<109||sx>276||Math.abs(x-sx)>55||dy<12||dy>52)continue;
-                String digits=java.text.Normalizer.normalize(word.get("text").toString(),java.text.Normalizer.Form.NFKC)
-                        .replaceAll("\\s","");
-                if(!digits.matches("[0-9]{4,5}|[0-9]{1,2},[0-9]{3}"))continue;
-                int value=Integer.parseInt(digits.replace(",",""));
-                if(value>=MIN_LEAGUE_RATING[0])ratings.add(value);
-            }
-        }
-        return ratings.size()==1?ratings.iterator().next():-1;
-    }
-
-    public static String leagueForRating(int rating) {
-        for(int i=MIN_LEAGUE_RATING.length-1;i>=0;i--)if(rating>=MIN_LEAGUE_RATING[i])return LEAGUES.get(i);
-        return "";
-    }
-
     /** Read the saturated center stripe of the event's small rating emblem, not the garage tabs. */
     public static String eventLeagueIcon(PixelFrame frame) {
-        return leagueStripe(frame,77,307,115,320);
+        return eventEmblem(frame,77,115,307);
     }
 
     /** Locate the shield beside the rating number across different event layouts. */
     public static String eventLeagueIcon(PixelFrame frame,List<?> words,boolean wide) {
+        int y=eventRatingRow(words);
+        String badge=y<0?"":eventEmblem(frame,wide?69:75,wide?117:116,y);
+        return badge.isEmpty()&&!wide?eventLeagueIcon(frame):badge;
+    }
+
+    /** Upright bounds of the badge itself, excluding the rating digits. */
+    public static int[] eventLeagueBadgeBounds(List<?> words,boolean wide) {
+        int y=eventRatingRow(words);
+        return new int[]{wide?66:72,y<0?(wide?265:283):y-21,120,y<0?(wide?409:347):y+38};
+    }
+
+    private static int eventRatingRow(List<?> words) {
+        int row=-1;
         for(Object item:words){
             Map<?,?> word=(Map<?,?>)item;
             int x=pos(word,"x"),y=pos(word,"y");
             String label=leagueText(word.get("text").toString());
-            if(x<103||x>265||y<267||y>390||!label.matches("[0-9]{3,4}"))continue;
-            int left=wide?69:75,right=wide?117:116;
-            String badge=leagueStripe(frame,left,y-1,right,y+13);
-            if(!badge.isEmpty())return badge;
+            if(x<123||x>265||y<267||y>390||!label.matches("[0-9]{3,5}"))continue;
+            if(row>=0&&Math.abs(row-y)>8)return -1;
+            row=y;
         }
-        return wide?"":eventLeagueIcon(frame);
+        return row;
+    }
+
+    private static String eventEmblem(PixelFrame frame,int left,int right,int ratingY) {
+        String badge=leagueStripe(frame,left,ratingY-1,right,ratingY+13);
+        if(!badge.isEmpty()&&!badge.equals("青铜"))return badge;
+        // The gold shield has an orange gradient through the lettering. Its
+        // lower stripe stays gold even when the main crop looks bronze.
+        for(int offset=11;offset<=16;offset++){
+            int y=ratingY+offset;
+            if(leagueStripe(frame,left,y,right,y+6).equals("黄金"))return "黄金";
+        }
+        return badge;
     }
 
     private static String leagueStripe(PixelFrame frame,int left,int top,int right,int bottom) {
@@ -258,7 +231,13 @@ public final class MultiplayerGarage {
         boolean originRegion=left>=(wide?215:202)&&left<=(wide?233:220);
         // The rail emblem is separate from the highlighted shortcut. Read it
         // only when the first card's geometry confirms the rail is present.
-        if(!master&&!wide&&!medium&&originRegion&&league.isEmpty())league=leagueStripe(frame,109,409,175,433);
+        if(!master&&!wide&&!medium&&originRegion&&league.isEmpty()){
+            league=leagueStripe(frame,109,409,175,433);
+            // The Gold shield blends into orange near the label. Confirm its lower
+            // stripe against the highlighted shortcut before trusting the first column.
+            if(league.isEmpty()&&leagueStripe(frame,109,430,175,442).equals("黄金")&&
+                    "黄金".equals(leagueTabs(frame).get("selected")))league="黄金";
+        }
         boolean origin=originRegion&&!league.isEmpty();
         List<Object> cards=new ArrayList<>();
         for(int column=0;left>=0&&column<3;column++){

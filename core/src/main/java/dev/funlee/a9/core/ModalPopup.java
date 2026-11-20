@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-/** A centered panel drawn over a dimmed game screen. Coordinates are upright. */
+/** Interruptions drawn as panels or full-screen reward prompts. Coordinates are upright. */
 public final class ModalPopup {
     private static final Set<String> LATER = Set.of("稍后", "稍后查看", "稍后领取", "稍后再说", "下次再说", "以后再说", "关闭");
     private static final Pattern GUARDED = Pattern.compile(
@@ -77,6 +77,8 @@ public final class ModalPopup {
     }
 
     public static Map<String, Object> dismiss(PixelFrame frame, Panel panel, List<?> words, double aspect, boolean keepDailyGoals) {
+        Map<String, Object> milestone = clubMilestone(frame, words);
+        if (milestone != null) return milestone;
         Map<String, Object> conversion = redCoinConversion(frame, words);
         if (conversion != null) return conversion;
         String textOnScreen = words.stream().map(value -> normalize(((Map<?, ?>) value).get("text").toString()))
@@ -130,6 +132,57 @@ public final class ModalPopup {
     private static boolean newcomerGift(String text) {
         return text.contains("连续登录7日") && (text.contains("新手狂欢礼") ||
                 text.contains("领取丰厚好礼") && text.matches(".*第[1-7]天礼物.*"));
+    }
+
+    /** The full-screen club reward has a white left button beside the lime claim button. */
+    public static boolean possibleClubMilestone(PixelFrame frame) {
+        return clubMilestoneButtonRow(frame) >= 0;
+    }
+
+    private static int clubMilestoneButtonRow(PixelFrame frame) {
+        if (frame.width != 720 || frame.height != 1280) return -1;
+        int start = -1;
+        for (int y = 515; y <= 701; y += 4) {
+            boolean buttons = y <= 690 && white(pixel(frame, 350, y)) && white(pixel(frame, 551, y)) &&
+                    lime(pixel(frame, 729, y)) && lime(pixel(frame, 931, y));
+            if (buttons) {
+                if (start < 0) start = y;
+            } else if (start >= 0) {
+                if (y - start >= 48) return (start + y - 4) / 2;
+                start = -1;
+            }
+        }
+        return -1;
+    }
+
+    private static Map<String, Object> clubMilestone(PixelFrame frame, List<?> words) {
+        StringBuilder heading = new StringBuilder();
+        int laterX = -1, laterY = -1;
+        boolean claim = false, claimOnLeft = false;
+        for (Object value : words) {
+            Map<?, ?> word = (Map<?, ?>) value;
+            int x = ((Number) word.get("x")).intValue(), y = ((Number) word.get("y")).intValue();
+            String label = normalize(word.get("text").toString())
+                    .replace('樂', '乐').replace('達', '达').replace('該', '该').replace('獎', '奖');
+            if (x >= 300 && x <= 980 && y >= 30 && y <= 225) heading.append(label);
+            if (y >= 530 && y <= 680) {
+                if (x >= 280 && x < 625) {
+                    if (label.equals("稍后领取")) { laterX = x; laterY = y; }
+                    claimOnLeft |= label.equals("前往领奖") || label.equals("立即领取");
+                } else if (x >= 655 && x <= 1010) claim |= label.equals("前往领奖");
+            }
+        }
+        String title = heading.toString();
+        boolean club = title.contains("俱乐部"), reached = title.contains("达成"), milestone = title.contains("里程碑");
+        if (!(club && reached && milestone) && !(laterX >= 0 && claim &&
+                (club && (reached || milestone) || reached && milestone))) return null;
+        if (claimOnLeft) return Map.of();
+        int row = clubMilestoneButtonRow(frame);
+        if (row >= 0) return Map.of("x", 450, "y", row, "label", "俱乐部里程碑稍后领取");
+        // Narrower layouts may still expose the exact Later label on a white button.
+        if (laterX < 0 || !white(pixel(frame, laterX - 68, laterY - 18)) ||
+                !white(pixel(frame, laterX + 68, laterY + 18))) return Map.of();
+        return Map.of("x", laterX, "y", laterY, "label", "俱乐部里程碑稍后领取");
     }
 
     private static Map<String, Object> newcomerClaim(PixelFrame frame, List<?> words) {
@@ -190,10 +243,18 @@ public final class ModalPopup {
     private static boolean limeButton(PixelFrame frame, int x, int y, int margin) {
         int hits = 0;
         for (int dx : new int[]{-margin, margin}) for (int dy : new int[]{-14, 0, 14}) {
-            int c = pixel(frame, x + dx, y + dy), r = c >> 16 & 255, g = c >> 8 & 255, b = c & 255;
-            if (r >= 145 && g >= 207 && g >= r - 12 && b <= 92) hits++;
+            if (lime(pixel(frame, x + dx, y + dy))) hits++;
         }
         return hits >= 5;
+    }
+
+    private static boolean white(int color) {
+        return (color >> 16 & 255) >= 224 && (color >> 8 & 255) >= 224 && (color & 255) >= 224;
+    }
+
+    private static boolean lime(int color) {
+        int r = color >> 16 & 255, g = color >> 8 & 255, b = color & 255;
+        return r >= 145 && g >= 207 && g >= r - 12 && b <= 92;
     }
 
     private static String normalize(String text) {

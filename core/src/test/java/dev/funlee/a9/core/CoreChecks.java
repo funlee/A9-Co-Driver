@@ -276,6 +276,7 @@ public final class CoreChecks {
         checks+=MultiplayerGarageChecks.run(assets);
         checks+=DailyEventChecks.run(assets);
         checks+=OrchestrationRecoveryChecks.run(assets);
+        checks+=QueueRetryChecks.run(assets);
         checks+=SpecialEventListChecks.run(assets);
         checks+=ModalPopupChecks.run(assets);
         checks+=DailyTaskChecks.run(assets);
@@ -451,8 +452,11 @@ public final class CoreChecks {
     }
     private static void duplicateSelectionFrames(List<Object> screens){
         for(int i=screens.size()-1;i>=0;i--){
-            String scene=((Map<?,?>)screens.get(i)).get("scene").toString();
-            int extra=scene.equals("cars")?4:scene.equals("car")||scene.equals("series")?1:0;
+            Map<?,?> frame=(Map<?,?>)screens.get(i);
+            String scene=frame.get("scene").toString();
+            boolean worldStart=scene.equals("event")&&frame.get("text").toString().contains("世界系列赛")&&
+                    !((List<?>)frame.get("words")).isEmpty();
+            int extra=scene.equals("cars")?4:scene.equals("car")||scene.equals("series")||worldStart?1:0;
             for(int n=0;n<extra;n++)screens.add(i,screens.get(i));
         }
     }
@@ -571,8 +575,9 @@ public final class CoreChecks {
                 r.set("LOCAL_ROOT","/tmp/a9-local-check");r.set("UIconfig",cfg);r.set("ROUTES",Map.of());
                 for(String module:modules)r.load(module,Files.readString(assets.resolve("lua/"+module+".lua")));
                 String ui = mode.equals("spCup") ?
-                        "function _soloEventUi()return {scene='home',specialSeasonTab=true,words={{text='赛季赛事',x=340,y=650},{text='开始',x=1100,y=535}}}end;"+
-                        "local frame=0;function _specialEventList()frame=frame+1;return {frameId=frame,aligned=true,cards={{x=220,y=170,top=73,artwork={42}}}}end;" :
+                        "local frame=0;function _soloEventUi()frame=frame+1;return {frameId=frame,scene='home',specialSeasonTab=true,words={{text='赛季赛事',x=340,y=650},{text='开始',x=1100,y=535}}}end;"+
+                        "local artwork={};for i=1,35 do artwork[i]=42 end;"+
+                        "function _specialEventList()frame=frame+1;return {frameId=frame,aligned=true,cards={{x=220,y=170,top=73,artwork=artwork}}}end;" :
                         "function _soloEventUi()return {scene='home'}end;";
                 r.load("menu-smoke",ui+
                         "function smoke() localInit();run.data={};"+mode+".operation["+(mode.equals("spCup")?2:1)+"][2]();record('done') end");

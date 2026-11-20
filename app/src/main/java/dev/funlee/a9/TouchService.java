@@ -377,7 +377,7 @@ public final class TouchService extends AccessibilityService implements RouteEng
         down(9,x1,y1);
         change(9,transform(x2,y2),false,Math.max(16,Math.min(2000,duration)));
         // Let the carousel stop under the finger before release to avoid a fling.
-        change(9,null,true,Math.max(16,Math.min(300,hold)));
+        change(9,null,true,Math.max(16,Math.min(500,hold)));
     }
     public void key(String key) {
         unlockGuard.requireOtherGesture();

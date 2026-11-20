@@ -8,7 +8,7 @@ import java.util.Map;
 
 final class ModalPopupChecks {
     static int run(Path assets) throws Exception {
-        int count = 0;
+        int count = LegacyPopupChecks.run(assets);
         for (int[] sample : new int[][]{
                 {250, 72, 1028, 647, 981, 114, 0xe35728, 0x3b2024},
                 {250, 72, 1028, 647, 992, 118, 0xffe200, 0xf21870},

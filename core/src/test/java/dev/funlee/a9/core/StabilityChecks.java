@@ -142,14 +142,14 @@ final class StabilityChecks {
                     if(mapped&&n<2){
                         screen.put("scene","series");screen.put("text","世界系列赛 大师系列赛");
                         screen.put("words",List.of(Map.of("text","世界系列赛","x",350,"y",450)));
-                    }else if(mapped&&n==2){
+                    }else if(mapped&&n<4){
                         screen.put("scene","event");screen.put("text","世界系列赛 里程碑 开始");
                         screen.put("worldLeague","青铜");
                         screen.put("words",List.of(Map.of("text","开始","x",1100,"y",650)));
                         if(!mode.equals("noBefore"))screen.put("seriesScore",31680);
-                    }else if(mapped&&n==3){
+                    }else if(mapped&&n==4){
                         screen.put("scene","race");screen.put("text","");
-                    }else if(mapped&&n<7){
+                    }else if(mapped&&n<8){
                         screen.putAll(Map.of("scene","result","text","比赛奖励 系列赛分数 总计 继续","finalRank",2,
                                 "rewardPage",true,"rewardReady",true,"rewardCanContinue",true));
                         if(!mode.equals("noAfter"))screen.put("seriesScore",31754);
@@ -227,12 +227,13 @@ final class StabilityChecks {
     }
     private static void postRaceTransitions(Path assets)throws Exception{
         for(String destination:List.of("event","cars","car","home","series"))for(boolean confirmed:List.of(true,false)){
-            List<String> pages=new ArrayList<>(List.of("series","series","event"));
+            List<String> pages=new ArrayList<>(List.of("series","series","event","event"));
             pages.addAll(Collections.nCopies(6,"cars"));pages.addAll(Collections.nCopies(2,"car"));pages.add("race");
             if(confirmed){pages.addAll(Collections.nCopies(4,"result"));pages.addAll(Collections.nCopies(5,"bonus"));}
             // Reproduce a brief event lobby followed by a garage while the old selection timer exists.
             if(confirmed)pages.add("event");pages.addAll(Collections.nCopies(4,destination));
-            pages.add("series");pages.add("series");pages.add("event");pages.addAll(Collections.nCopies(6,"cars"));pages.addAll(Collections.nCopies(2,"car"));pages.add("race");
+            pages.addAll(List.of("series","series","event","event"));
+            pages.addAll(Collections.nCopies(6,"cars"));pages.addAll(Collections.nCopies(2,"car"));pages.add("race");
             int[] reads={0},begins={0},cards={0},swipes={0},bonusTaps={0},resultTaps={0};String[] current={""};
             TaskStats stats=new TaskStats();stats.project("多人上");boolean rejected=false;
             try(LuaRuntime lua=new LuaRuntime((name,l)->{
@@ -382,12 +383,13 @@ final class StabilityChecks {
                     case "_queueDone":checkpoint.projectDone();if(cycle[0]==4&&!crashed[0]){crashed[0]=true;throw new IllegalStateException("injected after skip");}break;
                     case "_sessionProject":l.push(checkpoint.completed());return 1;
                     case "_sessionCycle":cycle[0]=(int)l.toInteger(1);break;
+                    case "_taskNotice":check(l.toString(1).contains("跳过项目 2")&&l.toString(1).contains("无油")&&l.toInteger(2)==4000,"Empty-fuel skip gives a visible reason");break;
                     case "empty":boolean empty=cycle[0]==4;if(empty)skipped[0]++;l.push(empty);return 1;
                     case "race":total[0]++;if(l.toString(1).equals("多人上"))world[0]++;else master[0]++;checkpoint.completed(1);break;
                     case "_finished":finished[0]=true;break;
                     default:break;
                 }return 0;
-            },List.of("_queueResume","_queueEnter","_queueDone","_sessionProject","_sessionCycle","_finished","_hud","print","race","empty"))){
+            },List.of("_queueResume","_queueEnter","_queueDone","_sessionProject","_sessionCycle","_finished","_hud","print","race","empty","_taskNotice"))){
                 lua.set("UIconfig",Map.of("routeOnly","","projects",List.of(Map.of("项目","多人上","data",Map.of("次数",10)),Map.of("项目","多人下","data",Map.of("次数",10))),"ActiveProj",List.of(true,true)));
                 lua.load("bootstrap",Files.readString(assets.resolve("lua/bootstrap.lua")));
                 lua.load("helpers","data={};run={};utils={backToMain=function()end};function localInit() end;function monitor() sleep(99999999) end;currentMultiplayer={run=function() local done=_sessionProject(data['项目'],10);if empty() then return 'fuelEmpty' end;for i=done+1,10 do race(data['项目']);sleep(1) end end}");
@@ -438,7 +440,7 @@ final class StabilityChecks {
                     case "_finished":finished[0]=true;break;
                     default:break;
                 }return 0;
-            },List.of("_queueResume","_queueEnter","_queueDone","_sessionProject","_sessionCycle","_finished","_hud","print","race","empty"))){
+            },List.of("_queueResume","_queueEnter","_queueDone","_sessionProject","_sessionCycle","_finished","_hud","print","race","empty","_taskNotice"))){
                 lua.set("UIconfig",Map.of("routeOnly","","maxCycles",5,"projects",List.of(Map.of("项目","多人上","data",Map.of("次数",30)),Map.of("项目","多人下","data",Map.of("次数",20))),"ActiveProj",List.of(true,true)));
                 lua.load("bootstrap",Files.readString(assets.resolve("lua/bootstrap.lua")));
                 lua.load("helpers","data={};run={};utils={backToMain=function()end};function localInit() end;function monitor() sleep(99999999) end;currentMultiplayer={run=function() local done=_sessionProject(data['项目'],run.data['次数']);for i=done+1,run.data['次数'] do if empty() then return 'fuelEmpty' end;race();sleep(1) end end}");

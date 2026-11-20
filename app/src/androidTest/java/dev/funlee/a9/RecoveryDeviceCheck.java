@@ -33,6 +33,7 @@ public final class RecoveryDeviceCheck extends Instrumentation {
             else if(mode.equals("custom-maps"))CustomMapDeviceCheck.run(this,report);
             else if(mode.equals("route-reset"))RouteResetDeviceCheck.run(this,report);
             else if(mode.equals("task-queue"))TaskQueueDeviceCheck.run(this,report);
+            else if(mode.equals("queue-retry")||mode.equals("queue-notices"))QueueRetryDeviceCheck.run(this,report,mode.equals("queue-notices"));
             else if(mode.equals("task-editing"))TaskEditingDeviceCheck.run(this,report);
             else if(mode.equals("account-login"))accountLogin(report);
             else if(mode.equals("screenshots"))screenshots(report);

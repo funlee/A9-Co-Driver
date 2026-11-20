@@ -293,7 +293,7 @@ function currentMultiplayer.run(resumingTutorial)
     local position={offset=0}
     local pageOffset,pageLeft,pageFrame
     local verifiedWorldLeague,targetLeague
-    local ratingScore,ratingFrame
+    local leagueCandidate,leagueFrame
     local leagueWaitAt=nil
     local rewardChoice=nil;local rewardAt=0;local rewardTries=0;local dialogMisses=0
     local scoreBefore,scoreAfter,scoreSample,scoreFrame,scoreSince
@@ -344,19 +344,16 @@ function currentMultiplayer.run(resumingTutorial)
       local scene=screen.scene
       if world and scene=='event' and has(screen.text,series) then
         local league=screen.worldLeague
-        if not league and screen.worldLeagueByRating and screen.worldRating and screen.frameId then
-          if screen.worldRating==ratingScore and screen.frameId>ratingFrame then
-            league=screen.worldLeagueByRating
-            if league~=verifiedWorldLeague then print('按评级分 '..ratingScore..' 确认世界赛段位：'..league) end
-          elseif screen.worldRating~=ratingScore then
-            ratingScore=screen.worldRating;ratingFrame=screen.frameId
-          end
-        else ratingScore,ratingFrame=nil,nil end
-        if league and verifiedWorldLeague~=league then
+        local frame=screen.frameId
+        if not league or not frame then
+          leagueCandidate,leagueFrame,verifiedWorldLeague=nil,nil,nil
+        elseif league~=leagueCandidate then
+          leagueCandidate,leagueFrame,verifiedWorldLeague=league,frame,nil
+        elseif frame>leagueFrame and verifiedWorldLeague~=league then
           verifiedWorldLeague=league
           print('赛事详情已确认世界赛当前段位：'..league)
         end
-      else ratingScore,ratingFrame=nil,nil end
+      else leagueCandidate,leagueFrame=nil,nil end
       if scene~='series' then seriesEntry=nil;seriesFrame=nil;seriesPressedAt=nil end
       local tutorial=started and not raced and spCup and spCup.tutorialButton(screen)
       if _racePanel then _racePanel(scene=='race') end
@@ -440,7 +437,7 @@ function currentMultiplayer.run(resumingTutorial)
         -- Finalize before any menu action, even when the event page was brief or missed.
         -- The outer loop discards the previous race's selectedCar/carPressedAt/route state.
         if frame-eventSince>=3000 and returnFrames>=2 then
-          disconnects=0;total=total+1;data['多人']=data['多人']+1;_sessionRaceReturned()
+          data['心跳时间']=os.time();disconnects=0;total=total+1;data['多人']=data['多人']+1;_sessionRaceReturned()
           status('多人比赛已完成 '..total..'/'..count..'，已返回比赛菜单')
           break
         else data['信息']='等待赛后菜单稳定';sleep(500) end
@@ -492,11 +489,11 @@ function currentMultiplayer.run(resumingTutorial)
         local recent=screen.recentAccount
         if not recent then
           loginMissing=loginMissing+1
-          if loginMissing>30 then error('登录历史无法唯一确认最近登录账号，已停止，请由玩家选择') end
+          if loginMissing>30 then (requirePlayerAction or error)('登录历史无法唯一确认最近登录账号，已停止，请由玩家选择') end
           data['信息']='等待登录历史加载';sleep(500)
         else
           loginMissing=0;loginAttempts=loginAttempts+1
-          if loginAttempts>3 then error('最近登录账号未能进入游戏，请由玩家检查登录状态') end
+          if loginAttempts>3 then (requirePlayerAction or error)('最近登录账号未能进入游戏，请由玩家检查登录状态') end
           status('恢复最近登录的游戏账号');click(recent.x,recent.y);sleep(5000);changed=tickCount()
         end
       elseif not raced and not started and screen.rewardPage and screen.rewardCanContinue then
@@ -530,9 +527,9 @@ function currentMultiplayer.run(resumingTutorial)
         end
         data['信息']='等待比赛奖励页稳定';sleep(400)
       elseif scene=='rewardChoice' then
-        if world and not autoReward then error('世界赛动态奖励等待手动选择。选好后可续跑') end
+        if world and not autoReward then (requirePlayerAction or error)('世界赛动态奖励等待手动选择。选好后可续跑') end
         rewardSeenAt=rewardSeenAt or tickCount()
-        if tickCount()-rewardSeenAt>=15000 then error('未能确认动态奖励的选卡或领取结果，请手动处理后续跑') end
+        if tickCount()-rewardSeenAt>=15000 then (requirePlayerAction or error)('未能确认动态奖励的选卡或领取结果，请手动处理后续跑') end
         local cards=screen.rewardChoices or {}
         local confirm
         for _,button in ipairs(screen.words or {}) do
@@ -545,7 +542,7 @@ function currentMultiplayer.run(resumingTutorial)
           elseif readSeriesScore then
             local position,score=worldRewardPosition(rewardRules,scoreBefore,scoreAfter)
             if rewardHandled or not position then
-              error('无法确认本局动态奖励对应已配置的里程碑（赛前 '..tostring(scoreBefore or '未知')..'，赛后 '..tostring(scoreAfter or '未知')..'），请手动选择后续跑')
+              (requirePlayerAction or error)('无法确认本局动态奖励对应已配置的里程碑（赛前 '..tostring(scoreBefore or '未知')..'，赛后 '..tostring(scoreAfter or '未知')..'），请手动选择后续跑')
             end
             if screen.rewardOrderKnown then candidate=cards[position] end
             description='里程碑 '..score..'，选择第 '..position..' 张奖励'
@@ -569,7 +566,7 @@ function currentMultiplayer.run(resumingTutorial)
           status('确认领取动态奖励');click(confirm.x,confirm.y);sleep(1200)
         elseif not rewardConfirmedAt and tickCount()-rewardAt>=3000 then
           rewardTries=rewardTries+1
-          if rewardTries>3 then error('动态奖励选择后未出现确认按钮，请手动处理后续跑') end
+          if rewardTries>3 then (requirePlayerAction or error)('动态奖励选择后未出现确认按钮，请手动处理后续跑') end
           rewardAt=tickCount();click(rewardChoice.x,rewardChoice.y);sleep(700)
         end
       elseif word(screen,'稍后查看',530) then

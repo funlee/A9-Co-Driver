@@ -39,26 +39,9 @@ final class MultiplayerGarageChecks {
             require(recognized.get("start").equals(true)&&recognized.get("rank").equals(league),league+": recognize league on garage rail");checks++;
         }
         require(MultiplayerGarage.leagueBadge("青铜联赛 钻石联赛").isEmpty(),"Ambiguous badge text cannot authorize ranking");checks++;
-        require(MultiplayerGarage.eventLeagueBanner(List.of(word("丨黃",610,87),word("金",717,93),
-                        word("传奇入手",1020,150),word("青铜",160,310))).equals("黄金"),
-                "Read the split Gold banner in the expanded event region");checks++;
-        require(MultiplayerGarage.eventLeagueBanner(List.of(word("黄",620,125),word("金",725,190),
-                        word("传奇促销",1010,92))).isEmpty(),
-                "Ignore unrelated text and letters on different rows");checks++;
-        List<String> ratingLeagues=List.of("青铜","白银","黄金","白金","翡翠","钻石","精英","宗师","传奇");
-        int[] thresholds={1000,1075,1175,1300,1450,1625,1825,2050,2300};
-        for(int i=0;i<thresholds.length;i++){
-            require(MultiplayerGarage.leagueForRating(thresholds[i]).equals(ratingLeagues.get(i))&&
-                    MultiplayerGarage.leagueForRating(thresholds[i]-1).equals(i==0?"":ratingLeagues.get(i-1)),
-                    "Rating boundary for "+ratingLeagues.get(i));checks++;
-        }
-        require(MultiplayerGarage.eventRatingScore(List.of(word("1,287",172,339),word("我的阳及分",162,368),
-                        word("5,000",163,603),word("34,000",375,609)))==1287,
-                "Select the rating above the caption on the actual Gold layout");checks++;
-        require(MultiplayerGarage.eventRatingScore(List.of(word("1,287",172,339),word("我的排名",162,368)))<0,
-                "Placement is not a rating");checks++;
-        require(MultiplayerGarage.eventRatingScore(List.of(word("1,287",172,339),word("1,387",197,340),
-                        word("我的评级分",162,368)))<0,"Conflicting ratings remain unidentified");checks++;
+        require(Arrays.equals(MultiplayerGarage.eventLeagueBadgeBounds(List.of(word("1,174",174,307),
+                        word("黄金",703,162),word("34,000",375,609)),false),new int[]{72,286,120,345}),
+                "Crop only the small badge beside the rating, excluding banner text and score digits");checks++;
         int[] emblem=new int[720*1280];
         for(int x=79;x<113;x++)for(int y=304;y<320;y++)emblem[x*720+719-y]=0xff22a8ee;
         require(MultiplayerGarage.eventLeagueIcon(new PixelFrame(720,1280,emblem)).equals("钻石"),
@@ -66,6 +49,12 @@ final class MultiplayerGarageChecks {
         for(int x=79;x<96;x++)for(int y=304;y<320;y++)emblem[x*720+719-y]=0xffcb3242;
         require(MultiplayerGarage.eventLeagueIcon(new PixelFrame(720,1280,emblem)).isEmpty(),
                 "Conflicting emblem colors do not authorize selecting a league");checks++;
+        int[] protectedGoldEmblem=new int[720*1280];
+        for(int x=79;x<113;x++)for(int y=306;y<320;y++)protectedGoldEmblem[x*720+719-y]=0xffdf8a17;
+        for(int x=79;x<113;x++)for(int y=320;y<326;y++)protectedGoldEmblem[x*720+719-y]=0xffedb11c;
+        require(MultiplayerGarage.eventLeagueIcon(new PixelFrame(720,1280,protectedGoldEmblem),
+                        List.of(word("1,174",174,307)),false).equals("黄金"),
+                "The Gold emblem overrides the orange gradient even below the promotion threshold");checks++;
         int[] wideEmblem=new int[720*1280];
         for(int x=77;x<115;x++)for(int y=330;y<343;y++)wideEmblem[x*720+719-y]=0xffe4b712;
         require(MultiplayerGarage.eventLeagueIcon(new PixelFrame(720,1280,wideEmblem),
@@ -106,6 +95,21 @@ final class MultiplayerGarageChecks {
             for(int j=0;j<cards.size();j++){
                 Map<?,?> slot=(Map<?,?>)cards.get(j);
                 require(slot.get("index").equals(j+1)&&slot.get("availability").equals(states.get(j)),"Preserve column order and fuel badge state");
+            }
+            if(!wide&&!medium){
+                // Match the lower gold stripe and selected shortcut in the failed 16:9 capture.
+                for(int y=430;y<442;y++)for(int px=109;px<175;px++)grid[px*720+719-y]=0xffedb11c;
+                require(Boolean.FALSE.equals(MultiplayerGarage.slots(new PixelFrame(720,1280,grid),List.of(),"",aspect).get("start")),
+                        "A lower gold stripe needs a matching selected shortcut");
+                int[] shortcutCenters={560,616,671,726};
+                int[] shieldColors={0xffd88560,0xff96b2d4,0xfff0ca30,0xffb18eff};
+                for(int i=0;i<shortcutCenters.length;i++)for(int px=shortcutCenters[i]-8;px<=shortcutCenters[i]+8;px++)
+                    for(int y=98;y<=114;y++)grid[px*720+719-y]=shieldColors[i];
+                for(int px=650;px<=693;px++)grid[px*720+719-132]=0xfffc1156;
+                var goldOrigin=MultiplayerGarage.slots(new PixelFrame(720,1280,grid),List.of(),"",aspect);
+                require(Boolean.TRUE.equals(goldOrigin.get("start"))&&goldOrigin.get("rank").equals("黄金"),
+                        "The gold shield and highlighted shortcut identify the aligned garage without OCR");
+                checks+=2;
             }
             for(int dx=12;dx<=154;dx++)for(int dy=5;dy<=22;dy++)grid[(x+dx)*720+719-top-dy]=0xfff3bb05;
             var pending=MultiplayerGarage.slots(new PixelFrame(720,1280,grid),List.of(),"青铜",aspect);
@@ -234,7 +238,7 @@ final class MultiplayerGarageChecks {
                     else if(cardTaps[0]==0||mode.equals("stuckCars")||detailReads[0]++<3)s=fixture(screen("cars"));
                     else s=fixture(screen("car"));
                     if(mode.equals("noOrigin")||(mode.equals("ocrGlitch")&&n==13)||(mode.equals("originLost")&&n>=13)){Map<String,Object> g=new HashMap<>((Map<String,Object>)s.getOrDefault("garage",Map.of()));g.put("start",false);s.put("garage",g);}
-                    if(mode.equals("stale"))s.put("frameId",1);
+                    if(mode.equals("stale")&&n>=9)s.put("frameId",1);
                     if(mode.equals("wrongDetail"))s.put("carDetail",Map.of("name","NISSAN370ZNISMO","performance","620/991"));
                     LuaRuntime.push(l,s);return 1;
                 }
@@ -279,19 +283,18 @@ final class MultiplayerGarageChecks {
 
     private static int leagueSelection(Path assets)throws Exception {
         int checks=0;
-        for(String scenario:List.of("青铜","白银","黄金","白金","翡翠","钻石","精英","宗师","传奇","rating")) {
-            boolean byRating=scenario.equals("rating");
-            String league=byRating?"黄金":scenario;
+        for(String scenario:List.of("青铜","白银","黄金","白金","翡翠","钻石","精英","宗师","传奇","protectedGold")) {
+            boolean protectedGold=scenario.equals("protectedGold");
+            String league=protectedGold?"黄金":scenario;
             int[] reads={0},selected={0},started={0};
             try(LuaRuntime lua=new LuaRuntime((name,l)->{
                 if(name.equals("_multiplayerUi")) {
                     int n=reads[0]++;Map<String,Object> screen=fixture(screen(n<2?"series":n<9?"event":selected[0]==0?"cars":"car"));
                     if("event".equals(screen.get("scene"))){
-                        if(byRating){
+                        if(protectedGold&&n<7){
                             screen.remove("worldLeague");
-                            screen.put("worldRating",n==4?1286:1287);
-                            screen.put("worldLeagueByRating",league);
-                            screen.put("frameId",Math.max(3,n)*1000);
+                            screen.put("worldRating",1174);
+                            screen.put("worldLeagueByRating","白银");
                         }else screen.put("worldLeague",league);
                     }
                     if("cars".equals(screen.get("scene"))) {
@@ -309,8 +312,8 @@ final class MultiplayerGarageChecks {
                 if(name.equals("tap")) {
                     int x=(int)l.toInteger(2),y=719-(int)l.toInteger(1);
                     if(x==410&&(y==305||y==542))selected[0]=y==542?2:1;
-                    if(byRating&&x==1100&&y==650&&selected[0]==0)
-                        require(reads[0]>=7,"Do not start on stale frames or a single rating sample");
+                    if(protectedGold&&x==1100&&y==650&&selected[0]==0)
+                        require(reads[0]>=9,"Wait for two fresh Gold badge frames after the below-threshold readings");
                     if(x==1100&&y==650&&selected[0]>0)started[0]++;
                 }
                 if(name.equals("cmpColor")){l.push(1);return 1;}return 0;

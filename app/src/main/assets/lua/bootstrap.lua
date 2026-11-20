@@ -24,38 +24,90 @@ myocr.level=myocr.smartOcrEx
 dialog={newLayout=function(message) error(message) end}
 mt={dialog=function(title,lines) error(title..': '..table.concat(lines,'\n')) end}
 
+-- The monitor reads only the original HUD rules. It never changes the frame kept by a task.
+local previousHudPopup,nextHudProbe=nil,0
+local handlingLegacy,handlingModal=false,false
+local function samePopup(first,second)
+  return first and second and first.rule==second.rule and second.frameId>first.frameId
+end
+local function monitorLegacyPopup()
+  if not _legacyPopupProbe or queueRecovering or handlingLegacy or handlingModal then
+    previousHudPopup=nil
+    return
+  end
+  if tickCount()<nextHudProbe then return end
+  local current=_legacyPopupProbe(true)
+  if samePopup(previousHudPopup,current) then
+    _legacyPopupDismiss(current.rule)
+    nextHudProbe=tickCount()+(current.rule=='AD_BACK' and 3000 or 1000)
+    previousHudPopup=nil
+  else previousHudPopup=current end
+end
+
+function _handleLegacyTips()
+  if not _legacyPopupProbe or queueRecovering or handlingLegacy then return false end
+  local first=_legacyPopupProbe(false)
+  if not first then return false end
+  handlingLegacy=true
+  previousHudPopup=nil
+  sleep(250)
+  local second=_legacyPopupProbe(false)
+  local closed=samePopup(first,second) and _legacyPopupDismiss(first.rule)
+  if closed and first.rule=='TIP_SEQUENCE' then
+    -- The original advances this prompt up to 15 times. Stop the instant it changes.
+    for i=1,15 do
+      sleep(500)
+      local current=_legacyPopupProbe(false)
+      if not samePopup(second,current) or not _legacyPopupDismiss(first.rule,true) then break end
+      second=current
+    end
+  end
+  if closed then sleep(first.rule=='AD_BACK' and 3000 or 500) end
+  handlingLegacy=false
+  return closed
+end
+
+local function recoverModal(screen,read,...)
+  local previous,clicks=nil,0
+  local deadline=tickCount()+18000
+  local status=data and data['信息']
+  while screen and screen.scene=='interruptingPopup' and tickCount()<deadline do
+    local action=screen.dismissPopup
+    local before=previous and previous.dismissPopup
+    if data then data['信息']='正在确认弹窗关闭控件' end
+    if action and before and screen.frameId and previous.frameId and screen.frameId>previous.frameId
+        and action.label==before.label and math.abs(action.x-before.x)<=5 and math.abs(action.y-before.y)<=5 then
+      if clicks>=5 then break end
+      print('关闭游戏弹窗：'..action.label)
+      tap(719-action.y,action.x)
+      clicks=clicks+1;previous=nil
+      local reward=action.label=='红币兑换确定' or action.label=='新手狂欢礼领取'
+      sleep(1);sleep(reward and 1600 or 850)
+    elseif not action and _handleLegacyTips() then
+      previous=nil
+    else
+      previous=screen
+      sleep(1);sleep(250)
+    end
+    screen=read(...)
+  end
+  if screen and screen.scene=='interruptingPopup' then
+    error(clicks>0 and '游戏弹窗关闭后仍遮挡画面，已保留任务进度'
+      or '游戏弹窗遮挡画面，未确认可点的关闭控件，已保留任务进度')
+  end
+  if data then data['信息']=status end
+  return screen
+end
 local function withPopupRecovery(read)
   if not read then return end
   return function(...)
     local screen=read(...)
     if not screen or screen.scene~='interruptingPopup' then return screen end
-    local previous,clicks=nil,0
-    local deadline=tickCount()+18000
-    local status=data and data['信息']
-    while screen and screen.scene=='interruptingPopup' and tickCount()<deadline do
-      local action=screen.dismissPopup
-      local before=previous and previous.dismissPopup
-      if data then data['信息']='正在确认弹窗关闭控件' end
-      if action and before and screen.frameId and previous.frameId and screen.frameId>previous.frameId
-          and action.label==before.label and math.abs(action.x-before.x)<=5 and math.abs(action.y-before.y)<=5 then
-        if clicks>=5 then break end
-        print('关闭游戏弹窗：'..action.label)
-        tap(719-action.y,action.x)
-        clicks=clicks+1;previous=nil
-        local reward=action.label=='红币兑换确定' or action.label=='新手狂欢礼领取'
-        sleep(1);sleep(reward and 1600 or 850)
-      else
-        previous=screen
-        sleep(1);sleep(250)
-      end
-      screen=read(...)
-    end
-    if screen and screen.scene=='interruptingPopup' then
-      error(clicks>0 and '游戏弹窗关闭后仍遮挡画面，已保留任务进度'
-        or '游戏弹窗遮挡画面，未确认可点的关闭控件，已保留任务进度')
-    end
-    if data then data['信息']=status end
-    return screen
+    handlingModal=true
+    local ok,result=pcall(recoverModal,screen,read,...)
+    handlingModal=false
+    if not ok then error(result,0) end
+    return result
   end
 end
 _soloEventUi=withPopupRecovery(_soloEventUi)
@@ -67,6 +119,12 @@ _specialEventList=withPopupRecovery(_specialEventList)
 _cupCards=withPopupRecovery(_cupCards)
 _garageFilterState=withPopupRecovery(_garageFilterState)
 _popupUi=withPopupRecovery(_popupUi)
+if keepCapture and _popupUi then
+  local captureFrame=keepCapture
+  function keepCapture()
+    if captureFrame() then _popupUi() end
+  end
+end
 
 function localInit()
   data['线路集合']=ROUTES
@@ -164,10 +222,36 @@ function monitor()
   while true do
     local status=tostring(data['信息'])..'\n'..tostring(data['多人地图'])..'  '..tostring(data['路程'])..'%'
     _hud(status)
-    if data['心跳时间']>0 and os.time()-data['心跳时间']>data['等待时间'] then data['超时状态']=true end
+    monitorLegacyPopup()
+    if not queueRecovering and data['心跳时间']>0 and os.time()-data['心跳时间']>data['等待时间'] then
+      data['超时状态']=true
+      if UIconfig.routeOnly=='' then error('任务超过 7 分钟未报告进展') end
+    end
     sleep(500)
   end
 end
+
+function requirePlayerAction(message)
+  if _requirePlayerAction then _requirePlayerAction(message) end
+  error(message)
+end
+
+-- Leave each decision visible before the queue sends input for its next step.
+local function taskNotice(message)
+  data['信息']=message
+  _taskNotice(message,4000)
+  sleep(4200)
+end
+
+local skipReasons={
+  dailyQuietHours='每日战利品在 00:00–00:30 暂停执行',
+  dailyExpired='赛事仅剩奖励页',
+  fuelEmpty='配置车辆均无油或暂不可用',
+  vehicleLocked='配置车辆尚未解锁',
+  vehicleUnavailable='没有可开赛的配置车辆',
+  noTicket='赛事门票不足',
+  [-1]='未完成配置场次'
+}
 
 function main()
   localInit()
@@ -187,12 +271,37 @@ function main()
   if #projects==0 then error('没有启用的项目，无法循环执行') end
 
   local resume=_queueResume and _queueResume() or {cycle=1,index=1,completed=0}
+  if resume.needsHome then
+    queueRecovering=true
+    local cfg=UIconfig.projects[resume.index]
+    local task=resume.rewardWork and '本轮领奖' or string.format('项目 %d · %s',resume.index,cfg['项目'])
+    local repeated=resume.failures>=2
+    local cause=resume.lastFailure or ''
+    if resume.homeRestarted then
+      taskNotice(task..'：重启后重新确认主界面')
+    else
+      taskNotice(task..(repeated and ' 再次异常，正在回主' or ' 异常，正在回主')..'\n'..cause)
+    end
+    if utils.backToMain(true)~=true then error('回主流程未确认游戏主界面') end
+    local completed=resume.completed
+    resume=_queueHomeConfirmed()
+    if repeated then
+      taskNotice('跳过'..task..'，继续本轮队列\n重试后仍出现异常')
+    elseif not resume.rewardWork and completed>=(tonumber(cfg.data['次数']) or 1) then
+      taskNotice(task..' 已完成配置局数\n已返回主界面，继续队列')
+    else
+      local progress=resume.rewardWork and '已返回主界面' or string.format('已结算 %d 局',completed)
+      taskNotice('正在重试'..task..'（仅一次）\n'..progress)
+    end
+    queueRecovering=false
+  end
   local rewardCycle=resume.rewardCycle or 0
   local cycle=resume.cycle-1
   while true do
     cycle=cycle+1;_sessionCycle(cycle);print('开始第 '..cycle..' 轮项目队列')
     if currentRewards and currentRewards.enabled() and cycle>rewardCycle then
-      data['心跳时间']=0
+      if _queueBeginRewards then _queueBeginRewards(cycle) end
+      data['心跳时间']=os.time()
       data['超时状态']=false
       utils.backToMain()
       currentRewards.collect()
@@ -239,30 +348,16 @@ function main()
           end
           run.data['次数']=original
         end
+        local reason=skipReasons[outcome]
         if outcome=='dailyUnmatched' then
-          local message='跳过每日战利品：未能在配置位置 '..(cfg.data['杯赛位置'] or '2')..' 确认赛事'
-          data['信息']=message
-          _taskNotice(message,4000)
-          sleep(4200)
+          reason='未能在配置位置 '..(cfg.data['杯赛位置'] or '2')..' 确认赛事'
+        end
+        if reason then
+          taskNotice('本轮跳过项目 '..i..' · '..data['项目']..'\n'..reason)
+        else
+          print('第 '..cycle..' 轮，项目 '..i..' 已完成：'..data['项目'])
         end
         if _queueDone then _queueDone() end
-        if outcome=='dailyQuietHours' then
-          print('项目 '..i..' 已跳过：每日战利品 00:00–00:30 不执行')
-        elseif outcome=='dailyExpired' then
-          print('第 '..cycle..' 轮，项目 '..i..' 已跳过：配置位置的每日战利品只剩奖励页，无法开赛')
-        elseif outcome=='dailyUnmatched' then
-          print('第 '..cycle..' 轮，项目 '..i..' 已跳过：未匹配配置位置的每日战利品')
-        elseif outcome=='fuelEmpty' then
-          print('第 '..cycle..' 轮，项目 '..i..' 因车辆全部无油已跳过：'..data['项目'])
-        elseif outcome=='vehicleLocked' then
-          print('第 '..cycle..' 轮，项目 '..i..' 因车辆未解锁已跳过：'..data['项目'])
-        elseif outcome=='vehicleUnavailable' then
-          print('第 '..cycle..' 轮，项目 '..i..' 的配置车辆均未确认可开赛，已跳过：'..data['项目'])
-        elseif outcome=='noTicket' then
-          print('第 '..cycle..' 轮，项目 '..i..' 因门票不足已跳过剩余场次：'..data['项目'])
-        elseif outcome==-1 then
-          print('第 '..cycle..' 轮，项目 '..i..' 未完成配置场次，已结束本项目：'..data['项目'])
-        else print('第 '..cycle..' 轮，项目 '..i..' 已完成：'..data['项目']) end
         run.data={}
       end
     end

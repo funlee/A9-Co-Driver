@@ -361,7 +361,7 @@ function utils.openHomeTab(screen,name)
   end
   error('点击每日赛事后仍在主菜单，请确认赛事入口后续跑')
 end
-function utils.backToMain()
+function utils.backToMain(strict)
   data["信息"] = "返回游戏主界面"
   local dismissedExit=false
   local sentBack=false
@@ -371,28 +371,49 @@ function utils.backToMain()
   local triedRankingHome=false
   local dismissedDemotion=false
   local garageBacks={}
+  local lastFrame,previousEvidence=-1,0
+  local previousPopup,popupClicks=nil,0
+  local lastBack=-4000
   local attempts=0
   local navigationDeadline=0
   local rewardTapAt=-10000
   local rewardTaps=0
   local rewardFrame=nil
   local deadline=tickCount()+90000
-  while attempts<25 and tickCount()<deadline do
-    local screen=_soloEventUi()
+  while (strict or attempts<25) and tickCount()<deadline do
+    local screen
+    if strict then screen=_recoveryUi() else screen=_soloEventUi() end
     local text=(screen.text or ''):gsub('%s','')
     local loading=screen.scene=='unknown' and
       (text:find('登录中',1,true) or text:find('加载中',1,true) or text:find('检查游戏更新',1,true)
         or text:find('健康游戏忠告',1,true) or text:find('适龄提示',1,true))
+    if strict and screen.scene=='loading' then loading=true end
     if not loading and tickCount()>=navigationDeadline then attempts=attempts+1 end
     local seriesMenu=text:gsub('賽','赛')
     local onMultiplayerTab=screen.scene=='unknown' and seriesMenu:find('世界系列赛',1,true)
       and seriesMenu:find('大师系列赛',1,true) and seriesMenu:find('对决',1,true)
-    if screen.scene=='home' or onMultiplayerTab then
+    local fresh=screen.frameId and screen.frameId>lastFrame
+    local evidence=screen.homeEvidence or 0
+    if loading or screen.dismissPopup or screen.returnOverlay or screen.legacyPopup
+        or screen.scene~='unknown' and screen.scene~='home' and screen.scene~='series' then evidence=0 end
+    if strict and fresh then
+      lastFrame=screen.frameId
+      if (evidence & previousEvidence)~=0 then
+        toast("到达游戏主界面")
+        return true
+      end
+      previousEvidence=evidence
+    elseif not strict and (screen.scene=='home' or onMultiplayerTab) then
       toast("到达游戏主界面")
       return
     end
-    if screen.scene=='rewardChoice' then error('请先手动选择画面上的动态奖励，再续跑') end
-    if loading then
+    if screen.scene=='rewardChoice' then (requirePlayerAction or error)('请先手动选择画面上的动态奖励，再续跑') end
+    if strict and screen.scene=='loginHistory' then (requirePlayerAction or error)('登录历史需要玩家确认，请检查登录状态') end
+    if screen.scene~='interruptingPopup' then previousPopup=nil end
+    if strict and (not fresh or evidence~=0) then
+      -- A candidate menu or repeated projection frame must not receive input.
+      sleep(250)
+    elseif loading then
       data['信息']='等待游戏登录与菜单加载'
       sleep(700)
     elseif screen.scene=='exitGame' then
@@ -400,6 +421,36 @@ function utils.backToMain()
         utils.dismissExitDialog(screen)
         dismissedExit=true
       else sleep(500) end
+    elseif strict and screen.legacyPopup then
+      if tickCount()>=navigationDeadline and _legacyPopupDismiss(screen.legacyPopup) then
+        navigationDeadline=tickCount()+850
+      end
+      sleep(350)
+    elseif strict and screen.returnOverlay then
+      local action=screen.returnOverlay
+      if tickCount()>=navigationDeadline and (action~='back' or tickCount()-lastBack>=4000) then
+        if action=='back' then keyPress('back');lastBack=tickCount()
+        elseif action=='continue' then tap(33,1080)
+        elseif action=='ad' then tap(600,1080)
+        elseif action=='gray' then tap(317,774) end
+        navigationDeadline=tickCount()+(action=='continue' and 300 or action=='back' and 4000 or 3000)
+      end
+      sleep(300)
+    elseif strict and screen.scene=='interruptingPopup' then
+      local action=screen.dismissPopup
+      if tickCount()>=navigationDeadline then
+        if action and popupClicks<5 then
+          if previousPopup and action.label==previousPopup.label and math.abs(action.x-previousPopup.x)<=5
+              and math.abs(action.y-previousPopup.y)<=5 then
+            tapUiWord(action);popupClicks=popupClicks+1;previousPopup=nil
+            navigationDeadline=tickCount()+1200
+          else previousPopup=action end
+        elseif tickCount()-lastBack>=4000 then
+          previousPopup=nil
+          keyPress('back');lastBack=tickCount();navigationDeadline=lastBack+4000
+        end
+      end
+      sleep(300)
     elseif screen.scene=='rewards' and screen.rewardPage then
       local button=screen.rewardExitButton
       if screen.rewardCanContinue and button and (button.label=='继续' or button.label=='错失机会')
@@ -414,7 +465,7 @@ function utils.backToMain()
       print('特殊赛事奖励已退出，从排行榜返回主界面')
       if screen.homeButton then tapUiWord(screen.homeButton) else tap(690,1244) end
       sleep(1);navigationDeadline=tickCount()+3000;sleep(400)
-    elseif screen.scene=='unknown' and tickCount()-rewardTapAt<12000 then
+    elseif screen.scene=='unknown' and rewardTaps>0 and tickCount()-rewardTapAt<12000 then
       -- Do not spend the Home or Back attempt on a reward-page transition.
       sleep(500)
     elseif driveTutorialPages<2 and dismissDriveTutorial(screen) then
@@ -438,8 +489,8 @@ function utils.backToMain()
       if screen.closeX then tapUiWord(screen.closeX) end
       sleep(1200)
     else
-      keepCapture()
-      if cmpColorEx("690|1240|FFFFFF-101010,690|1252|3B2312-101010,670|1270|3B2312-101010",1)==1 then
+      if not strict then keepCapture() end
+      if not strict and cmpColorEx("690|1240|FFFFFF-101010,690|1252|3B2312-101010,670|1270|3B2312-101010",1)==1 then
         releaseCapture()
         toast("到达游戏主界面")
         return
@@ -454,11 +505,11 @@ function utils.backToMain()
           or (screen.scene=='car' or screen.scene=='lockedCar') and not screen.homeButton then
         if not garageBacks[screen.scene] then
           garageBacks[screen.scene]=true
-          if screen.scene=='garageFilter' then keyPress('back') else tap(690,38) end
+          if screen.scene=='garageFilter' then keyPress('back');lastBack=tickCount() else tap(690,38) end
           sleep(1);navigationDeadline=tickCount()+2000
         end
         sleep(400)
-      elseif screen.scene=='race' or cmpColorEx("680|50|FFFFFF,660|70|FFFFFF",1)==1 then
+      elseif screen.scene=='race' or not strict and cmpColorEx("680|50|FFFFFF,660|70|FFFFFF",1)==1 then
         tap(670, 60)
         sleep(2000)
         tap(80, 1100)
@@ -467,22 +518,23 @@ function utils.backToMain()
         closedPopup=true
         tapUiWord(screen.closeX)
         sleep(1200)
-      elseif not triedHome then
+      elseif not triedHome and (not strict or not screen.panelVisible) then
         triedHome=true
         if screen.homeButton then tapUiWord(screen.homeButton) else tap(690,1244) end
         sleep(1)
-        navigationDeadline=tickCount()+3000
+        navigationDeadline=tickCount()+(strict and 4000 or 3000)
         sleep(400)
-      elseif not sentBack then
+      elseif strict and tickCount()-lastBack>=4000 or not strict and not sentBack then
         sentBack=true
         keyPress("back")
+        lastBack=tickCount()
         sleep(1)
-        navigationDeadline=tickCount()+2000
+        navigationDeadline=tickCount()+(strict and 4000 or 2000)
         sleep(400)
       else sleep(600) end
-      releaseCapture()
+      if not strict then releaseCapture() end
     end
-    if data["超时状态"] then break end
+    if not strict and data["超时状态"] then break end
   end
   error('未能确认游戏主菜单，请打开游戏主菜单后续跑')
 end
@@ -2063,23 +2115,25 @@ function utils.findCup(cupAddr)
   }
 end
 local function sameSpecialCard(a,b)
-  if #a.artwork==0 or #a.artwork~=#b.artwork then return false end
+  local shared=math.min(#a.artwork,#b.artwork)
+  if shared<14 then return false end
   local matches=0
-  for i,color in ipairs(a.artwork) do
+  for i=1,shared do
+    local color=a.artwork[i]
     local other=b.artwork[i]
     local difference=math.abs((color>>16)-(other>>16))
       +math.abs((color>>8&255)-(other>>8&255))+math.abs((color&255)-(other&255))
     if difference<=72 then matches=matches+1 end
   end
-  return matches*4>=#a.artwork*3
+  return matches*4>=shared*3
 end
 
 local function sameSpecialPage(a,b)
   if a.aligned~=b.aligned or #a.cards~=#b.cards then return false end
   for i,card in ipairs(a.cards) do
     local previous=b.cards[i]
-    if math.abs(card.top-previous.top)>3 or
-        (#card.artwork>0 or #previous.artwork>0) and not sameSpecialCard(card,previous) then return false end
+    if math.abs(card.top-previous.top)>3 or #card.artwork~=#previous.artwork or
+        not sameSpecialCard(card,previous) then return false end
   end
   return true
 end
@@ -2090,7 +2144,8 @@ local function specialListPage()
   repeat
     local page=_specialEventList()
     if page.cards and #page.cards>0 then
-      if previous and sameSpecialPage(page,previous) then return page end
+      if page.frameId and previous and previous.frameId and page.frameId>previous.frameId and
+          sameSpecialPage(page,previous) then return page end
       previous=page
     else previous=nil end
     sleep(250)
@@ -2098,12 +2153,40 @@ local function specialListPage()
   error('未识别特殊赛事入口列表，已保留当前任务')
 end
 
+local function specialChapterPage(screen)
+  if screen.scene~='unknown' then return false end
+  local firstChapter
+  for _,word in ipairs(screen.words or {}) do
+    local label=word.text:gsub('[ \t\r\n|]','')
+    local chapter=label:match('^章节(%d+)$')
+    if chapter and word.x<=370 and word.y>=130 and word.y<=670 then
+      if screen.stageRail or firstChapter and chapter~=firstChapter then return true end
+      firstChapter=chapter
+    end
+  end
+  return false
+end
+
 function utils.openSpecialEntry(screen,position)
   if position<1 or position%1~=0 then error('特殊赛事位置必须为正整数') end
-  utils.openHomeTab(screen or _soloEventUi(),'season')
+  screen=screen or _soloEventUi()
+  if not screen.specialSeasonTab then
+    utils.openHomeTab(screen,'season')
+    for attempt=1,5 do
+      screen=_soloEventUi()
+      if screen.specialSeasonTab then break end
+      sleep(350)
+    end
+    if not screen.specialSeasonTab then error('未确认赛季赛事标签，已保留当前任务') end
+  end
+  -- The original resets the rail before trying to read any card at a saved scroll position.
+  data['信息']='向下拉取特殊赛事入口列表'
+  for pull=1,8 do
+    swipe(550,220,200,220,300,90)
+  end
+  sleep(2000)
   local page=specialListPage()
   local atOrigin=false
-  data['信息']='向下拉取特殊赛事入口列表'
   for attempt=1,8 do
     -- Use a short confirmation pull when the leading tile is already visible.
     swipe(page.aligned and 405 or 550,220,200,220,page.aligned and 540 or 460,160)
@@ -2119,44 +2202,76 @@ function utils.openSpecialEntry(screen,position)
   if not atOrigin then error('未确认特殊赛事入口列表起点，已保留当前任务') end
 
   local offset=0
-  while position>offset+#page.cards do
+  local drags=0
+  while position>offset+#page.cards or
+      (position-offset>2 and page.cards[position-offset].complete==false) do
+    drags=drags+1
+    if drags>position+3 then error('未确认特殊赛事入口位置 '..position..'，已保留当前任务') end
     local previous=page
-    swipe(230,220,405,220,470,160)
+    -- Advance one slot using the measured separator and hold before releasing.
+    local distance=page.scrollDistance
+    if not distance or distance<=0 then distance=175 end
+    swipe(180,220,180+distance,220,200,500)
     sleep(500)
     page=specialListPage()
+    if sameSpecialPage(page,previous) and position<=offset+#page.cards then break end
     -- Keep an overlap with the previous page, so a drag cannot skip a position.
-    local advanced
+    local advanced,travel
     for i,before in ipairs(previous.cards) do
       for j,current in ipairs(page.cards) do
-        if sameSpecialCard(before,current) then
-          if advanced and advanced~=i-j then error('特殊赛事入口翻页位置不明确，已保留当前任务') end
-          advanced=i-j
+        local dy=before.top-current.top
+        if dy>=8 and sameSpecialCard(before,current) then
+          if advanced and (advanced~=i-j or math.abs(dy-travel)>6) then
+            error('特殊赛事入口翻页位置不明确，已保留当前任务')
+          end
+          advanced,travel=i-j,dy
         end
       end
     end
-    if not advanced or advanced<0 or advanced+#page.cards<=#previous.cards then
+    if not advanced or advanced<0 then
       error('未确认特殊赛事入口位置 '..position..'，已保留当前任务')
     end
     offset=offset+advanced
   end
 
-  tapUiWord(page.cards[position-offset])
+  local target=page.cards[position-offset]
+  tapUiWord(target)
+  local tappedFrame=page.frameId
   for attempt=1,7 do
     sleep(450)
-    local preview=_soloEventUi()
-    local button=findUiWord(preview,{['开始']=true,['进入']=true,['进人']=true},930,1200,450,575)
-    if preview.specialSeasonTab and button then
-      print('已选中特殊赛事入口位置 '..position)
-      tapUiWord(button)
-      return
+    local preview=_soloEventUi(false,true)
+    if preview.frameId and preview.frameId>tappedFrame then
+      if preview.specialSeasonTab then
+        local button=findUiWord(preview,{['开始']=true,['进入']=true,['进人']=true},930,1200,450,575)
+            or preview.specialEntryButton
+        if button then
+          print('已选中特殊赛事入口位置 '..position)
+          tapUiWord(button)
+          return
+        end
+        -- Retry only while the same tile is still under the finger on the entry list.
+        if attempt==2 or attempt==4 then
+          local current=_specialEventList()
+          local card=current.cards and current.cards[position-offset]
+          if card and current.frameId>=preview.frameId and math.abs(target.top-card.top)<=3
+              and sameSpecialCard(target,card) then
+            tapUiWord(card)
+            tappedFrame=current.frameId
+          end
+        end
+      elseif specialChapterPage(preview) or utils.specialMissionContinue(preview) then
+        print('特殊赛事入口位置 '..position..' 已直接进入赛事')
+        return preview
+      end
     end
   end
-  error('未确认特殊赛事入口位置 '..position..' 的进入按钮，已保留当前任务')
+  error('未确认特殊赛事入口位置 '..position..' 的进入按钮或赛事页面，已保留当前任务')
 end
 
 function utils.intoSpecial(screen)
   data["信息"] = "进入特殊赛事 "
-  utils.openSpecialEntry(screen,tonumber(run.data["特殊赛事位置"]) or 1)
+  local entered=utils.openSpecialEntry(screen,tonumber(run.data["特殊赛事位置"]) or 1)
+  if entered and utils.specialMissionContinue(entered) then return 1 end
   local spStage = tonumber(run.data["特殊赛事阶段"]) or 1
   sleep(3000)
   keepCapture()
@@ -2209,7 +2324,7 @@ function utils.intoSpecial(screen)
       if rail.clear and (nearRail and leading.number==1 or stageNumber(screen.stageFirstLabel)==1) then
         first={x=rail.x+142,y=430}
       end
-      local target=badges[spStage]
+      local target=spStage>1 and badges[spStage] or nil
       if spStage>1 and not target then
         -- A badge border can add a trailing 1. Keep this fallback tied to a
         -- neighboring number, and require a stage label on the destination.
@@ -2229,7 +2344,8 @@ function utils.intoSpecial(screen)
     end
     local function samePage(a,b)
       return a and b and a.rail.clear==b.rail.clear and math.abs(a.rail.x-b.rail.x)<=3
-        and (a.first~=nil)==(b.first~=nil) and sameBadge(a.leading,b.leading) and sameBadge(a.target,b.target)
+        and (a.first and b.first or not a.first and not b.first and sameBadge(a.leading,b.leading))
+        and sameBadge(a.target,b.target)
     end
     local function settledPage()
       local deadline=tickCount()+6000
@@ -2614,30 +2730,8 @@ function utils.backToCup()
 end
 function utils.tipsHandle()
   keepCapture()
+  if _handleLegacyTips and _handleLegacyTips() then keepCapture() end
   if _popupUi then _popupUi() end
-  if cmpColorEx("190|560|FFFFFF-101010,540|330|2C180C-101010,550|1000|2C1A0C-101010", 1) == 1 then
-    tap(192, 610)
-  end
-  keepCapture()
-  if cmpColorEx("564|370|000000-101010,580|1132|5400FF-101010,584|1080|000000-101010", 1) == 1 then
-    tap(580, 1130)
-  end
-  keepCapture()
-  if cmpColorEx("99|587|FFFFFF-101010,152|542|FFFFFE-101010,116|684|14FBC3-101010", 1) == 1 then
-    tap(99, 588)
-  end
-  keepCapture()
-  if cmpColorEx("150|325|5E6822-101010,496|278|BDD045-101010,580|331|0C0C03-101010", 1) == 1 then
-    tap(158, 692)
-    for i = 1, 15 do
-      tap(30, 1240)
-      sleep(500)
-    end
-  end
-  keepCapture()
-  if cmpColorEx("394|446|FFFFFF-101010,88|718|FFFFFF-101010,594|200|000000-101010", 1) == 1 then
-    tap(100, 600)
-  end
 end
 function utils.initCar()
   data["用车情况"] = {

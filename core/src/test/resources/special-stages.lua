@@ -48,7 +48,8 @@ function _soloEventUi(_,stageProbe)
   local clear=drags>=6 and forward==0 and scenario~='stuck'
   local page={scene='unknown',frameId=frame,stageRail={x=287,y=257,clear=clear},words={}}
   if clear then
-    if scenario=='focused' then page.stageFirstLabel='|阶段1'
+    if scenario=='focused' or scenario=='noisy-first' and frame%2==0 then
+      page.stageFirstLabel='|阶段1'
     else page.words[1]={text='阶段1',x=370,y=238} end
     table.insert(page.words,{text='阶段2',x=1019,y=238})
   elseif forward>0 then

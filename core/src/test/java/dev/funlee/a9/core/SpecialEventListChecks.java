@@ -7,6 +7,7 @@ import java.util.Map;
 
 final class SpecialEventListChecks {
     static int run(Path assets) throws Exception {
+        checkEntryButton();
         int[] origin = seasonTab();
         tile(origin, 88, 268, 0x16a3c0);
         tile(origin, 281, 477, 0x635451);
@@ -26,6 +27,36 @@ final class SpecialEventListChecks {
         Map<String, Object> offset = SpecialEventList.read(new PixelFrame(720, 1280, shifted), false);
         if (!Boolean.FALSE.equals(offset.get("aligned")) || ((List<?>) offset.get("cards")).size() != 2) {
             throw new AssertionError("The first complete card on the shifted rail is not position 1");
+        }
+        int[] wide = seasonTab();
+        tile(wide, 92, 331, 0x16a3c0);
+        tile(wide, 347, 551, 0x635451);
+        Map<String, Object> widePage = SpecialEventList.read(new PixelFrame(720, 1280, wide), true);
+        List<?> wideCards = (List<?>) widePage.get("cards");
+        if (!Boolean.TRUE.equals(widePage.get("aligned")) || wideCards.size() != 2 ||
+                !Boolean.FALSE.equals(((Map<?, ?>) wideCards.get(1)).get("complete")) ||
+                ((List<?>) ((Map<?, ?>) wideCards.get(1)).get("artwork")).size() < 14) {
+            throw new AssertionError("A clipped second wide tile retains its visible artwork for scroll matching");
+        }
+        // The reported wide MISTRAL card starts with low-contrast lettering. Its
+        // first strongly contrasting image row is 43 px below the visible top.
+        int[] dark = seasonTab();
+        tile(dark, 92, 134, 0x090913);
+        tile(dark, 135, 332, 0x4e9a81);
+        tile(dark, 333, 345, 0x170a36);
+        tile(dark, 346, 558, 0x42383c);
+        Map<String, Object> darkPage = SpecialEventList.read(new PixelFrame(720, 1280, dark), true);
+        List<?> darkCards = (List<?>) darkPage.get("cards");
+        if (!Boolean.TRUE.equals(darkPage.get("aligned")) || darkCards.size() != 2
+                || !((Map<?, ?>) darkCards.get(0)).get("top").equals(92)
+                || !Boolean.FALSE.equals(((Map<?, ?>) darkCards.get(1)).get("complete"))
+                || !darkPage.get("scrollDistance").equals(254)) {
+            throw new AssertionError("The shared purple separator anchors a dark first card and a one-card drag");
+        }
+        fill(dark, 0, 346, 1279, 558, 0x170a36);
+        Map<String, Object> lastPage = SpecialEventList.read(new PixelFrame(720, 1280, dark), true);
+        if (((List<?>) lastPage.get("cards")).size() != 1 || !lastPage.get("scrollDistance").equals(0)) {
+            throw new AssertionError("Empty rail below the last card cannot supply another position");
         }
         if (!SpecialEventList.read(new PixelFrame(720, 1280, new int[720 * 1280]), false).isEmpty()) {
             throw new AssertionError("Only the selected Season Events tab can expose the special list");
@@ -50,7 +81,9 @@ final class SpecialEventListChecks {
         try (var input = SpecialEventListChecks.class.getResourceAsStream("/special-event-list.lua")) {
             fixture = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         }
-        for (String scenario : List.of("first", "third", "fourth", "noOrigin", "wrongPreview")) {
+        for (String scenario : List.of("first", "third", "wideThird", "fourth", "noOrigin", "wrongPreview",
+                "directChapter", "directLeftLabels", "directRanking", "pixelButton", "retry", "stale", "clamped",
+                "skip", "wrongTab", "wrongRankStage")) {
             try (LuaRuntime lua = new LuaRuntime((name, state) -> 0, List.of())) {
                 lua.set("scenario", scenario);
                 lua.load("utilities", utilities);
@@ -63,7 +96,7 @@ final class SpecialEventListChecks {
         try (var input = SpecialEventListChecks.class.getResourceAsStream("/special-stages.lua")) {
             fixture = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         }
-        for (String scenario : List.of("first", "third", "focused", "stuck", "wrong-stage")) {
+        for (String scenario : List.of("first", "third", "focused", "noisy-first", "stuck", "wrong-stage")) {
             try (LuaRuntime lua = new LuaRuntime((name, state) -> 0, List.of())) {
                 lua.set("scenario", scenario);
                 lua.load("utilities", utilities);
@@ -73,7 +106,25 @@ final class SpecialEventListChecks {
                 lua.load("verify", "assert(done,scenario)");
             }
         }
-        return 15;
+        return 32;
+    }
+
+    private static void checkEntryButton() {
+        int[] preview = seasonTab();
+        fill(preview, 1010, 482, 1186, 545, 0xc3fb12);
+        fill(preview, 1073, 498, 1120, 529, 0x192330);
+        if (!Map.of("x", 1098, "y", 514).equals(SpecialEventList.entryButton(new PixelFrame(720, 1280, preview)))) {
+            throw new AssertionError("Locate the wide preview button around its dark caption");
+        }
+        int[] otherTab = new int[720 * 1280];
+        fill(otherTab, 1010, 482, 1186, 545, 0xc3fb12);
+        if (!SpecialEventList.entryButton(new PixelFrame(720, 1280, otherTab)).isEmpty()) {
+            throw new AssertionError("A matching button outside Season Events cannot enter a special event");
+        }
+        fill(preview, 1060, 482, 1186, 545, 0);
+        if (!SpecialEventList.entryButton(new PixelFrame(720, 1280, preview)).isEmpty()) {
+            throw new AssertionError("A small green patch in the preview cannot serve as its action button");
+        }
     }
 
     private static int[] seasonTab() {

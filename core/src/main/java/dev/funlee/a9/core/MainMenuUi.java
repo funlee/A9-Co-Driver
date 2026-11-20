@@ -32,6 +32,25 @@ public final class MainMenuUi {
         return tabs.size()>=3?"home":"";
     }
 
+    /** Original backToMain color signatures in the automation's rotated BGR coordinates. */
+    public static String returnOverlay(PixelFrame frame) {
+        if (ColorPattern.matches(frame, "493|416|FF7856-101010,493|425|FF7956-101010,506|441|FFA157-101010", 1)) return "back";
+        if (ColorPattern.matches(frame, "70|920|10FBC3-101010,70|970|10FBC3-101010", 1)) return "continue";
+        if (ColorPattern.matches(frame, "705|1251|191919-050505,690|1251|060302-050505,666|1226|060302-050505", 1)
+                || ColorPattern.matches(frame, "698|1249|181818-050505,676|1250|060302-050505,679|1238|151413-050505", 1)) return "ad";
+        if (ColorPattern.matches(frame, "286|397|424242-090909,441|394|444241-090909,398|821|424242-090909,401|983|424242-090909", 1)) return "gray";
+        return "";
+    }
+
+    /** Each bit is a distinct way of confirming an unobstructed home menu in this frame. */
+    public static int homeEvidence(PixelFrame frame, String text, List<?> words, String scene, boolean obstructed) {
+        if (obstructed || !(scene.equals("home") || scene.equals("unknown") || scene.equals("series"))
+                || exitDialog(text) || RaceHud.backWedge(frame)) return 0;
+        int evidence = ColorPattern.matches(frame, "690|1240|FFFFFF-101010,690|1252|3B2312-101010,670|1270|3B2312-101010", 1) ? 1 : 0;
+        if (classify(text, words).equals("home")) evidence |= 2;
+        return evidence;
+    }
+
     /** The daily-goals clipboard uses a yellow tile when a reward is available. */
     public static boolean dailyGoalsHighlighted(PixelFrame frame) {
         if(frame.width!=720||frame.height!=1280)return false;

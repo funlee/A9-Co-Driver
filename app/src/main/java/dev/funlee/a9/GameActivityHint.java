@@ -56,21 +56,22 @@ final class GameActivityHint {
         shownForScreen=changed;
         String message=pending;
         pending="";
-        show(message,SHOW_MS);
+        show(message,SHOW_MS,2);
     }
 
     void showNow(String message,long duration){
         clear();
         last=message;
-        show(message,duration);
+        show(message,duration,4);
     }
 
-    private void show(String message,long duration){
+    private void show(String message,long duration,int maxLines){
         TextView label=new TextView(context);
         label.setText(message);
         label.setTextColor(0xfff5fafb);
         label.setTextSize(15);
-        label.setMaxLines(2);
+        label.setMaxLines(maxLines);
+        label.setEllipsize(android.text.TextUtils.TruncateAt.END);
         label.setMaxWidth(dp(280));
         label.setGravity(Gravity.CENTER);
         label.setPadding(dp(12),dp(6),dp(12),dp(6));
