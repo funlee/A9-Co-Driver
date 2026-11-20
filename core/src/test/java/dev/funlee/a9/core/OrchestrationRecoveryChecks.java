@@ -105,6 +105,8 @@ final class OrchestrationRecoveryChecks {
             if(FuelAvailability.detail(List.of(Map.of("text",fuel+" / 10","x",562,"y",665)))!=fuel)
                 throw new AssertionError("Ten-slot detail fuel counter");
         }
+        if(FuelAvailability.focusedDetail("1 0／\n1 0")!=10||FuelAvailability.focusedDetail("99/10")!=-1)
+            throw new AssertionError("Isolated fuel counter may split digits around the slash");
         for(Map<String,Object> w:List.of(Map.<String,Object>of("text","0/10","x",1150,"y",183),Map.<String,Object>of("text","0/3","x",300,"y",300),Map.<String,Object>of("text","0/30","x",540,"y",665),Map.<String,Object>of("text","4/3","x",540,"y",665))){
             if(FuelAvailability.detail(List.of(w))!=-1)throw new AssertionError("Non-fuel ratio accepted");
         }

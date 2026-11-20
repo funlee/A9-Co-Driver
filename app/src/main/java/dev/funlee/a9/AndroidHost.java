@@ -443,7 +443,13 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             if(solo)addWideHomeButton(out);
             out.put("words",words);
             if(scene.equals("car")){
-                out.put("fuel",FuelAvailability.detail(words));
+                int fuel=FuelAvailability.detail(words);
+                if(fuel<0&&!wideViewport()){
+                    String counter=text(32,510,79,649,4);
+                    fuel=FuelAvailability.focusedDetail(counter);
+                    if(fuel<0)android.util.Log.d("A9FuelOcr","Unrecognized detail counter: "+counter);
+                }
+                out.put("fuel",fuel);
                 out.put("starUpPending",VehicleUnlockGuard.pendingDetail(full.getText()));
                 String detailScore=MultiplayerGarage.soloDetailScore(words);
                 if(SessionState.stats.dailyLoot()&&detailScore.isEmpty())

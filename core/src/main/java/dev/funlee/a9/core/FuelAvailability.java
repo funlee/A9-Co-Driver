@@ -14,13 +14,22 @@ public final class FuelAvailability {
             Map<?,?> w=(Map<?,?>)o;
             int x=((Number)w.get("x")).intValue(),y=((Number)w.get("y")).intValue();
             if(x<470||x>710||y<640||y>705)continue;
-            var m=DETAIL_COUNTER.matcher(w.get("text").toString());
-            while(m.find()){
-                int fuel=Integer.parseInt(m.group(1)),capacity=Integer.parseInt(m.group(2));
-                if(fuel<=capacity)values.add(fuel);
-            }
+            addCounters(w.get("text").toString(),values);
         }
         return values.size()==1?values.iterator().next():-1;
+    }
+    /** Read an enlarged crop containing only the lower fuel counter. */
+    public static int focusedDetail(String text){
+        Set<Integer> values=new HashSet<>();
+        addCounters(text.replaceAll("\\s",""),values);
+        return values.size()==1?values.iterator().next():-1;
+    }
+    private static void addCounters(String text,Set<Integer> values){
+        var m=DETAIL_COUNTER.matcher(text);
+        while(m.find()){
+            int fuel=Integer.parseInt(m.group(1)),capacity=Integer.parseInt(m.group(2));
+            if(fuel<=capacity)values.add(fuel);
+        }
     }
     public static List<Integer> emptySlots(PixelFrame f){
         List<Integer> slots=new ArrayList<>();if(f.width!=720||f.height!=1280)return slots;
