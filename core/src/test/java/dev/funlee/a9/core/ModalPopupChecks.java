@@ -75,6 +75,31 @@ final class ModalPopupChecks {
                 "Wait for confirmation to become enabled");
         count += 4;
 
+        int[] gift = panel(153, 71, 1127, 647, 0x245294);
+        fill(gift, 824, 501, 1064, 576, 0xbaff00);
+        fill(gift, 878, 520, 1010, 560, 0x161a08);
+        var giftTitle = word("新手狂歡禮", 465, 137);
+        var giftText = word("連續登錄７日，領取豐厚好禮！", 363, 192);
+        var claim = word("點擊領取", 945, 539);
+        expect(Map.of("x", 945, "y", 539, "label", "新手狂欢礼领取").equals(
+                action(gift, List.of(giftTitle, giftText, claim))), "Claim only the identified newcomer gift");
+        expect(action(gift, List.of(word("购买组合包", 465, 137), claim)).isEmpty(),
+                "A generic Claim button is not authorization");
+        count += 2;
+
+        int[] goals = panel(0, 0, 1279, 719, 0x122645);
+        fill(goals, 1172, 106, 1220, 165, 0xf70865);
+        cross(goals, 1196, 135, 0xffffff);
+        var goalWords = List.of(word("成就", 154, 137), word("每日目标", 315, 137),
+                word("赛季任务", 482, 137), word("领取", 1089, 360));
+        PixelFrame goalsFrame = new PixelFrame(720, 1280, goals);
+        var closeGoals = ModalPopup.dismiss(goalsFrame, ModalPopup.locate(goalsFrame), goalWords, 20.0 / 9);
+        expect(closeGoals != null && "每日目标关闭".equals(closeGoals.get("label")) &&
+                Math.abs((int) closeGoals.get("x") - 1196) <= 3, "Daily goals uses its own wide close control");
+        expect(ModalPopup.dismiss(goalsFrame, ModalPopup.locate(goalsFrame), goalWords, 20.0 / 9, true) == null,
+                "The configured daily-goals collector keeps its own page open");
+        count += 2;
+
         String fixtures;
         try (var input = ModalPopupChecks.class.getResourceAsStream("/modal-popup.lua")) {
             fixtures = new String(input.readAllBytes(), StandardCharsets.UTF_8);

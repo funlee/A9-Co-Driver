@@ -12,11 +12,11 @@ local function word(screen,label,minX,minY,maxY)
     if clean(w.text)==label and w.x>=(minX or 0) and w.y>=(minY or 0) and w.y<=(maxY or 720) then return w end
   end
 end
-local function click(w,valid,settleMs)
+local function click(w,valid,settleMs,read)
   if w.text then
     local stable=false
     for attempt=1,5 do
-      pause(500);local s=_rewardUi();local candidate=nil
+      pause(500);local s=(read or _rewardUi)();local candidate=nil
       for _,v in ipairs(s.words or {}) do
         if clean(v.text)==clean(w.text) and math.abs(v.y-w.y)<30 and (not valid or valid(s,v)) then
           if not candidate or math.abs(v.x-w.x)<math.abs(candidate.x-w.x) then candidate=v end
@@ -31,10 +31,10 @@ local function click(w,valid,settleMs)
   end
   tap(719-math.floor(w.y),math.floor(w.x));pause(settleMs or 1600);return true
 end
-local function waitFor(predicate,timeout)
+local function waitFor(predicate,timeout,read)
   local deadline=tickCount()+(timeout or 7600)
   repeat
-    local s=_rewardUi()
+    local s=(read or _rewardUi)()
     if predicate(s) then return s end
     pause(400)
   until tickCount()>=deadline
@@ -282,22 +282,23 @@ local function tokens(s)
     return
   end
   report('领奖：检查每日目标奖励','正在检查每日奖励')
+  local function readGoals()return _rewardUi(true)end
   -- The clipboard is the daily-goal entry on the verified current CN home header.
-  click({x=440,y=30},nil,300);s=waitFor(function(page)return word(page,'每日目标',0,60,155)~=nil end)
+  click({x=440,y=30},nil,300);s=waitFor(function(page)return word(page,'每日目标',0,60,155)~=nil end,nil,readGoals)
   local tab=s and word(s,'每日目标',0,60,155)
   if not tab then report('领奖：未确认每日目标页面，暂未领取');backHome();return end
-  click(tab);s=_rewardUi()
+  click(tab,nil,nil,readGoals);s=readGoals()
   local count=0;local pages=0;local lastPage='';local stalled=false;local unknown=0
   local untilTime=tickCount()+90000
   while tickCount()<untilTime and count<20 do
     if not has(s,'每日目标') then
       if revealed(s) then
         local next=word(s,'继续',800,540)
-        if next then click(next) else pause(800) end
-        s=_rewardUi()
+        if next then click(next,nil,nil,readGoals) else pause(800) end
+        s=readGoals()
       else
         unknown=unknown+1;if unknown>10 then stalled=true;break end
-        pause(800);s=_rewardUi()
+        pause(800);s=readGoals()
       end
     else
       unknown=0
@@ -305,7 +306,7 @@ local function tokens(s)
       local claim=word(s,'领取',900,170) or word(s,'领取奖励',900,170)
       if claim then
         activity('正在领取每日奖励')
-        if not click(claim,nil,300) then stalled=true;break end
+        if not click(claim,nil,300,readGoals) then stalled=true;break end
         local beforeText=clean(s.text)
         local beforeRow=rowSignature(s,claim.y)
         local after=waitFor(function(page)
@@ -313,12 +314,12 @@ local function tokens(s)
           if clean(page.text)==beforeText or not has(page,'每日目标') then return false end
           local still=word(page,'领取',900,170) or word(page,'领取奖励',900,170)
           return not still or rowSignature(page,claim.y)~=beforeRow
-        end)
+        end,nil,readGoals)
         if not after then stalled=true;break end
         count=count+1;report('领奖：已确认领取每日目标奖励 '..count..' 项');s=after
       elseif pages<6 then
         if pages>0 and clean(s.text)==lastPage then break end
-        lastPage=clean(s.text);pages=pages+1;slide(810,650,810,320);s=_rewardUi()
+      lastPage=clean(s.text);pages=pages+1;slide(810,650,810,320);s=readGoals()
       else break end
     end
   end

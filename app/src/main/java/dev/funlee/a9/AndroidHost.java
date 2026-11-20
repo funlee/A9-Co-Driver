@@ -151,14 +151,14 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     }
     /** Reward menus use fresh OCR, without multiplayer scene transitions or watchdog state. */
     public boolean recoveryReady()throws Exception{
-        Map<String,Object> screen=rewardUi();
+        Map<String,Object> screen=rewardUi(false);
         String text=(String)screen.get("text");
         if(RecoveryReadiness.incompatibleDevice(text))throw new GameRecovery.IncompatibleStartup();
         if("interruptingPopup".equals(screen.get("scene")))return screen.containsKey("dismissPopup");
         if(MultiplayerUi.limitedSalePromo(text))return PopupCloseDetector.findLimitedSale(frame)!=null;
         return RecoveryReadiness.ready(text,(String)screen.get("scene"));
     }
-    private Map<String,Object> rewardUi() throws Exception {
+    private Map<String,Object> rewardUi(boolean keepDailyGoals) throws Exception {
         capture();
         Bitmap side=Bitmap.createBitmap(frame.copyPixels(),720,1280,Bitmap.Config.ARGB_8888);
         Matrix rotation=new Matrix();rotation.postRotate(270);
@@ -179,8 +179,8 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             String scene=menu.isEmpty()?MultiplayerUi.classify(text.toString()):menu;
             Map<String,Object> screen=new LinkedHashMap<>(Map.of("text",text.toString(),"words",words,
                     "frameId",capture.frameId(),"scene",scene));
-            if(addInterruptingPopup(screen,ModalPopup.locate(frame),words))return screen;
             if(addLeagueDemotion(screen,words))screen.put("scene","leagueDemotion");
+            if(addInterruptingPopup(screen,ModalPopup.locate(frame),words,keepDailyGoals))return screen;
             if(scene.equals("home"))screen.put("dailyGoalsHighlighted",MainMenuUi.dailyGoalsHighlighted(frame));
             addWideHomeButton(screen);
             return screen;
@@ -194,15 +194,19 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         if(SessionState.overlayMode(result,menu))capture.awaitFrameAfter(before);
     }
     private boolean addInterruptingPopup(Map<String,Object> screen,ModalPopup.Panel panel,List<?> words) {
-        if(touch!=null&&touch.unlockGuard.active())return false;
-        Map<String,Object> action=ModalPopup.dismiss(frame,panel,words,viewportAspect());
+        return addInterruptingPopup(screen,panel,words,false);
+    }
+    private boolean addInterruptingPopup(Map<String,Object> screen,ModalPopup.Panel panel,List<?> words,boolean keepDailyGoals) {
+        if(screen.containsKey("demotionConfirm")||touch!=null&&touch.unlockGuard.active())return false;
+        Map<String,Object> action=ModalPopup.dismiss(frame,panel,words,viewportAspect(),keepDailyGoals);
         if(action==null)return false;
         screen.put("scene","interruptingPopup");
         if(!action.isEmpty())screen.put("dismissPopup",action);
         return true;
     }
     private Map<String,Object> popupOverPixelMenu()throws Exception{
-        if(ModalPopup.locate(frame())==null&&!ModalPopup.possibleRedCoinConversion(frame))return Map.of();
+        if(ModalPopup.locate(frame())==null&&!ModalPopup.possibleRedCoinConversion(frame)&&
+                !ModalPopup.possibleNewcomerGift(frame)&&PopupCloseDetector.findDailyGoals(frame)==null)return Map.of();
         Map<String,Object> screen=dailyEventUi(true);
         return "interruptingPopup".equals(screen.get("scene"))?screen:Map.of();
     }
@@ -387,8 +391,15 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         if(!league.isEmpty())return league;
         return MultiplayerGarage.leagueBadge(text(455,515,604,1115,2));
     }
-    private boolean addLeagueDemotion(Map<String,Object> out,List<?> words) {
+    private boolean addLeagueDemotion(Map<String,Object> out,List<?> words)throws Exception {
+        if(!MultiplayerUi.leagueDemotionLayout(frame))return false;
         Map<String,Integer> button=MultiplayerUi.leagueDemotionButton(frame,words);
+        if(button.isEmpty()){
+            List<Object> focused=new ArrayList<>(words);
+            focused.add(Map.of("text",text(510,535,564,728,3),"x",633,"y",182));
+            focused.add(Map.of("text",text(171,568,211,700,3),"x",633,"y",528));
+            button=MultiplayerUi.leagueDemotionButton(frame,focused);
+        }
         if(button.isEmpty())return false;
         out.put("demotionConfirm",button);
         return true;
@@ -674,7 +685,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 case "_recoverEventStart":
                     recoveryReason=GameRecovery.Reason.EVENT_START_TIMEOUT;
                     throw new IllegalStateException("点击赛事开始后未确认进入选车页面");
-                case "_rewardUi":return result(l,rewardUi());
+                case "_rewardUi":return result(l,rewardUi(l.toBoolean(1)));
                 case "_routeDisplay":return result(l,store.matcher.displayName(s(l,1)));
                 case "_sessionCycle":SessionState.stats.cycle(n(l,1));return 0;
                 case "_dailyTaskStatus":return result(l,dailySkipReason(n(l,1)));

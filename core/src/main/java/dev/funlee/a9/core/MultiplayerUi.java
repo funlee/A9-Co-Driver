@@ -18,7 +18,7 @@ public final class MultiplayerUi {
         return (t.contains("传奇促销")||t.contains("赛道制霸"))
                 &&(t.contains("限时发售")||t.contains("一举成名"));
     }
-    private static boolean leagueDemotionLayout(PixelFrame frame) {
+    public static boolean leagueDemotionLayout(PixelFrame frame) {
         // The dialog's centered white action sits on a dark blue panel. Sample
         // away from the two Chinese glyphs and verify the button's outside edges.
         return ColorPattern.color(frame.pixel(719-517,550),"FFFFFF-202020",1)
@@ -37,7 +37,8 @@ public final class MultiplayerUi {
             Object label=word.get("text"), x=word.get("x"), y=word.get("y");
             if(!(label instanceof String)||!(x instanceof Number)||!(y instanceof Number))continue;
             int centerX=((Number)x).intValue(),centerY=((Number)y).intValue();
-            String t=MapMatcher.normalize((String)label).replace('級','级').replace('經','经').replace('己','已').replace('確','确');
+            String t=MapMatcher.normalize((String)label).replace('級','级').replace('經','经')
+                    .replace('己','已').replace('巳','已').replace('確','确').replace('丨',' ').trim();
             if(centerX>=550&&centerX<=730&&centerY>=158&&centerY<=208&&(t.equals("你已降级")||t.equals("你已经降级")))title=true;
             if(centerX>=555&&centerX<=708&&centerY>=513&&centerY<=543&&t.equals("确定"))button=Map.of("x",centerX,"y",centerY);
         }

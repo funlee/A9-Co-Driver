@@ -73,8 +73,20 @@ public final class ModalPopup {
 
     /** Null delegates to the normal workflow. An empty map means no safe dismissal is visible yet. */
     public static Map<String, Object> dismiss(PixelFrame frame, Panel panel, List<?> words, double aspect) {
+        return dismiss(frame, panel, words, aspect, false);
+    }
+
+    public static Map<String, Object> dismiss(PixelFrame frame, Panel panel, List<?> words, double aspect, boolean keepDailyGoals) {
         Map<String, Object> conversion = redCoinConversion(frame, words);
         if (conversion != null) return conversion;
+        String textOnScreen = words.stream().map(value -> normalize(((Map<?, ?>) value).get("text").toString()))
+                .collect(java.util.stream.Collectors.joining());
+        if (dailyGoals(textOnScreen)) {
+            if (keepDailyGoals) return null;
+            int[] close = PopupCloseDetector.findDailyGoals(frame);
+            return close == null ? Map.of() : Map.of("x", close[0], "y", close[1], "label", "每日目标关闭");
+        }
+        if (newcomerGift(textOnScreen)) return newcomerClaim(frame, words);
         if (panel == null) return null;
         StringBuilder text = new StringBuilder();
         List<Map<String, Object>> later = new ArrayList<>();
@@ -107,7 +119,30 @@ public final class ModalPopup {
         if (cross != null) return Map.of("x", cross[0], "y", cross[1], "label", "×");
         if (later.size() == 1) return later.get(0);
         if (later.isEmpty() && next.size() == 1 && body && !GUARDED.matcher(content).find()) return next.get(0);
-        return content.contains("新手狂欢礼") ? null : Map.of();
+        return Map.of();
+    }
+
+    private static boolean dailyGoals(String text) {
+        return text.contains("每日目标") && (text.contains("成就") && text.contains("赛季任务") ||
+                text.contains("连环目标") && text.contains("重置还需"));
+    }
+
+    private static boolean newcomerGift(String text) {
+        return text.contains("连续登录7日") && (text.contains("新手狂欢礼") ||
+                text.contains("领取丰厚好礼") && text.matches(".*第[1-7]天礼物.*"));
+    }
+
+    private static Map<String, Object> newcomerClaim(PixelFrame frame, List<?> words) {
+        Map<String, Object> action = Map.of();
+        for (Object value : words) {
+            Map<?, ?> word = (Map<?, ?>) value;
+            int x = ((Number) word.get("x")).intValue(), y = ((Number) word.get("y")).intValue();
+            if (x < 735 || x > 1120 || y < 445 || y > 670 ||
+                    !normalize(word.get("text").toString()).equals("点击领取") || !limeButton(frame, x, y, 88)) continue;
+            if (!action.isEmpty()) return Map.of();
+            action = Map.of("x", x, "y", y, "label", "新手狂欢礼领取");
+        }
+        return action;
     }
 
     // This reward is a full screen; the central card is artwork rather than a modal.
@@ -126,7 +161,7 @@ public final class ModalPopup {
             if (x >= 50 && x <= 265 && y >= 34 && y <= 122 && label.equals("红币")) title = true;
             if (x >= 100 && x <= 880 && y >= 80 && y <= 205) explanation.append(label);
             if (x >= 930 && x <= 1205 && y >= 575 && y <= 695 &&
-                    (label.equals("确定") || label.equals("确认")) && limeButton(frame, x, y)) {
+                    (label.equals("确定") || label.equals("确认")) && limeButton(frame, x, y, 46)) {
                 candidates.add(Map.of("x", x, "y", y, "label", "红币兑换确定"));
             }
         }
@@ -138,7 +173,7 @@ public final class ModalPopup {
 
     /** Cheap precheck for callers that otherwise use pixel-only menu recognition. */
     public static boolean possibleRedCoinConversion(PixelFrame frame) {
-        if (frame.width != 720 || frame.height != 1280 || !limeButton(frame, 1100, 650)) return false;
+        if (frame.width != 720 || frame.height != 1280 || !limeButton(frame, 1100, 650, 46)) return false;
         int red = 0;
         for (int x = 45; x <= 155; x += 3) for (int y = 45; y <= 95; y += 3) {
             int c = pixel(frame, x, y), r = c >> 16 & 255, g = c >> 8 & 255, b = c & 255;
@@ -147,9 +182,14 @@ public final class ModalPopup {
         return red >= 7;
     }
 
-    private static boolean limeButton(PixelFrame frame, int x, int y) {
+    public static boolean possibleNewcomerGift(PixelFrame frame) {
+        if (frame.width != 720 || frame.height != 1280 || !limeButton(frame, 945, 539, 88)) return false;
+        return maximum(pixel(frame, 88, 300)) < 90 && maximum(pixel(frame, 1192, 300)) < 90;
+    }
+
+    private static boolean limeButton(PixelFrame frame, int x, int y, int margin) {
         int hits = 0;
-        for (int dx : new int[]{-46, 46}) for (int dy : new int[]{-14, 0, 14}) {
+        for (int dx : new int[]{-margin, margin}) for (int dy : new int[]{-14, 0, 14}) {
             int c = pixel(frame, x + dx, y + dy), r = c >> 16 & 255, g = c >> 8 & 255, b = c & 255;
             if (r >= 145 && g >= 207 && g >= r - 12 && b <= 92) hits++;
         }
@@ -160,7 +200,10 @@ public final class ModalPopup {
         return MapMatcher.normalize(text).replace('繼','继').replace('續','续').replace('遊','游')
                 .replace('戲','戏').replace('後','后').replace('領','领').replace('閉','闭')
                 .replace('購','购').replace('買','买').replace('級','级').replace('鎖','锁')
-                .replace('認','认').replace('確','确').replace('號','号').replace('錄','录').replace('兌','兑');
+                .replace('認','认').replace('確','确').replace('號','号').replace('錄','录').replace('兌','兑')
+                .replace('點','点').replace('擊','击').replace('歡','欢').replace('禮','礼').replace('連','连')
+                .replace('賽','赛').replace('環','环').replace('標','标').replace('務','务').replace('還','还')
+                .replace('豐','丰').replace('７','7');
     }
 
     private static boolean button(PixelFrame frame, Panel panel, int x, int y, int length) {

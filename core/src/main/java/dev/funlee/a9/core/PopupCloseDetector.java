@@ -54,8 +54,14 @@ public final class PopupCloseDetector {
         return find(frame,65,220);
     }
     public static int[] findSeasonPassUnlock(PixelFrame frame) {
+        return findPinkSquare(frame,950,1190,55,135);
+    }
+    public static int[] findDailyGoals(PixelFrame frame) {
+        return findPinkSquare(frame,1110,1246,70,165);
+    }
+    private static int[] findPinkSquare(PixelFrame frame,int left,int right,int top,int bottom) {
         if(frame.width!=720||frame.height!=1280)return null;
-        for(int y=55;y<135;y++)for(int x=950;x<1190;x++){
+        for(int y=top;y<bottom;y++)for(int x=left;x<right;x++){
             if(!at(frame,x,y,false)||!at(frame,x-18,y,true)||!at(frame,x+18,y,true)||
                     !at(frame,x,y-21,true)||!at(frame,x,y+21,true))continue;
             for(int rise:new int[]{5,7}){
