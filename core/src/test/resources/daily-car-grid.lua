@@ -3,11 +3,13 @@ run={data={['用车模式']='1',['选车方式']='0',['杯赛用车']={12,22}}}
 local frame,offset,resets,chosen=0,scenario=='large' and 150 or 8,0,0
 local tapped={}
 local entrySwipes=0
-local filtered=scenario=='filtered-slide' or scenario=='filtered-click'
+local confirmCase=scenario:match('^confirm%-(.*)')
+local fullReads=0
+local filtered=scenario=='filtered-slide' or scenario=='filtered-click' or confirmCase
 if filtered then
-  run.data['选车筛选']='0'
+  run.data['选车筛选']='0,1,2'
   utils.configureGarageFilter=function()return true end
-  if scenario=='filtered-click' then run.data['选车方式']='1' end
+  if scenario:find('click') then run.data['选车方式']='1' end
 end
 if filtered or scenario=='at-start' then offset=0 end
 local blankReads=2
@@ -39,7 +41,18 @@ function _soloGarageUi(fast)
   local atStart=offset==0 and bounceReads==0
   local left=atStart and 97 or offset==0 and 376 or 200
   bounceReads=math.max(0,bounceReads-1)
-  return {scene='cars',frameId=frame,gridOnly=fast,garage={start=atStart,leadingClear=offset==0,left=left,pitch=474,cards=cards}}
+  local garage={start=atStart,leadingClear=offset==0,left=left,pitch=474,cards=cards}
+  if not fast and confirmCase then
+    fullReads=fullReads+1
+    if confirmCase=='home' or confirmCase=='car-click' then
+      return {scene=confirmCase=='home' and 'home' or 'car',frameId=frame}
+    end
+    if confirmCase=='obscured' or fullReads==1 then return {scene='unknown',frameId=frame} end
+    if confirmCase=='moving' then garage.left=left+fullReads*10 end
+    if confirmCase=='stale' then frame=100000 end
+    return {scene='unknown',frameId=frame,focusedGarage=true,garage=garage}
+  end
+  return {scene='cars',frameId=frame,gridOnly=fast,garage=garage}
 end
 function swipe(y,from,endY,to,duration)
   if y==290 and endY==290 and from==70 and to==1200 then
@@ -80,7 +93,17 @@ utils.carFuel=function()
 end
 utils.backToGarage=function()returns=returns+1 end
 function test()
-  if filtered or scenario=='at-start' then
+  if confirmCase then
+    function toast()end
+    local ok,result=pcall(utils.chooseCarCup,{1})
+    if confirmCase=='home' or confirmCase=='car-click' then
+      assert(ok and result=='garageChanged' and #tapped==0)
+    elseif confirmCase=='obscured' or confirmCase=='moving' or confirmCase=='stale' then
+      assert(not ok and result:find('未能确认选车页面') and #tapped==0)
+    else
+      assert(ok and result==true and fullReads==3 and #tapped==1 and tapped[1]==1)
+    end
+  elseif filtered or scenario=='at-start' then
     function toast()end
     assert(utils.chooseCarCup({1}) and tapped[1]==1)
     local expected=not filtered and 30 or scenario=='filtered-click' and 6 or 0

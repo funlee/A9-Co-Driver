@@ -1,7 +1,7 @@
 {
   "runtime_validation": "partial: cumulative 78 multiplayer races on MuMu (world 40, master 38), interrupted by updates; latest empty-fuel task skip covered offline only; not a continuous 200-race acceptance",
   "assets": {
-    "data/default-projects.json": "f4d45ed210ca154670705bdbebd8070f623e7706cd2d333af25218ac296d1277",
+    "data/default-projects.json": "056da75e83f0a67b6c42ec317661be6cccfec510af4270934d29307067c33097",
     "data/forms.json": "801a13a96d64b27df150264a944bf3997023e4d4c1db0d4a96c0105de7b7d65f",
     "data/map-rules.tsv": "3851380011f0d1fc8a234092109a6414e7277e73efa6a40b4c2543de8eea03d5",
     "data/progress.lib": "1a15ef4e6e5bda467aec8b453e448b5e95a166b29529d7a186fbde4192e2c2d1",
@@ -11,14 +11,14 @@
     "lua/bootstrap.lua": "0ae82a0eaa10a8b4d06ce7a1045d8513ce358ab436c15270f3bf04f2212e5402",
     "lua/club.lua": "ccf7edc1001f4e1b186e0689eb444c21be6e1c4f3550714c968787e8785863dc",
     "lua/cup.lua": "7d53feceab7527b8fcbf69c74cebebac616954eca21953c8d6adb1172613d8e1",
-    "lua/daily.lua": "0dd13884aabe0f711292bcf7b49b6e75226d74fab77a83de590864352e584349",
-    "lua/multiplayer_current.lua": "fbf07e4a2c3c024f90004e57d0096ebe6653469dc9dd42c9549957c7cd46c75c",
+    "lua/daily.lua": "d49ad20859011115bad429c1c18319d5b5fb2a326cea89bf6022b23c5184004d",
+    "lua/multiplayer_current.lua": "32fce8215220e5067e79388027846d91f5100daae66a3c868da970d6390b9f7f",
     "lua/multiplayer_down.lua": "addd34c4fda61bb25e351c138e7df298c361886a36d675d12400c25ba9286fb3",
     "lua/multiplayer_up.lua": "81bcbaaa6e1dea2265878400f05c172412e4fa899a11e1ebdccc2f2882f43d02",
     "lua/rewards.lua": "7b3c8662256e5ed1f729d2ba48048bdcc09bc404e731c47af864008101f43728",
     "lua/shared.lua": "5627abce52aa42667081048e15ad2f386eb628c78aabc525404a5d7d3a56b364",
     "lua/special.lua": "611ac7599d7e1e6e074ef82fbff28b36c25096e78015b2e5951a6b8ffac8869d",
-    "lua/utilities.lua": "0cd82eb1bb60014bb5f5b662589c2f54681547ed64fa75256f4bdbe006eb39f2",
+    "lua/utilities.lua": "73c3f5e91b1a1aebee3e29d6a6a5e2613df34eaf26f4c0bc7b7975ac8e80a1ed",
     "lua/workflows.lua": "8db697fa94cd86c2a0ac1b91ab5121c54d146e54806148001019ce4b94475a17"
   },
   "publication": {

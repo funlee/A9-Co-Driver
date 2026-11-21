@@ -93,20 +93,32 @@ public final class RecoveryDeviceCheck extends Instrumentation {
         };
         try{
             if(FailureScreenshot.read(context)!=null)throw new AssertionError("Expected empty record");
+            byte[] oldReason="旧版异常".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            try(java.io.DataOutputStream out=new java.io.DataOutputStream(
+                    new java.io.FileOutputStream(new File(directory,"last-failure-v1")))){
+                out.writeLong(1234);out.writeInt(oldReason.length);out.write(oldReason);out.writeBoolean(false);
+            }
+            FailureScreenshot.Entry old=FailureScreenshot.read(context);
+            if(old.time!=1234||!old.reason.equals("旧版异常")||!old.version.isEmpty()||old.image!=null)
+                throw new AssertionError("Older records must keep their original reason and unknown version");
+            String version=AppVersion.name(context);
+            if(version.isEmpty())throw new AssertionError("Expected an installed app version");
             Bitmap image=Bitmap.createBitmap(16,9,Bitmap.Config.ARGB_8888);image.eraseColor(0xffcc3311);
             java.util.concurrent.CompletableFuture<Boolean> saved=new java.util.concurrent.CompletableFuture<>();
             FailureScreenshot.save(context,image,"恢复时未确认菜单",saved::complete);
             if(!saved.get(5,TimeUnit.SECONDS))throw new AssertionError("Missing screenshot");
             FailureScreenshot.Entry entry=FailureScreenshot.read(context);
-            if(entry.image.getPixel(3,3)!=0xffcc3311 || !entry.reason.equals("恢复时未确认菜单") || entry.time<=0)
-                throw new AssertionError("Screenshot, time and reason must belong to the same failure");
+            if(entry.image.getPixel(3,3)!=0xffcc3311 || !entry.reason.equals("恢复时未确认菜单") ||
+                    entry.time<=0 || !entry.version.equals(version))
+                throw new AssertionError("Screenshot, time, reason and app version must belong to the same failure");
             entry.image.recycle();
             java.util.concurrent.CompletableFuture<Boolean> missing=new java.util.concurrent.CompletableFuture<>();
             FailureScreenshot.save(context,null,"截屏授权已结束",missing::complete);
             if(missing.get(5,TimeUnit.SECONDS))throw new AssertionError("Unexpected image");
             entry=FailureScreenshot.read(context);
-            if(entry.image!=null||!entry.reason.equals("截屏授权已结束"))throw new AssertionError("Stale screenshot attached");
-            report.putString("result","PASS: empty, screenshot with cause and timestamp, and new cause without a screenshot");
+            if(entry.image!=null||!entry.reason.equals("截屏授权已结束")||!entry.version.equals(version))
+                throw new AssertionError("A failure without a screenshot must still record its version");
+            report.putString("result","PASS: legacy record and versioned failures with or without a screenshot");
         }finally{
             File[] files=directory.listFiles();if(files!=null)for(File f:files)f.delete();
             directory.delete();

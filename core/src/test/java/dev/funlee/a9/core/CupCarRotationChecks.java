@@ -54,7 +54,8 @@ final class CupCarRotationChecks {
         try(var input=CupCarRotationChecks.class.getResourceAsStream("/daily-car-grid.lua")){
             fixture=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
         }
-        for(String scenario:List.of("at-start","filtered-click","filtered-slide","ordered","stuck","mismatch","model","large","locked","locked-only","locked-detail","star-card","star-detail","star-only"))
+        var scenarios=List.of("at-start","filtered-click","filtered-slide","confirm-click","confirm-slide","confirm-obscured","confirm-home","confirm-car-click","confirm-moving","confirm-stale","ordered","stuck","mismatch","model","large","locked","locked-only","locked-detail","star-card","star-detail","star-only");
+        for(String scenario:scenarios)
                 try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
             lua.set("scenario",scenario);
             lua.load("utilities",Files.readString(assets.resolve("lua/utilities.lua")));
@@ -87,6 +88,6 @@ final class CupCarRotationChecks {
         for(int x=46;x<87;x++)for(int y=195;y<670;y++)pixels[x*720+719-y]=0xff963815;
         if(Boolean.TRUE.equals(MultiplayerGarage.soloSlots(new PixelFrame(720,1280,pixels),List.of(),16.0/9).get("start")))
             throw new AssertionError("A clipped preceding card cannot be counted as the origin");
-        return 16;
+        return scenarios.size()+2;
     }
 }

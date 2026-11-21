@@ -111,7 +111,7 @@ public final class MainActivity extends Activity {
         LinearLayout rail=column();rail.setPadding(dp(wide?24:PAGE_GUTTER),dp(wide?24:8),dp(wide?24:PAGE_GUTTER),dp(wide?16:4));if(wide){rail.setBackgroundColor(SURFACE);root.addView(rail,new LinearLayout.LayoutParams(dp(218),-1));}else root.addView(rail);
         brand(rail);LinearLayout nav=wide?column():row();LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(-1,-2);np.topMargin=dp(wide?24:8);rail.addView(nav,np);
         String[] names={"任务编排","任务偏好","地图配置","偏好设置"};for(int i=0;i<names.length;i++){final int n=navigationPages[i];Button b=button(names[i],()->navigate(n));b.setGravity(wide?Gravity.CENTER_VERTICAL|Gravity.START:Gravity.CENTER);navigation[i]=b;if(!wide){b.setTextSize(DETAIL);b.setPadding(dp(2),dp(SPACE_SMALL),dp(2),dp(SPACE_SMALL));}if(wide)nav.addView(b);else weighted(nav,b,i);}
-        if(wide){View space=new View(this);rail.addView(space,new LinearLayout.LayoutParams(1,0,1));rail.addView(badge("本地运行 · 无需账号",ACCENT,SOFT));TextView version=label(getString(R.string.app_name)+"  ·  "+version(),DETAIL);version.setPadding(0,dp(SPACE_LARGE),0,0);rail.addView(version);}
+        if(wide){View space=new View(this);rail.addView(space,new LinearLayout.LayoutParams(1,0,1));rail.addView(badge("本地运行 · 无需账号",ACCENT,SOFT));TextView version=label(getString(R.string.app_name)+"  ·  "+AppVersion.name(this),DETAIL);version.setPadding(0,dp(SPACE_LARGE),0,0);rail.addView(version);}
         LinearLayout content=column();
         int gutter=wide?24:PAGE_GUTTER;
         content.setPadding(dp(gutter),dp(wide?16:4),dp(gutter),dp(SPACE_MEDIUM));
@@ -195,7 +195,6 @@ public final class MainActivity extends Activity {
         if(!SessionState.running)RunStatusRecord.save(this,false,SessionState.status);
         navigate(RUN);
     }
-    private String version(){try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception e){return "";}}
     private String modeName(String mode){return MultiplayerUi.displayMode(mode);}
     private String taskTypeTag(String mode){
         switch(mode){
@@ -698,9 +697,9 @@ public final class MainActivity extends Activity {
         permissionRow(permissions,"通知控制","也可从通知栏控制任务",()->getSystemService(NotificationManager.class).areNotificationsEnabled(),()->startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName())));
         body.addView(permissions);
         LinearLayout diagnostics=settingsGroup("问题排查");
-        settingRow(diagnostics,"最近一次异常","查看发生时间、原因和现场截图","",this::showFailureScreenshot);
+        settingRow(diagnostics,"最近一次异常","查看版本、发生时间、原因和现场截图","",this::showFailureScreenshot);
         body.addView(diagnostics);
-        TextView about=label(getString(R.string.app_name)+"  "+version()+" · 本地运行",DETAIL);about.setGravity(Gravity.CENTER);body.addView(about);
+        TextView about=label(getString(R.string.app_name)+"  "+AppVersion.name(this)+" · 本地运行",DETAIL);about.setGravity(Gravity.CENTER);body.addView(about);
     }
     private void showFailureScreenshot() {
         FailureScreenshot.load(getApplicationContext(), entry -> {
@@ -710,10 +709,19 @@ public final class MainActivity extends Activity {
                 return;
             }
             AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("最近一次异常").setPositiveButton("关闭",null);
-            if(entry==null){showDialog(dialog.setMessage("暂无异常记录").create());return;}
             LinearLayout preview=column();
             preview.setPadding(dp(DIALOG_GUTTER),dp(ROW_GAP),dp(DIALOG_GUTTER),dp(ROW_GAP));
+            String version=AppVersion.name(this);
+            preview.addView(label("当前程序版本 "+(version.isEmpty()?"未知":version),DETAIL));
+            if(entry==null){
+                preview.addView(label("暂无异常记录",BODY));
+                showDialog(dialog.setView(scroll(preview)).create());
+                return;
+            }
             if(entry.time>0)preview.addView(label(java.text.DateFormat.getDateTimeInstance().format(new Date(entry.time)),DETAIL));
+            if(entry.time>0&&(entry.version.isEmpty()||!entry.version.equals(version))){
+                preview.addView(label("异常发生时版本 "+(entry.version.isEmpty()?"未记录":entry.version),DETAIL));
+            }
             TextView heading=label("异常原因",SECTION);
             heading.setPadding(0,dp(SPACE_LARGE),0,dp(SPACE_SMALL));
             preview.addView(heading);

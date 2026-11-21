@@ -150,6 +150,14 @@ local function press(screen,label,delay)
   end
   return false
 end
+local function packSkipHint(screen)
+  for _,word in ipairs(screen.words or {}) do
+    local text=word.text:gsub('[%s|]',''):gsub('　','')
+    if word.y>=550 and (text=='点击任意区域可跳过' or text=='点击任意位置跳过') then
+      return word
+    end
+  end
+end
 function dailyCup.settle(label,readScreen)
   label=label or '每日战利品'
   readScreen=readScreen or _dailyEventUi
@@ -159,6 +167,8 @@ function dailyCup.settle(label,readScreen)
   local started=tickCount();local rewardSince=nil;local readySince=nil;local rewardDone=false;local seen=false;local eventFrames=0;local eventSince=nil;local lastEvent=nil
   local returnedScene,returnedFrame
   local pressedFrame=nil;local pressedScene=nil;local pressTries=0
+  local skipFrame,skipAt
+  local skipTries=0
   local function advance(screen,button)
     local frame=screen.frameId
     if frame and pressedFrame and (frame-pressedFrame<3000 or
@@ -167,6 +177,7 @@ function dailyCup.settle(label,readScreen)
     if pressTries>=3 then error(label..'结算按钮点击后未切页，保留当前任务') end
     if not press(screen,button,special and 350 or 800) then return false end
     pressedFrame=frame;pressedScene=screen.scene;pressTries=pressTries+1
+    if screen.scene=='cards' then skipFrame,skipAt,skipTries=nil,nil,0 end
     return true
   end
   while tickCount()-started<90000 do
@@ -199,7 +210,21 @@ function dailyCup.settle(label,readScreen)
         if not advance(screen,"错失机会") then advance(screen,"继续") end
       elseif tickCount()-rewardSince>=60000 then error(label.."收益结算超时") end
     elseif scene=="cards" or scene=="missionRewards" then
-      seen=true;advance(screen,"继续")
+      seen=true
+      local hint=label=='杯赛' and scene=='cards' and packSkipHint(screen)
+      if hint then
+        local frame=screen.frameId
+        if frame and (not pressedFrame or frame>pressedFrame) and skipTries<2
+            and (not skipFrame or frame>skipFrame and tickCount()-skipAt>=1000) then
+          tap(719-math.floor(hint.y),math.floor(hint.x))
+          skipFrame,skipAt=frame,tickCount()
+          skipTries=skipTries+1
+          print('杯赛奖励开包：已点击跳过提示 '..hint.text)
+          sleep(800)
+        end
+      elseif not skipFrame or screen.frameId~=skipFrame then
+        advance(screen,"继续")
+      end
     elseif scene=="conversion" then
       seen=true;advance(screen,"确定")
     elseif scene=="vehicleUnlock" and screen.unlockLater then
@@ -285,6 +310,7 @@ dailyCup.operation = {
     function()
       data["信息"] = "开始选车"
       local chosen=utils.chooseCarCup(utils.taskCars())
+      if chosen=="garageChanged" then return nil end
       if type(chosen)=="string" then return chosen end
       sleep(2000)
     end
@@ -297,6 +323,7 @@ dailyCup.operation = {
       data["信息"] = "即将开始游戏"
       utils.prepareTaskRoute(true)
       local sRet = utils.startConfiguredRace()
+      if sRet=="garageChanged" then return nil end
       if type(sRet)=="string" then return sRet end
       if sRet == 0 or sRet == -2 then
         return -1

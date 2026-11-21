@@ -10,6 +10,12 @@ import java.util.concurrent.TimeUnit;
 
 /** Targeted OCR for fuel badges and car identity omitted by full-screen recognition. */
 final class GarageOcr {
+    static boolean soloHeading(TextRecognizer ocr,PixelFrame frame)throws Exception{
+        String heading=MapMatcher.normalize(region(ocr,frame,40,65,365,155,3))
+                .replace('車','车').replace('輛','辆').replace('擇','择');
+        return heading.contains("车辆选择")||heading.contains("车辅选择");
+    }
+
     /** Read identity from separate crops of the same frame, away from the busy garage background. */
     static Map<String,Object> detail(TextRecognizer ocr,PixelFrame frame,boolean wide)throws Exception{
         String name=region(ocr,frame,160,100,670,180,4);

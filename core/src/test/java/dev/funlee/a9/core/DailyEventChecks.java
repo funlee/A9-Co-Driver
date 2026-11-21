@@ -79,6 +79,19 @@ final class DailyEventChecks {
             "screens={{scene='rewards',rewardCanContinue=true,rewardReady=true,rewardCoins=3200,rewardFame=105,words={{text='观看广告',x=1100,y=650},{text='错失机会',x=1050,y=660}}},{scene='event'},{scene='event'}};tap=function(x,y)assert(y==1050,'ad clicked');taps=taps+1 end;assert(dailyCup.settle()==0);assert(taps==1 and rewards==1 and coins==3200)",
             "screens={};for i=1,12 do screens[#screens+1]={scene='rewards',rewardCanContinue=false,rewardReady=false} end;for i=1,3 do screens[#screens+1]={scene='rewards',rewardCanContinue=true,rewardReady=false,words={}} end;screens[#screens+1]={scene='rewards',rewardCanContinue=true,rewardReady=true,rewardCoins=4173,rewardFame=128,"+continueButton+"};screens[#screens+1]={scene='event'};screens[#screens+1]={scene='event'};assert(dailyCup.settle()==0);assert(taps==1 and rewards==1 and coins==4173 and fame==128)",
             "screens={{scene='cards',"+continueButton+"},{scene='event'},{scene='unknown'},{scene='event'},{scene='event'}};assert(dailyCup.settle()==0);assert(taps==1)",
+            "for _,hint in ipairs({'点击任意区域可跳过','点击 任意位置 跳过'}) do "+
+                "local opening={scene='cards',frameId=1000,words={{text=hint,x=640,y=665}}};"+
+                "local frames={opening,opening,{scene='cards',frameId=2200,"+continueButton+"},{scene='event'}};"+
+                "local i=0;taps=0;tap=function(x,y)taps=taps+1;assert(taps==1 and x==54 and y==640 or taps==2 and y==1100) end;"+
+                "assert(dailyCup.settle('杯赛',function()i=i+1;return frames[math.min(i,#frames)] end)==0 and taps==2 and rewards==0) end",
+            "screens={{scene='unknown',frameId=1000,words={{text='点击任意区域可跳过',x=640,y=665}}},"+
+                "{scene='missionRewards',frameId=2200,words={{text='点击任意位置跳过',x=640,y=665}}},"+
+                "{scene='cards',frameId=3400,words={{text='点击任意位置跳过',x=640,y=300}}},"+
+                "{scene='cards',frameId=4600,"+continueButton+"},{scene='event'}};"+
+                "tap=function(x,y)assert(y==1100);taps=taps+1 end;assert(dailyCup.settle('杯赛')==0 and taps==1)",
+            "screens={{scene='cards',frameId=1000,words={{text='点击任意区域可跳过',x=640,y=665}}},"+
+                "{scene='cards',frameId=2200,"+continueButton+"},{scene='event'}};"+
+                "tap=function(x,y)assert(y==1100);taps=taps+1 end;assert(dailyCup.settle('特殊赛事')==0 and taps==1)",
             "screens={{scene='event'}};assert(not pcall(dailyCup.settle));assert(taps==0)",
             "screens={{scene='unknown',"+continueButton+"}};assert(not pcall(dailyCup.settle));assert(taps==0)",
             "screens={{scene='loading',route='旧金山喧闹铁路'},{scene='loading',route='旧金山喧闹铁路'},{scene='race'}};dailyCup.readMap();assert(data['多人地图']=='旧金山喧闹铁路' and data['线路']=='route')",

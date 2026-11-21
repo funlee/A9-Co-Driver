@@ -84,10 +84,25 @@ local function confirmCar(screen,card,index,position,readFull)
   local garage=screen.garage
   local anchor={offset=position.offset,cards=garage.cards}
   local lastSlot,lastLeft,lastOffset,lastFrame
-  for retry=1,5 do
+  local daily=readFull and data['项目']=='每日战利品'
+  local deadline=daily and tickCount()+8000
+  local reads=0
+  local lastScene='unknown'
+  while reads<5 and (not daily or tickCount()<deadline) do
     local full=readFull and readFull() or _multiplayerUi(false,false)
-    if full.scene~='cars' then error('目标车位已离开车库，停止选车') end
-    if full.frameId~=screen.frameId and full.frameId~=lastFrame then
+    local fresh=full.frameId~=screen.frameId and full.frameId~=lastFrame
+    if daily then fresh=full.frameId and full.frameId>(lastFrame or screen.frameId) end
+    if not daily or fresh then reads=reads+1 end
+    if not daily and full.scene~='cars' then error('目标车位已离开车库，停止选车') end
+    if fresh then
+      lastScene=full.scene
+      lastFrame=full.frameId
+      if daily and lastScene~='cars' and lastScene~='unknown' then
+        print('每日战利品第 '..index..' 辆复核时已切页：'..lastScene)
+        return nil,full
+      end
+    end
+    if fresh and full.garage then
       local current=full.garage
       local left=current.left
       local samePage=math.abs(left-garage.left)<=3
@@ -95,19 +110,23 @@ local function confirmCar(screen,card,index,position,readFull)
       local candidate
       for _,slot in ipairs(current.cards or {}) do
         if offset and slot.index+offset==index and not slot.clipped then
-          if samePage and sameCard(card,slot,12) then return slot,full end
-          if not samePage and lastSlot and offset==lastOffset and math.abs(left-lastLeft)<=3 and sameCard(lastSlot,slot,12) then
+          local matchesAnchor=samePage and sameCard(card,slot,12)
+          if matchesAnchor and not full.focusedGarage then return slot,full end
+          if (not samePage or matchesAnchor) and lastSlot and offset==lastOffset and math.abs(left-lastLeft)<=3 and sameCard(lastSlot,slot,12) then
             position.offset=offset
             return slot,full
           end
-          candidate=slot
+          if not samePage or matchesAnchor then candidate=slot end
           break
         end
       end
-      lastSlot=candidate;lastLeft=left;lastOffset=offset;lastFrame=full.frameId
+      lastSlot=candidate;lastLeft=left;lastOffset=offset
+    elseif daily and fresh then
+      lastSlot=nil
     end
     sleep(150)
   end
+  if daily then error('未能确认选车页面或目标车位，保留任务进度（第 '..index..' 辆，场景 '..lastScene..'，新帧 '..reads..'）') end
   error('目标车位仍在移动，未选择车辆')
 end
 local function awaitGarageOverlap(previous,position,direction,afterFrame,readGrid)
@@ -168,6 +187,7 @@ local function locateCar(screen,index,position,readGrid,readFull)
         if screen.gridOnly then
           -- Only the destination needs full menu OCR; the intervening columns use pixels.
           card,screen=confirmCar(screen,card,index,position,readFull)
+          if not card then return nil,screen end
         end
         local result={}
         for k,v in pairs(card) do result[k]=v end
@@ -269,7 +289,7 @@ end
 
 function vehicleGrid.soloCar(origin,index)
   return locateCar(origin,index,{offset=0},
-    function()return _soloGarageUi(true)end,function()return _soloGarageUi(false)end)
+    function()return _soloGarageUi(true)end,function()return _soloGarageUi(false,data['项目']=='每日战利品')end)
 end
 
 function currentMultiplayer.run(resumingTutorial)

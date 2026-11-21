@@ -13,7 +13,7 @@ import java.util.*;
 
 /** Queue lifecycle and real editor actions, using disposable preferences. */
 final class TaskEditingDeviceCheck {
-    private static final int SPECIAL=0, DAILY=1, CUP=2, WORLD=3, MASTER=4;
+    private static final int SPECIAL=0, DAILY=1, CUP=2, WORLD=4, MASTER=3;
     private final Instrumentation test;
     private MainActivity activity;
     private LocalStore store;
@@ -51,7 +51,7 @@ final class TaskEditingDeviceCheck {
             checkTaskRoutes();
             clickTask("世界系列赛");
             screenshot("world-editor-open.png");
-            check(node("4. 世界系列赛")!=null,"World editor title missing");
+            check(node("5. 世界系列赛")!=null,"World editor title missing");
             check(node("使用车组")==null,"World editor retained car groups");
             check(node("青铜用车")!=null,"World editor bronze input missing");
             input("青铜用车","2,3");
@@ -60,15 +60,15 @@ final class TaskEditingDeviceCheck {
             for(String league:List.of("白金","翡翠","精英","宗师"))check(tasks().getJSONObject(WORLD).getJSONObject("data").getString(league+"用车").equals("2,4"),"New league vehicle settings did not persist: "+league);
             check(tasks().getJSONObject(WORLD).getJSONObject("data").getString("青铜用车").equals("2,3"),"World vehicle settings did not persist");
             clickTask("大师系列赛");
-            check(node("5. 大师系列赛")!=null&&node("多人下用车")!=null,"Master editor did not open vehicle settings");
+            check(node("4. 大师系列赛")!=null&&node("多人下用车")!=null,"Master editor did not open vehicle settings");
             input("多人下用车","2,4");click("保存");reload();bind();
             check(tasks().getJSONObject(MASTER).getJSONObject("data").getString("多人下用车").equals("2,4"),"Master vehicle settings did not persist");
             String originalTask=tasks().getJSONObject(DAILY).toString();
-            clickTask("每日战利品");
+            clickTask("狼崽");
             check(node("选择项目类型")==null&&node("2. 每日战利品")!=null&&node("保存")!=null,"Existing task did not open its details directly");
             check(node("每日只执行一次")==null&&node("完成本任务后，当天后续循环自动跳过")==null,"Retired daily-once control is visible");
             input("次数","9");click("取消");check(tasks().getJSONObject(DAILY).toString().equals(originalTask),"Cancelling edit changed task");
-            clickTask("每日战利品");input("次数","4");input("项目名称","test战利品");click("保存");reload();bind();
+            clickTask("狼崽");input("次数","4");input("项目名称","test战利品");click("保存");reload();bind();
             test.runOnMainSync(()->{
                 View root=activity.getWindow().getDecorView(),title=findText(root,"test战利品");
                 check(title!=null&&findText(root,"test战利品 · 每日战利品")==null,"Custom title still includes task type");
@@ -235,12 +235,12 @@ final class TaskEditingDeviceCheck {
     }
     private void reload()throws Exception{store=new LocalStore(isolated);}
     private void checkDefaults()throws Exception {
-        String[] modes={"特殊赛事","每日战利品","杯赛","多人上","多人下"};String[] counts={"2","5","1","7","4"};Set<String> ids=new HashSet<>();
+        String[] modes={"特殊赛事","每日战利品","杯赛","多人下","多人上"};String[] counts={"30","1","5","4","30"};Set<String> ids=new HashSet<>();
         JSONArray template=new JSONArray(store.asset("data/default-projects.json"));
         check(tasks().length()==5,"Expected five tasks");
         for(int i=0;i<modes.length;i++) {
             JSONObject task=tasks().getJSONObject(i);
-            check(task.getString("项目").equals(modes[i])&&task.getBoolean("enabled"),"Wrong default mode/flag at "+i);
+            check(task.getString("项目").equals(modes[i])&&task.getBoolean("enabled")== (i<3),"Wrong default mode/flag at "+i);
             check(task.getJSONObject("data").getString("次数").equals(counts[i]),"Wrong saved default count");
             check(LocalStore.javaValue(task.getJSONObject("data")).equals(LocalStore.javaValue(template.getJSONObject(i).getJSONObject("data"))),"Default fields not restored");
             check(!task.getString("taskId").isEmpty()&&ids.add(task.getString("taskId")),"Missing/duplicate identity");

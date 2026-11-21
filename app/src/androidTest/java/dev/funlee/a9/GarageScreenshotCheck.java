@@ -20,6 +20,18 @@ public final class GarageScreenshotCheck extends Instrumentation {
     @Override public void onStart(){
         Bundle report=new Bundle();TextRecognizer ocr=TextRecognition.getClient(new ChineseTextRecognizerOptions.Builder().build());
         try{
+            if(arguments.containsKey("dailyHeadingFrame")){
+                File file=new File(getTargetContext().getFilesDir(),"runtime/"+arguments.getString("dailyHeadingFrame"));
+                Bitmap image=BitmapFactory.decodeFile(file.getPath());
+                if(image==null||image.getWidth()!=720||image.getHeight()!=1280)throw new AssertionError("Missing normalized garage frame");
+                int[] pixels=new int[720*1280];image.getPixels(pixels,0,720,0,0,720,1280);image.recycle();
+                PixelFrame frame=new PixelFrame(720,1280,pixels);
+                var grid=MultiplayerGarage.soloSlots(frame,List.of(),16.0/9);
+                if(!RaceHud.backWedge(frame)||ModalPopup.locate(frame)!=null||!GarageOcr.soloHeading(ocr,frame)
+                        ||((List<?>)grid.get("cards")).isEmpty())throw new AssertionError("Focused garage evidence missing");
+                report.putString("result","PASS: focused ML Kit heading and garage grid on supplied frame");
+                finish(0,report);return;
+            }
             boolean solo=arguments.containsKey("soloPendingIndex");
             Map<String,Object> garage=null,detail=null;
             for(String scene:List.of("cars","car")){

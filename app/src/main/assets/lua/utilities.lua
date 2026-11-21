@@ -1640,12 +1640,14 @@ function utils.chooseCarCup(carList)
     lastCar=1
     if dailyGrid then
       local first=vehicleGrid.soloCar(origin or vehicleGrid.soloOrigin(),1)
+      if not first then return false end
       tapUiWord(first)
     else tap(400,220) end
     sleep(1500)
     if target<0 then tap(360,490);sleep(700);lastCar=-1 end
+    return true
   end
-  if clickMode then openFirstCar(tonumber(carList[1])) end
+  if clickMode and not openFirstCar(tonumber(carList[1])) then return 'garageChanged' end
   local empty={};local unavailable={};local locked={}
   for pass=1,2 do
     for j,raw in ipairs(carList) do
@@ -1655,12 +1657,13 @@ function utils.chooseCarCup(carList)
       if not empty[car] and not unavailable[car] and not locked[car] and (not rotate or data['用车次数']['car'..j]~=1) then
         local retryX,retryY,slot,fuel,detail
         if clickMode then
-          if not lastCar then openFirstCar(car) end
+          if not lastCar and not openFirstCar(car) then return 'garageChanged' end
           utils.clickChoose(car,lastCar)
         elseif useGrid then
           if car<1 or car%1~=0 then error('滑动选车需要正整数车辆序号') end
           origin=origin or vehicleGrid.soloOrigin()
           slot=vehicleGrid.soloCar(origin,car)
+          if not slot then return 'garageChanged' end
           origin=nil
           if slot.availability=='locked' or slot.availability=='starUp' then
             fuel=slot.availability=='locked' and 'vehicleLocked' or 'starUp'

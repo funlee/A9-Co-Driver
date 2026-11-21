@@ -796,7 +796,16 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 case "_soloGarageUi":{
                     if(!l.toBoolean(1)){
                         Map<String,Object> ui=dailyEventUi(true);
-                        if("cars".equals(ui.get("scene"))){
+                        if(l.toBoolean(2)){
+                            ui=new LinkedHashMap<>(ui);
+                            ui.putIfAbsent("frameId",capture.frameId());
+                            boolean obscured=popupPanel()!=null || ui.containsKey("closeX") ||
+                                    Boolean.TRUE.equals(GarageFilter.read(frame,viewportAspect()).get("present"));
+                            if(obscured && "cars".equals(ui.get("scene")))ui.put("scene","unknown");
+                            if(!obscured && "unknown".equals(ui.get("scene")) && RaceHud.backWedge(frame)
+                                    && GarageOcr.soloHeading(recognizer,frame))ui.put("focusedGarage",true);
+                        }
+                        if("cars".equals(ui.get("scene"))||Boolean.TRUE.equals(ui.get("focusedGarage"))){
                             List<?> words=(List<?>)ui.get("words");
                             ui.put("garage",MultiplayerGarage.soloSlots(frame,words,viewportAspect()));
                         }
