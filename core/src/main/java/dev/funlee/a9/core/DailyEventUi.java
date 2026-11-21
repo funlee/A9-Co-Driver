@@ -90,7 +90,7 @@ public final class DailyEventUi {
         if((t.contains("车辆选择")||t.contains("车辅选择"))&&
                 t.contains("选择参与此赛事的车辆"))return "cars";
         if((t.contains("门票不足")||t.contains("门票已用完")||t.contains("没有足够的门票")))return "noTicket";
-        if(t.matches(".*阶段[0-9]+.*")&&t.contains("排行榜")&&t.contains("进入前")&&
+        if((t.matches(".*阶段[0-9]+.*")||t.contains("顶尖排名")&&t.contains("前30%"))&&t.contains("排行榜")&&
                 t.contains("开始"))return "specialRanking";
         // Credit cups and car hunts can have only a solo rewards tab.
         boolean timedEvent=t.contains("最佳用时")||
@@ -100,9 +100,9 @@ public final class DailyEventUi {
         // Ranked cups can return to their ranking-reward tab instead of single-player rewards.
         if(t.contains("单人奖励")&&t.contains("排名奖励")&&t.contains("比赛")&&
                 (t.contains("顶尖排名")||t.contains("排行榜")||t.contains("最佳用时")))return "event";
-        if(t.contains("阶段")&&t.contains("继续")&&
+        if((t.contains("继续")||t.contains("继绩"))&&
                 (t.contains("俱乐部奖励")||t.contains("具乐部奖励"))&&
-                (t.contains("单人奖励")||t.contains("单人笑励")))return "missionRewards";
+                (t.contains("单人奖励")||t.contains("单人笑励")||t.contains("个人奖励")))return "missionRewards";
         if(t.contains("俱乐部奖励")&&t.contains("单人奖励")) {
             if(t.contains("比赛")&&(t.contains("最佳用时")||t.contains("阶段")||t.contains("赛事")))return "event";
         }

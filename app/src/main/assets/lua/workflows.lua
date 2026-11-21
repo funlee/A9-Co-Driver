@@ -47,6 +47,10 @@ function run.project()
   local dailyMatched=false
   local dailySearchSince=nil
   for i = 1, times do
+    if i>1 and data['项目']=='特殊赛事' then
+      utils.backToMain()
+      print('特赛已回主，按配置重新选择赛事、章节和阶段')
+    end
     if daily then
       local reason=dailyCup.skipReason()
       if reason~='' then return reason end

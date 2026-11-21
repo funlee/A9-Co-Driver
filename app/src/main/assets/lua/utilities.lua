@@ -1527,7 +1527,12 @@ function utils.configureGarageFilter(selection)
         data["信息"]="设置车库筛选："..label
         local columns=option[4]
         local target=sorting and columns[wanted][attempts+1] or columns
-        tap(option[3],target);attempts=attempts+1;sleep(700)
+        if sorting then tap(option[3],target)
+        else
+          local center=state[option[2]..'Center']
+          tap(center and 719-center.y or option[3],center and center.x or target)
+        end
+        attempts=attempts+1;sleep(700)
       else sleep(300) end
       if data["超时状态"] then error("车库筛选已超时") end
     end
@@ -2370,7 +2375,21 @@ function utils.openSpecialEntry(screen,position)
       if preview.specialSeasonTab then
         local button=findUiWord(preview,{['开始']=true,['进入']=true,['进人']=true},930,1200,450,575)
             or preview.specialEntryButton
-        if button then
+        local matches=false
+        for _,tile in ipairs(preview.words or {}) do
+          if tile.x>=42 and tile.x<=400 and tile.y>=target.top and tile.y<math.min(target.top+92,575) then
+            local title=tile.text:upper():gsub('[%s%p]','')
+            if #title>=3 then
+              for _,heading in ipairs(preview.words or {}) do
+                if heading.x>=425 and heading.x<=950 and heading.y>=78 and heading.y<=210 then
+                  local name=heading.text:upper():gsub('[%s%p]','')
+                  if name==title then matches=true end
+                end
+              end
+            end
+          end
+        end
+        if button and matches then
           print('已选中特殊赛事入口位置 '..position)
           tapUiWord(button)
           return
@@ -2385,7 +2404,7 @@ function utils.openSpecialEntry(screen,position)
             tappedFrame=current.frameId
           end
         end
-      elseif specialChapterPage(preview) or utils.specialMissionContinue(preview) then
+      elseif specialChapterPage(preview) or preview.scene=="missionRewards" or utils.specialMissionContinue(preview) then
         print('特殊赛事入口位置 '..position..' 已直接进入赛事')
         return preview
       end
@@ -2418,10 +2437,16 @@ function utils.intoSpecial(screen)
     local function stageNumber(text)
       return tonumber((text or ''):gsub('[%s|]',''):gsub('階','阶'):match('^阶段(%d+)$'))
     end
-    local tab
-    for attempt=1,4 do
+    local tab,returnedFromStage
+    for attempt=1,12 do
       local screen=_soloEventUi()
       if utils.specialMissionContinue(screen) then return 1 end
+      if not returnedFromStage and (screen.scene=='missionRewards' or screen.scene=='specialRanking') then
+        print('当前阶段与配置不符或阶段未读清，返回章节列表重新选择')
+        keyPress('back')
+        returnedFromStage=true
+        sleep(750)
+      end
       tab=numberedWord(screen,'章节',chapter,0,370)
       if tab then break end
       sleep(500)
@@ -2558,16 +2583,13 @@ function utils.intoSpecial(screen)
   end
   if spStage == 1 then
     tap(400, 370)
-    sleep(2000)
-    return 1
+
   elseif spStage == 2 then
     tap(400, 720)
-    sleep(2000)
-    return 1
+
   elseif spStage == 3 then
     tap(400, 1150)
-    sleep(2000)
-    return 1
+
   else
     for i = 4, spStage do
       keepCapture()
@@ -2581,9 +2603,13 @@ function utils.intoSpecial(screen)
       end
     end
     tap(400, 1150)
-    sleep(2000)
-    return 1
+
   end
+  for attempt=1,12 do
+    sleep(350)
+    if utils.specialMissionContinue(_soloEventUi()) then return 1 end
+  end
+  error('未能确认进入特殊赛事阶段 '..spStage..'，已保留当前任务')
 end
 function utils.intoSpecial1(screen)
   data["信息"] = "进入车手联会"

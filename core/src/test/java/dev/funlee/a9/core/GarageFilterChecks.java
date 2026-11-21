@@ -32,6 +32,21 @@ final class GarageFilterChecks {
             if(alive)throw new AssertionError("Filter did not terminate");
         }
         if(!GarageFilter.read(new PixelFrame(720,1280,new int[720*1280])).equals(Map.of("present",false)))throw new AssertionError("Blank frame accepted");
-        return cases.size()+1;
+        int[] pixels=new int[720*1280];
+        Arrays.fill(pixels,0x05285a);
+        fill(pixels,290,570,315,595,0xc3fb12);
+        fill(pixels,1190,55,1260,110,0xff0054);
+        fill(pixels,325,218,360,253,0x000921);
+        fill(pixels,325,420,360,455,0xc3fb12);
+        Map<String,Object> shifted=GarageFilter.read(new PixelFrame(720,1280,pixels));
+        if(!Integer.valueOf(0).equals(shifted.get("owned")) || !Integer.valueOf(1).equals(shifted.get("rank")))
+            throw new AssertionError("Shifted checkbox interiors: "+shifted);
+        Map<?,?> center=(Map<?,?>)shifted.get("ownedCenter");
+        if(center==null || (int)center.get("y")<218 || (int)center.get("y")>253)
+            throw new AssertionError("Tap the observed checkbox: "+shifted);
+        return cases.size()+2;
+    }
+    private static void fill(int[] pixels,int left,int top,int right,int bottom,int color){
+        for(int y=top;y<=bottom;y++)for(int x=left;x<=right;x++)pixels[x*720+719-y]=color;
     }
 }

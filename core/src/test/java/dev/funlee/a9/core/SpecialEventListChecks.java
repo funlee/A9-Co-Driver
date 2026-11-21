@@ -83,7 +83,7 @@ final class SpecialEventListChecks {
         }
         for (String scenario : List.of("first", "third", "wideThird", "fourth", "noOrigin", "wrongPreview",
                 "directChapter", "directLeftLabels", "directRanking", "pixelButton", "retry", "stale", "clamped",
-                "skip", "wrongTab", "wrongRankStage")) {
+                "skip", "wrongTab", "wrongRankStage", "previousPreview")) {
             try (LuaRuntime lua = new LuaRuntime((name, state) -> 0, List.of())) {
                 lua.set("scenario", scenario);
                 lua.load("utilities", utilities);
@@ -96,7 +96,7 @@ final class SpecialEventListChecks {
         try (var input = SpecialEventListChecks.class.getResourceAsStream("/special-stages.lua")) {
             fixture = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         }
-        for (String scenario : List.of("first", "third", "focused", "noisy-first", "stuck", "wrong-stage")) {
+        for (String scenario : List.of("first", "third", "focused", "noisy-first", "stuck", "wrong-stage", "saved-fifth")) {
             try (LuaRuntime lua = new LuaRuntime((name, state) -> 0, List.of())) {
                 lua.set("scenario", scenario);
                 lua.load("utilities", utilities);

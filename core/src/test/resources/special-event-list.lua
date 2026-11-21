@@ -73,6 +73,11 @@ function _soloEventUi(_,probe)
   elseif scenario=='stale' then
     screen.frameId=1
   end
+  if screen.specialSeasonTab then
+    local top=position==1 and 84 or position==4 and 516 or scenario=='wideThird' and 446 or scenario=='clamped' and 490 or 310
+    table.insert(screen.words,{text='N VISION 74',x=180,y=top+15})
+    table.insert(screen.words,{text=scenario=='previousPreview' and 'MISTRAL' or 'N VISION 74',x=580,y=140})
+  end
   return screen
 end
 function tap(y,x)
@@ -87,6 +92,9 @@ function test()
     assert(not ok and message:find('赛季赛事标签') and #taps==0 and down==0,message)
   elseif scenario=='wrongPreview' or scenario=='stale' or scenario=='wrongRankStage' then
     assert(not ok and message:find('进入按钮') and #taps==1,message)
+  elseif scenario=='previousPreview' then
+    assert(not ok and message:find('进入按钮'))
+    for _,coordinates in ipairs(taps) do assert(coordinates:find('220,')==1) end
   elseif scenario=='skip' then
     assert(not ok and message:find('未确认特殊赛事入口位置') and #taps==0,message)
   else

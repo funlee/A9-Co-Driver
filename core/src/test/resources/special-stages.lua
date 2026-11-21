@@ -5,6 +5,11 @@ local frame,drags,forward,transient=0,0,0,0
 local chapterSelected,stageSelected=false,false
 
 utils.openSpecialEntry=function(_,position)assert(position==2)end
+local returned=false
+function keyPress(key)
+  assert(scenario=='saved-fifth' and key=='back' and not returned)
+  returned=true
+end
 function keepCapture()end
 function cmpColor()return 0 end
 function print()end
@@ -38,6 +43,9 @@ function _soloEventUi(_,stageProbe)
   if stageSelected then
     local actual=scenario=='wrong-stage' and 2 or target
     return {scene='specialRanking',words={{text='阶段'..actual,x=195,y=112},{text='开始',x=1100,y=650}}}
+  end
+  if scenario=='saved-fifth' and not returned then
+    return {scene='missionRewards',stageLabel='阶段5',words={{text='继续',x=1100,y=650}}}
   end
   if not chapterSelected then return {scene='unknown',words={{text='章节1',x=165,y=250}}} end
   assert(stageProbe)

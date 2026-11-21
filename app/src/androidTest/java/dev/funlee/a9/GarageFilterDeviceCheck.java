@@ -50,7 +50,7 @@ final class GarageFilterDeviceCheck implements LuaRuntime.Host {
             Canvas canvas=new Canvas(upright);Paint paint=new Paint();paint.setColor(0xff222e3a);
             canvas.drawRect(4,476,204,716,paint);
             Map<String,Object> state=GarageFilter.read(pixels(upright));upright.recycle();int expected=name.equals("filter-on")?1:0;
-            if(!state.equals(Map.of("present",true,"owned",expected,"rank",expected,"descending",expected)))throw new AssertionError("Fixed overlay fixture "+name+": "+state);
+            if(!state.entrySet().containsAll(Map.of("present",true,"owned",expected,"rank",expected,"descending",expected).entrySet()))throw new AssertionError("Fixed overlay fixture "+name+": "+state);
         }
         report.putString("result","PASS: filter still recognized with fixed full panel covering bottom-left; no game input");
     }
@@ -59,7 +59,7 @@ final class GarageFilterDeviceCheck implements LuaRuntime.Host {
         for(String name:List.of("reference-upright","filter-off","filter-on")){
             Bitmap b=BitmapFactory.decodeStream(test.getContext().getAssets().open("garage-"+name+".png"));Map<String,Object> state=GarageFilter.read(pixels(b));b.recycle();
             int expected=name.equals("filter-on")?1:0;
-            if(!state.equals(Map.of("present",true,"owned",expected,"rank",expected,"descending",expected)))throw new AssertionError(name+": "+state);
+            if(!state.entrySet().containsAll(Map.of("present",true,"owned",expected,"rank",expected,"descending",expected).entrySet()))throw new AssertionError(name+": "+state);
         }
         capture();if(!Boolean.TRUE.equals(GarageFilter.read(frame).get("present")))throw new IllegalStateException("Open filter panel first");
         LocalStore store=new LocalStore(test.getTargetContext());
@@ -73,7 +73,7 @@ final class GarageFilterDeviceCheck implements LuaRuntime.Host {
                 capture();if(Boolean.TRUE.equals(GarageFilter.read(frame).get("present")))throw new AssertionError("Filter still open");
                 if(run==1&&optionTaps!=before)throw new AssertionError("Repeated invocation toggled selected options");
                 save("garage-applied.png");tap(600,1192);Thread.sleep(800);capture();
-                if(!GarageFilter.read(frame).equals(Map.of("present",true,"owned",1,"rank",1,"descending",1)))throw new AssertionError("Incorrect saved filter: "+GarageFilter.read(frame));
+                if(!GarageFilter.read(frame).entrySet().containsAll(Map.of("present",true,"owned",1,"rank",1,"descending",1).entrySet()))throw new AssertionError("Incorrect saved filter: "+GarageFilter.read(frame));
             }
             save("garage-verified.png");tap(134,240);
         }
@@ -85,8 +85,8 @@ final class GarageFilterDeviceCheck implements LuaRuntime.Host {
         if(name.equals("_garageFilterState")){LuaRuntime.push(lua,GarageFilter.read(frame));return 1;}
         if(name.equals("tap")){
             int x=(int)lua.toInteger(1),y=(int)lua.toInteger(2);
-            if((x==509||x==304||x==436)&&y==340)optionTaps++;
-            else if(!(x==134&&y==240)&&!(x==600&&y==1192))throw new AssertionError("Non-filter tap");
+            if(((x>=484&&x<=533)||(x>=281&&x<=324)||x==436)&&y>=320&&y<=355)optionTaps++;
+            else if(!(x==134&&(y==240||y==320))&&!(x==600&&y==1192))throw new AssertionError("Non-filter tap");
             tap(x,y);return 0;
         }
         throw new AssertionError(name);

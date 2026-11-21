@@ -621,7 +621,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             }
             if(addInterruptingPopup(out,panel,words))return out;
             if(scene.equals("results")||scene.equals("rewards"))recordLegacyResult();
-            if(solo&&scene.equals("missionRewards"))out.put("stageLabel",specialStageLabel());
+            if(solo&&(scene.equals("missionRewards")||scene.equals("specialRanking")))out.put("stageLabel",specialStageLabel());
             if(specialLoading&&(scene.equals("unknown")||scene.equals("loading"))){
                 String header=text(445,0,675,430,3);
                 if(header.replaceAll("\\s","").matches("(?s).*阶段[0-9]+.*")){
@@ -666,7 +666,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     }
     private String specialStageLabel()throws Exception {
         // This badge is vertical in landscape. The rotated capture already has its text upright.
-        return redLabel(335,25,160,230,0);
+        return redLabel(285,12,260,230,0);
     }
     private String redLabel(int left,int top,int width,int height,int rotation)throws Exception {
         int[] pixels=new int[width*height];
