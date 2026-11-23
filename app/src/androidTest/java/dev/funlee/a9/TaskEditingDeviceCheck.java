@@ -30,7 +30,15 @@ final class TaskEditingDeviceCheck {
         try {
             store=new LocalStore(isolated);checkDefaults();
             check(store.config.getInt("raceTimeout")==900,"Wrong initial race timeout");
+            check(store.config.getJSONObject("global").getBoolean("autoToken")&&store.config.getJSONObject("global").getBoolean("freePkg"),"Wrong initial global task options");
             String initial=tasks().toString();reload();check(initial.equals(tasks().toString()),"Default identities did not persist");
+            check(store.config.getJSONObject("global").getBoolean("autoToken")&&store.config.getJSONObject("global").getBoolean("freePkg"),"Default global task options did not persist");
+            JSONObject initialConfig=new JSONObject(store.config.toString());
+            store.config=new JSONObject().put("global",new JSONObject().put("autoToken",false).put("freePkg",false));store.save();reload();checkDefaults();
+            check(!store.config.getJSONObject("global").getBoolean("autoToken")&&!store.config.getJSONObject("global").getBoolean("freePkg"),"Initialization overwrote explicit global options");
+            store.config=new JSONObject(initialConfig.toString());store.config.remove("global");store.save();reload();
+            check(!store.config.has("global"),"Existing configuration adopted enabled reward defaults");
+            store.config=initialConfig;store.save();reload();
             // An untouched legacy queue upgrades; a single edited or enabled slot preserves all 20.
             JSONArray legacy=new JSONArray();
             for(int i=0;i<20;i++)legacy.put(new JSONObject().put("项目","多人上").put("enabled",false).put("data",store.defaults("多人上")));
@@ -43,7 +51,7 @@ final class TaskEditingDeviceCheck {
             store.resetProjects();
             checkSeriesOptions();
             checkWorldLeagues();
-            store.config.put("accuracy",91).put("global",new JSONObject().put("freePkg",true));store.save();
+            store.config.put("accuracy",91).put("global",new JSONObject().put("autoToken",false).put("freePkg",false));store.save();
             String route=store.routeKeys().get(0);store.saveRoute(route,"1,31");
             ui=test.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES);
             activity=(MainActivity)test.startActivitySync(new Intent(base,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));bind();
@@ -105,7 +113,7 @@ final class TaskEditingDeviceCheck {
             screenshot("reset-confirmation.png");click("取消");reload();bind();
             check(tasks().toString().equals(beforeReset),"Cancelling reset changed saved tasks");
             clickMain("重置编排");click("确认重置");reload();bind();checkDefaults();
-            check(store.config.getInt("accuracy")==91&&store.config.getJSONObject("global").getBoolean("freePkg"),"Reset changed preferences");
+            check(store.config.getInt("accuracy")==91&&!store.config.getJSONObject("global").getBoolean("autoToken")&&!store.config.getJSONObject("global").getBoolean("freePkg"),"Reset changed preferences");
             check(store.routes.get(route).raw.equals("1,31"),"Reset changed custom route");
             String reset=tasks().toString();reload();check(reset.equals(tasks().toString()),"Reset did not persist");
             screenshot("reset-queue.png");
@@ -235,14 +243,15 @@ final class TaskEditingDeviceCheck {
     }
     private void reload()throws Exception{store=new LocalStore(isolated);}
     private void checkDefaults()throws Exception {
-        String[] modes={"特殊赛事","每日战利品","杯赛","多人下","多人上"};String[] counts={"30","1","5","4","30"};Set<String> ids=new HashSet<>();
+        String[] modes={"特殊赛事","每日战利品","杯赛","多人下","多人上"};String[] counts={"5","3","5","4","5"};Set<String> ids=new HashSet<>();
         JSONArray template=new JSONArray(store.asset("data/default-projects.json"));
         check(tasks().length()==5,"Expected five tasks");
         for(int i=0;i<modes.length;i++) {
             JSONObject task=tasks().getJSONObject(i);
-            check(task.getString("项目").equals(modes[i])&&task.getBoolean("enabled")== (i<3),"Wrong default mode/flag at "+i);
+            check(task.getString("项目").equals(modes[i])&&task.getBoolean("enabled"),"Wrong default mode/flag at "+i);
             check(task.getJSONObject("data").getString("次数").equals(counts[i]),"Wrong saved default count");
             check(LocalStore.javaValue(task.getJSONObject("data")).equals(LocalStore.javaValue(template.getJSONObject(i).getJSONObject("data"))),"Default fields not restored");
+            if(LocalStore.hasTaskRoute(task.getString("项目")))store.validateTaskRoute(task.getJSONObject("data"));
             check(!task.getString("taskId").isEmpty()&&ids.add(task.getString("taskId")),"Missing/duplicate identity");
         }
     }

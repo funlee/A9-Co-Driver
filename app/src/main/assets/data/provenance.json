@@ -1,7 +1,7 @@
 {
   "runtime_validation": "partial: cumulative 78 multiplayer races on MuMu (world 40, master 38), interrupted by updates; latest empty-fuel task skip covered offline only; not a continuous 200-race acceptance",
   "assets": {
-    "data/default-projects.json": "056da75e83f0a67b6c42ec317661be6cccfec510af4270934d29307067c33097",
+    "data/default-projects.json": "21278c5995eeaad1add1adde16b0e784c38f6a898f326eda0a6e238d8b9902e2",
     "data/forms.json": "801a13a96d64b27df150264a944bf3997023e4d4c1db0d4a96c0105de7b7d65f",
     "data/map-rules.tsv": "3851380011f0d1fc8a234092109a6414e7277e73efa6a40b4c2543de8eea03d5",
     "data/progress.lib": "1a15ef4e6e5bda467aec8b453e448b5e95a166b29529d7a186fbde4192e2c2d1",
@@ -28,7 +28,7 @@
     "scope": "Bundled runtime scripts, route data, map rules, digit dictionary and configuration forms."
   },
   "map_name_validation": "2026-11-09: 21 maintainer-supplied screenshot catalogs visually verified. The 252 screenshot entries resolved to 251 distinct tracks after the maintainer removed duplicate 海港博物馆/博物馆竞速 and confirmed 欢迎来到樱花港. The check verified 202 keys for configuration compatibility and parsed all 202 nonempty catalog scripts. The 49 empty scripts used left-swipe fallback. This check covered offline validation.",
-  "route_validation": "2026-11-21: Added the maintainer-supplied 狮城/狮城竞速 script and selected it for the default special-event task. Validation covers offline parsing and template references.",
+  "route_validation": "2026-11-21: Added the maintainer-supplied 狮城/狮城竞速 script. 2026-11-23: Default task templates match the maintainer's emulator configuration; the special-event task selects the bundled 罗马台伯河激流 route. Validation covers offline parsing and template references.",
   "catalog": {
     "regions": 21,
     "tracks": 251,

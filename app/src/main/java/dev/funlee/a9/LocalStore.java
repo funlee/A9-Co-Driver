@@ -46,8 +46,10 @@ public final class LocalStore {
         forms=new JSONObject(asset("data/forms.json"));
         config=new JSONObject(context.getSharedPreferences("local",0).getString("config","{}"));
         boolean queueMigrated=config.optInt("taskQueueVersion",0)<1;
-        boolean initialized=!config.has("projects")||(queueMigrated&&isUntouchedLegacyQueue());
+        boolean isNewConfig=!config.has("projects");
+        boolean initialized=isNewConfig||(queueMigrated&&isUntouchedLegacyQueue());
         if(initialized)config.put("projects",defaultProjects());
+        if(isNewConfig&&!config.has("global"))config.put("global",new JSONObject().put("autoToken",true).put("freePkg",true));
         if(queueMigrated)config.put("taskQueueVersion",1);
         // Persist identity separately from editable task fields and queue position.
         boolean migrated=migrateConfig()||initialized||queueMigrated;Set<String> ids=new HashSet<>();
