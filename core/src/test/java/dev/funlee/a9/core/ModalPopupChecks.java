@@ -138,6 +138,27 @@ final class ModalPopupChecks {
                 "A real dialog covering the gutters still blocks a visible multiplayer tab");
         count+=2;
 
+        int[] store = panel(336, 223, 914, 619, 0x915032);
+        var storeWords = List.of(word("充值活动", 128, 84), word("高级通行证", 139, 157),
+                word("限时钜惠", 128, 304), word("卡牌包", 116, 670),
+                word("卡牌包详情", 438, 164), word("开始", 468, 596), word("免费", 764, 596));
+        for (int y : new int[]{84, 157, 304}) fill(store, 120, y - 2, 135, y + 2, 0xffffff);
+        expect(action(store, storeWords) == null, "Undimmed pack carousel is not an interrupting popup");
+        var pricedStoreWords = List.of(storeWords.get(0), storeWords.get(1), storeWords.get(2), storeWords.get(3),
+                storeWords.get(4), word("即将可用", 764, 596), word("65", 1078, 596));
+        expect(action(store, pricedStoreWords) == null, "Claimed cards with cooldowns and prices remain a store, not a modal");
+        count++;
+        expect(action(store, List.of()).isEmpty(), "Pixel artwork alone cannot identify a safe store");
+        fill(store, 120, 302, 135, 306, 0x999999);
+        expect(action(store, storeWords).isEmpty(), "Two undimmed sidebar labels are insufficient");
+        fill(store, 120, 82, 135, 86, 0x999999);
+        fill(store, 120, 155, 135, 159, 0x999999);
+        expect(action(store, storeWords).isEmpty(), "Store words behind a dimmed modal remain blocked");
+        for (int y : new int[]{84, 157, 304}) fill(store, 120, y - 2, 135, y + 2, 0xffffff);
+        cross(store, 879, 265, 0xffffff);
+        expect("×".equals(action(store, storeWords).get("label")), "A real close control retains priority over store evidence");
+        count += 5;
+
         // New artwork, no campaign text or footer button, and a mid-tone close glyph.
         int[] redesign = panel(212, 101, 1068, 619, 0x280b18);
         cross(redesign, 1034, 142, 0x1cb594);

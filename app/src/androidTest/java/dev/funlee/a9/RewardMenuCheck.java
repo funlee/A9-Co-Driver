@@ -55,7 +55,7 @@ final class RewardMenuCheck {
                             Rect b=line.getBoundingBox();if(b!=null&&(overlayBounds[0]==null||!Rect.intersects(overlayBounds[0],b))){words.add(Map.of("text",line.getText(),"x",b.centerX()*1280/bitmap.getWidth(),"y",b.centerY()*720/bitmap.getHeight()));recognized.append(line.getText()).append('\n');}
                         }
                         try(FileOutputStream out=new FileOutputStream(new File(evidence,String.format(Locale.ROOT,"reward-check-%03d.png",++frames[0])))){bitmap.compress(Bitmap.CompressFormat.PNG,100,out);}
-                        try(FileWriter notes=new FileWriter(new File(evidence,"frames.txt"),true)){notes.write(frames[0]+" | requested="+requestedAtCapture+" | displayed="+shownAtCapture+" | "+result.getText().replace('\n',' ')+'\n');}
+                        try(FileWriter notes=new FileWriter(new File(evidence,"frames.txt"),true)){notes.write(frames[0]+" | requested="+requestedAtCapture+" | displayed="+shownAtCapture+" | "+result.getText().replace('\n',' ')+'\n'+"words="+words+'\n');}
                         android.util.Log.i("A9RewardWords",words.toString());
                         LuaRuntime.push(l,Map.of("text",recognized.toString(),"words",words,"frameId",SystemClock.elapsedRealtime()));return 1;
                     }finally{bitmap.recycle();}

@@ -4,7 +4,7 @@ currentRewards={}
 -- scheduler clock before waiting, so an OCR read cannot eat the post-click delay.
 local function pause(ms) sleep(1);sleep(ms) end
 local function clean(s)
-  return (s or ''):gsub('[ \t\r\n]',''):gsub('!',''):gsub('！',''):gsub('領','领'):gsub('獎','奖'):gsub('賽','赛'):gsub('免費','免费'):gsub('免兔费包','免费包'):gsub('兔费包','免费包'):gsub('|',''):gsub('%[',''):gsub('%]','')
+  return (s or ''):gsub('[ \t\r\n]',''):gsub('!',''):gsub('！',''):gsub('領','领'):gsub('獎','奖'):gsub('賽','赛'):gsub('內','内'):gsub('免費','免费'):gsub('免兔费包','免费包'):gsub('兔费包','免费包'):gsub('免费贵包','免费包'):gsub('兔费贵包','免费包'):gsub('免费費包','免费包'):gsub('|',''):gsub('%[',''):gsub('%]','')
 end
 local function has(screen,label) return clean(screen.text):find(label,1,true)~=nil end
 local function word(screen,label,minX,minY,maxY)
@@ -68,6 +68,25 @@ local function freePackEntry(s)
   if not home(s) then return nil end
   for _,w in ipairs(s.words or {}) do if freePackHeader(w) then return w end end
 end
+local function confirmFreePackEntry(s)
+  for attempt=1,5 do
+    local entry=freePackEntry(s)
+    if entry then return s,entry end
+    if not home(s) then return s,nil end
+    local labels={}
+    for _,w in ipairs(s.words or {}) do
+      if w.x>=950 and w.y<=80 then labels[#labels+1]=w.text..'@'..w.x..','..w.y end
+    end
+    print('领奖：免费包入口复核 '..attempt..'/5，帧='..tostring(s.frameId or '未知')..
+      '，右上角OCR='..(#labels>0 and table.concat(labels,' | ') or '未识别到文字'))
+    if attempt==5 then break end
+    pause(800)
+    local fresh=_rewardUi()
+    -- Repeated projection frames must not replace a newer observation.
+    if not s.frameId or not fresh.frameId or fresh.frameId>s.frameId then s=fresh end
+  end
+  return s,nil
+end
 local function sidebarWord(s,label)
   for _,w in ipairs(s.words or {}) do
     if clean(w.text)==label and w.x<265 and w.y>=80 and w.y<=700 then return w end
@@ -114,62 +133,54 @@ local function packMenu(s) return has(s,'卡牌包') and has(s,'卡牌包详情'
 local function shopPage(s)
   return packMenu(s) or sidebarWord(s,'卡牌包')~=nil or shopSidebar(s)
 end
-local function openCardPacks(s)
-  for attempt=1,9 do
-    if packMenu(s) then return s end
-    if not shopPage(s) then return nil end
-    local tab=sidebarWord(s,'卡牌包')
-    if tab then
-      report('领奖：进入卡牌包选项','正在打开卡牌包')
-      if not click(tab,nil,300) then return nil end
-      return waitFor(packMenu)
-    end
-    if attempt==9 then break end
-    activity('正在查找卡牌包选项')
-    -- Search only the category sidebar. The initial banner can open any shop
-    -- category, and the remembered sidebar position may be above or below Packs.
-    if attempt<=4 then slide(150,600,150,240) else slide(150,240,150,600) end
-    s=waitFor(shopPage)
-    if not s then return nil end
-  end
-end
-local function firstPacks(s)
-  for attempt=1,5 do
-    if not packMenu(s) then return nil end
-    -- Narrow card labels can be split by OCR. An exact Free button on the
-    -- confirmed packs page is enough to start scanning visible offers.
-    if has(s,'经典包') or has(s,'广告包') or word(s,'免费',300,180,680) then return s end
-    if attempt==5 then break end
-    activity('正在定位经典卡牌包')
-    slide(450,420,1130,420)
-    s=waitFor(packMenu)
-    if not s then return nil end
-  end
-end
 local function revealed(s) return has(s,'恭喜') and (has(s,'你获得了') or has(s,'获得以下')) end
-local function featuredFreeButton(page,button)
-  if packMenu(page) or not shopSidebar(page) or clean(button.text)~='免费'
-    or button.x<300 or button.y<170 or button.y>680 then return false end
+local function featuredPackName(page,button)
+  local hasWelfare=false
+  for _,label in ipairs(page.words or {}) do
+    if label.x>=300 and math.abs(label.x-button.x)<210 and math.abs(label.y-button.y)<260
+      and clean(label.text):find('免费福利',1,true) then hasWelfare=true end
+  end
   for _,label in ipairs(page.words or {}) do
     local title=clean(label.text)
+    -- Decorative card artwork can be appended to a readable gift name by OCR.
+    -- The local welfare marker is mandatory before tolerating that suffix.
+    if hasWelfare then title=title:match('^(.-包)') or title end
     local dy=button.y-label.y
+    -- Welfare tiles place the pack name below the Free button. Only accept
+    -- that layout when the same tile also identifies itself as free welfare.
     if label.x>=300 and label.y>=90 and math.abs(label.x-button.x)<150
-      and dy>30 and dy<260 and title:match('包$') and title~='免费包' then return true end
+      and ((dy>30 and dy<260) or (hasWelfare and dy< -30 and dy> -120))
+      and title:match('包$') and title~='免费包' then return title end
   end
-  return false
+  -- An exact Free control on a verified store welfare tile is still safe when
+  -- the animated gift name itself is unreadable. Prices and ads never qualify.
+  if hasWelfare then return '商店免费福利包' end
+end
+local function featuredFreeButton(page,button)
+  -- Called only after the verified home Free Pack entry auto-selects an offer.
+  -- The pack title is descriptive, not a prerequisite for an exact Free control.
+  return shopPage(page) and not home(page) and clean(button.text)=='免费'
+    and button.x>=300 and button.x<=1220 and button.y>=170 and button.y<=680
 end
 local function claimFeaturedPack(s,free)
-  local special=has(s,'特殊赛事包')
-  local name=special and '特殊赛事免费包' or '免费包'
+  local title=featuredPackName(s,free)
+  local name=packMenu(s) and '免费卡牌包' or title=='特殊赛事包' and '特殊赛事免费包' or title or '商店免费福利包'
   activity('正在领取'..name)
   if not click(free,featuredFreeButton,300) then return 0 end
   local function detail(page)
-    return has(page,'此包内可能包含的物品') or has(page,'掉落几率')
+    return has(page,'此包内可能包含') or has(page,'掉落几率')
   end
   s=waitFor(function(page)return revealed(page) or detail(page) end) or _rewardUi()
   if not revealed(s) and detail(s) then
-    local detailFree=word(s,'免费',300,550)
-    if detailFree and click(detailFree,detail,300) then s=waitFor(revealed) or _rewardUi() end
+    -- Detail text can appear before the claim control, or be misread on one frame.
+    local ready=waitFor(function(page)
+      return revealed(page) or (detail(page) and word(page,'免费',300,550)~=nil)
+    end)
+    if ready then s=ready end
+    if not revealed(s) then
+      local detailFree=word(s,'免费',300,550)
+      if detailFree and click(detailFree,detail,300) then s=waitFor(revealed) or _rewardUi() end
+    end
   end
   if not revealed(s) then report('领奖：'..name..'领取结果未确认');return 0 end
   report('领奖：已确认领取'..name)
@@ -183,90 +194,36 @@ local function freePacksAtEntry(entry)
   end
   local s=waitFor(shopPage)
   if not s then report('领奖：未确认商店页面，免费包暂未领取');return 0 end
-  -- The header can land on a featured promotion, not just the card-pack carousel.
-  for _,button in ipairs(s.words or {}) do
-    if featuredFreeButton(s,button) then return claimFeaturedPack(s,button) end
-  end
-  if not packMenu(s) and shopSidebar(s) and has(s,'特殊赛事包') then
-    -- Sidebar text sometimes appears a frame before the free promotion.
-    for i=1,3 do
-      pause(500);s=_rewardUi()
+  -- The home entry auto-selects the pending offer. Never override that landing
+  -- page with a category click or carousel swipe, even while content is loading.
+  for attempt=1,5 do
+    if shopPage(s) then
       for _,button in ipairs(s.words or {}) do
         if featuredFreeButton(s,button) then return claimFeaturedPack(s,button) end
       end
     end
+    if attempt==5 then break end
+    activity('正在检查定位到的免费包')
+    pause(800);s=_rewardUi()
   end
-  s=openCardPacks(s)
-  if not s then report('领奖：未确认卡牌包选项，免费包暂未领取');return 0 end
-  s=firstPacks(s)
-  if not s then report('领奖：未确认卡牌包列表起点，免费包暂未领取');return 0 end
-  report('领奖：已确认卡牌包页面，检查免费领取')
-  local count=0;local pages=0;local pending=false;local detailClicked=false;local confirmed=false;local skipped=false;local lastPage=''
-  local untilTime=tickCount()+120000
-  while tickCount()<untilTime do
-    if revealed(s) then
-      if pending and not confirmed then count=count+1;confirmed=true;report('领奖：已确认领取免费包 '..count..' 个') end
-      local next=word(s,'继续',800,540)
-      if not next then pause(800) else click(next) end
-    elseif packMenu(s) then
-      activity(count>0 and ('检查剩余免费包 · 已领取 '..count..' 个') or '正在检查免费包')
-      pending=false;detailClicked=false;confirmed=false
-      -- Only exact Free buttons on the confirmed Packs page are eligible.
-      local free=word(s,'免费',300,180,680)
-      -- Sidebar text appears before the animated shop content becomes readable.
-      -- Recheck the same page before concluding it has no free offer or swiping away.
-      if not free then
-        for attempt=1,3 do
-          pause(800);s=_rewardUi()
-          if not packMenu(s) then break end
-          free=word(s,'免费',300,180,680)
-          if free then break end
-        end
-      end
-      if free then
-        activity('正在领取免费包')
-        pending=click(free)
-        if pending then pause(1800) end
-      elseif not packMenu(s) then pause(800)
-      elseif pages<3 and not (pages>0 and clean(s.text)==lastPage) then
-        lastPage=clean(s.text);pages=pages+1;slide(1130,420,450,420)
-      else
-        break
-      end
-    elseif has(s,'此包内可能包含的物品') or has(s,'掉落几率') then
-      local free=word(s,'免费',300,550)
-      if free and not detailClicked then
-        activity('正在领取免费包')
-        pending=click(free);detailClicked=pending;confirmed=false
-      elseif not free and not detailClicked then
-        -- A timed/free card may have changed to a priced offer. Never confirm it.
-        skipped=true;report('领奖：此卡包当前不是免费领取，已跳过');keyPress('back');pause(1000);break
-      else pause(800) end
-    else
-      -- Opening animations have no stable controls. Wait for a real reward page.
-      pause(800)
-    end
-    s=_rewardUi()
-  end
-  if skipped or tickCount()>=untilTime then report('领奖：免费包界面未完成确认，稍后重试')
-  elseif count==0 then report('领奖：当前没有可领取的免费卡牌包')
-  else report('领奖：免费卡牌包领取完成，共 '..count..' 个') end
-  return count
+  report('领奖：当前定位页面未确认免费领取按钮，不切换商店分类')
+  return 0
 end
 
 local function freePackages(s)
   if UIconfig.freePkg~='0' then return s end
-  local entry=freePackEntry(s)
+  local entry
+  s,entry=confirmFreePackEntry(s)
   if not entry then
-    print('领奖：主界面未显示免费包，跳过免费包检查')
+    print('领奖：多帧复核后未确认免费包入口，跳过本次检查')
     return s
   end
-  report('领奖：检查免费卡牌包','正在检查免费包')
+  report('领奖：检查商店免费包与免费福利','正在检查免费包')
   for attempt=1,5 do
     local claimed=freePacksAtEntry(entry)
     s=backHome()
     if not s then return nil end
-    entry=freePackEntry(s)
+    s,entry=confirmFreePackEntry(s)
     if not entry then return s end
     if claimed==0 then break end
   end

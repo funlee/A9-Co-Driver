@@ -166,9 +166,43 @@ public final class ModalPopup {
                     panel.contains(legacy[0], legacy[1], 5)) cross = legacy;
         }
         if (cross != null) return Map.of("x", cross[0], "y", cross[1], "label", "×");
+        if (unobstructedPackStore(frame, panel, words)) return null;
         if (later.size() == 1) return later.get(0);
         if (later.isEmpty() && next.size() == 1 && body && !GUARDED.matcher(content).find()) return next.get(0);
         return Map.of();
+    }
+
+    private static boolean unobstructedPackStore(PixelFrame frame, Panel panel, List<?> words) {
+        if (panel.left < 280 || panel.right > 970) return false;
+        boolean hasPacks = false, hasDetails = false;
+        Set<String> categories = new java.util.HashSet<>();
+        List<Integer> offerColumns = new ArrayList<>();
+        Set<String> storeCategories = Set.of("充值活动", "高级通行证", "新手专属", "限时钜惠", "热销",
+                "每日超能包", "首充优惠", "限时商品包", "卡牌包");
+        for (Object value : words) {
+            Map<?, ?> word = (Map<?, ?>) value;
+            int x = ((Number) word.get("x")).intValue(), y = ((Number) word.get("y")).intValue();
+            String label = normalize(word.get("text").toString());
+            if (x < 265 && y >= 60 && y <= 700 && storeCategories.contains(label)) {
+                int bright = 0;
+                for (int px = Math.max(0, x - 65); px <= Math.min(264, x + 65); px++)
+                    for (int py = y - 9; py <= y + 9; py++) {
+                        int rgb = pixel(frame, px, py);
+                        if ((rgb >> 16 & 255) >= 210 && (rgb >> 8 & 255) >= 210 && (rgb & 255) >= 210) bright++;
+                    }
+                if (bright >= 20) categories.add(label);
+                hasPacks |= label.equals("卡牌包");
+            }
+            hasDetails |= x >= 300 && y >= 90 && y <= 200 && label.equals("卡牌包详情");
+            if (x >= 300 && y >= 540 && y <= 670 &&
+                    (label.equals("免费") || label.equals("开始") || label.equals("立刻获取") ||
+                            label.equals("即将可用") || label.matches("[0-9]{1,5}"))) {
+                if (offerColumns.stream().noneMatch(column -> Math.abs(column - x) < 160)) offerColumns.add(x);
+            }
+        }
+        // Text can remain readable behind a real overlay: require three distinct
+        // undimmed sidebar labels as well as the title and multiple card columns.
+        return hasPacks && hasDetails && categories.size() >= 3 && offerColumns.size() >= 2;
     }
 
     private static boolean dailyGoals(String text) {
