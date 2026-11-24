@@ -13,7 +13,7 @@ import java.util.*;
 
 /** Queue lifecycle and real editor actions, using disposable preferences. */
 final class TaskEditingDeviceCheck {
-    private static final int SPECIAL=0, DAILY=1, CUP=2, WORLD=4, MASTER=3;
+    private static final int CUP=1, SPECIAL=2, DAILY=3, MASTER=5, WORLD=6;
     private final Instrumentation test;
     private MainActivity activity;
     private LocalStore store;
@@ -59,7 +59,7 @@ final class TaskEditingDeviceCheck {
             checkTaskRoutes();
             clickTask("世界系列赛");
             screenshot("world-editor-open.png");
-            check(node("5. 世界系列赛")!=null,"World editor title missing");
+            check(node("7. 世界系列赛")!=null,"World editor title missing");
             check(node("使用车组")==null,"World editor retained car groups");
             check(node("青铜用车")!=null,"World editor bronze input missing");
             input("青铜用车","2,3");
@@ -68,12 +68,12 @@ final class TaskEditingDeviceCheck {
             for(String league:List.of("白金","翡翠","精英","宗师"))check(tasks().getJSONObject(WORLD).getJSONObject("data").getString(league+"用车").equals("2,4"),"New league vehicle settings did not persist: "+league);
             check(tasks().getJSONObject(WORLD).getJSONObject("data").getString("青铜用车").equals("2,3"),"World vehicle settings did not persist");
             clickTask("大师系列赛");
-            check(node("4. 大师系列赛")!=null&&node("多人下用车")!=null,"Master editor did not open vehicle settings");
+            check(node("6. 大师系列赛")!=null&&node("多人下用车")!=null,"Master editor did not open vehicle settings");
             input("多人下用车","2,4");click("保存");reload();bind();
             check(tasks().getJSONObject(MASTER).getJSONObject("data").getString("多人下用车").equals("2,4"),"Master vehicle settings did not persist");
             String originalTask=tasks().getJSONObject(DAILY).toString();
             clickTask("狼崽");
-            check(node("选择项目类型")==null&&node("2. 每日战利品")!=null&&node("保存")!=null,"Existing task did not open its details directly");
+            check(node("选择项目类型")==null&&node("4. 每日战利品")!=null&&node("保存")!=null,"Existing task did not open its details directly");
             check(node("每日只执行一次")==null&&node("完成本任务后，当天后续循环自动跳过")==null,"Retired daily-once control is visible");
             input("次数","9");click("取消");check(tasks().getJSONObject(DAILY).toString().equals(originalTask),"Cancelling edit changed task");
             clickTask("狼崽");input("次数","4");input("项目名称","test战利品");click("保存");reload();bind();
@@ -89,26 +89,26 @@ final class TaskEditingDeviceCheck {
             check(edited.getJSONObject("data").getString("次数").equals("4")&&edited.getString("项目").equals("每日战利品")
                     &&edited.getString("taskId").equals(original.getString("taskId"))&&edited.getBoolean("enabled")==original.getBoolean("enabled"),"Edit lost fields/type/identity/flag on reload");
             clickMain("新增任务");check(node("选择项目类型")!=null,"New task must choose type first");click("取消");
-            clickMain("新增任务");click("取消");check(tasks().length()==5,"Cancelling type picker added a task");
-            clickMain("新增任务");click("杯赛");click("取消");check(tasks().length()==5,"Cancelling form added a task");
+            clickMain("新增任务");click("取消");check(tasks().length()==7,"Cancelling type picker added a task");
+            clickMain("新增任务");click("杯赛");click("取消");check(tasks().length()==7,"Cancelling form added a task");
             clickMain("新增任务");click("杯赛");input("项目名称","新增杯赛测试");input("次数","0");click("保存");
-            check(tasks().length()==5&&node("执行次数需为 1–10000")!=null,"Invalid task was saved");click("确定");
+            check(tasks().length()==7&&node("执行次数需为 1–10000")!=null,"Invalid task was saved");click("确定");
             input("次数","3");click("保存");
-            check(tasks().length()==6,"UI add failed");
-            JSONObject added=tasks().getJSONObject(5);String addedId=added.getString("taskId");
+            check(tasks().length()==8,"UI add failed");
+            JSONObject added=tasks().getJSONObject(7);String addedId=added.getString("taskId");
             check(added.getJSONObject("data").getString("次数").equals("3")&&!added.getBoolean("enabled"),"New task fields/flag incorrect");
             check(!addedId.equals(tasks().getJSONObject(CUP).getString("taskId")),"Repeated mode shared identity");
-            reload();bind();check(tasks().getJSONObject(5).getString("taskId").equals(addedId),"Added task did not persist");
+            reload();bind();check(tasks().getJSONObject(7).getString("taskId").equals(addedId),"Added task did not persist");
             String retained=tasks().getJSONObject(1).toString();clickMain("删除");reload();bind();
-            check(tasks().length()==5&&tasks().getJSONObject(0).toString().equals(retained),"Deleting first task changed its neighbor");
-            for(int i=0;i<5;i++)clickMain("删除");reload();bind();
+            check(tasks().length()==7&&tasks().getJSONObject(0).toString().equals(retained),"Deleting first task changed its neighbor");
+            for(int i=0;i<7;i++)clickMain("删除");reload();bind();
             check(tasks().length()==0&&((List<?>)store.luaConfig().get("projects")).isEmpty(),"Empty queue resurrected on reload");
             screenshot("empty-queue.png");
             clickMain("新增任务");click("每日战利品");click("保存");check(tasks().length()==1,"Cannot add to empty queue");
             tasks().getJSONObject(0).put("enabled",true).getJSONObject("data").put("次数","12");store.save();bind();
             String beforeReset=tasks().toString();
             clickMain("重置编排");
-            check(node("重置将舍弃当前任务编排配置，并恢复默认的 5 个任务配置。确认重置吗？")!=null,"Reset warning missing");
+            check(node("重置将舍弃当前任务编排配置，并恢复默认的 "+store.defaultProjectCount()+" 个任务配置。确认重置吗？")!=null,"Reset warning missing");
             check(tasks().toString().equals(beforeReset),"Reset happened before confirmation");
             screenshot("reset-confirmation.png");click("取消");reload();bind();
             check(tasks().toString().equals(beforeReset),"Cancelling reset changed saved tasks");
@@ -117,7 +117,7 @@ final class TaskEditingDeviceCheck {
             check(store.routes.get(route).raw.equals("1,31"),"Reset changed custom route");
             String reset=tasks().toString();reload();check(reset.equals(tasks().toString()),"Reset did not persist");
             screenshot("reset-queue.png");
-            report.putString("result","PASS: direct edit details/cancel/save/reload preserves type/identity/flag; only new tasks choose type; five defaults; legacy upgrade/custom queue preservation; add/cancel/validation; repeated mode identities; delete all and persist empty queue; add to empty queue; reset fields/order/flags; preferences and routes preserved; isolated preferences only");
+            report.putString("result","PASS: direct edit details/cancel/save/reload preserves type/identity/flag; only new tasks choose type; seven defaults; legacy upgrade/custom queue preservation; add/cancel/validation; repeated mode identities; delete all and persist empty queue; add to empty queue; reset fields/order/flags; preferences and routes preserved; isolated preferences only");
         } finally {
             if(activity!=null)test.runOnMainSync(()->activity.finish());base.deleteSharedPreferences(preferences);
         }
@@ -243,9 +243,9 @@ final class TaskEditingDeviceCheck {
     }
     private void reload()throws Exception{store=new LocalStore(isolated);}
     private void checkDefaults()throws Exception {
-        String[] modes={"特殊赛事","每日战利品","杯赛","多人下","多人上"};String[] counts={"5","3","5","4","5"};Set<String> ids=new HashSet<>();
+        String[] modes={"车联","杯赛","特殊赛事","每日战利品","特殊赛事","多人下","多人上"};String[] counts={"2","2","2","3","3","3","3"};Set<String> ids=new HashSet<>();
         JSONArray template=new JSONArray(store.asset("data/default-projects.json"));
-        check(tasks().length()==5,"Expected five tasks");
+        check(tasks().length()==7,"Expected seven tasks");
         for(int i=0;i<modes.length;i++) {
             JSONObject task=tasks().getJSONObject(i);
             check(task.getString("项目").equals(modes[i])&&task.getBoolean("enabled"),"Wrong default mode/flag at "+i);

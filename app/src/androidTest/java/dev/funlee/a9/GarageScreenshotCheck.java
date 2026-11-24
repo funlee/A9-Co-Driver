@@ -20,6 +20,61 @@ public final class GarageScreenshotCheck extends Instrumentation {
     @Override public void onStart(){
         Bundle report=new Bundle();TextRecognizer ocr=TextRecognition.getClient(new ChineseTextRecognizerOptions.Builder().build());
         try{
+            if(arguments.containsKey("cupListFrame")){
+                File file=new File(getTargetContext().getFilesDir(),"runtime/"+arguments.getString("cupListFrame"));
+                Bitmap image=BitmapFactory.decodeFile(file.getPath());
+                if(image==null)throw new AssertionError("Missing event-list frame");
+                if(image.getWidth()==1280&&image.getHeight()==720){
+                    Matrix rotation=new Matrix();rotation.postRotate(90);
+                    Bitmap side=Bitmap.createBitmap(image,0,0,1280,720,rotation,false);image.recycle();image=side;
+                }
+                if(image.getWidth()!=720||image.getHeight()!=1280)throw new AssertionError("Unsupported event-list frame");
+                int[] pixels=new int[720*1280];image.getPixels(pixels,0,720,0,0,720,1280);image.recycle();
+                PixelFrame frame=new PixelFrame(720,1280,pixels);
+                report.putString("cards",CupCarousel.cards(frame).toString());
+                report.putBoolean("claimSpotlight",CupCarousel.claimSpotlight(frame));
+                if(!CupCarousel.listVisible(frame)&&!CupCarousel.claimSpotlight(frame))throw new AssertionError("Standard event list not confirmed; Back="+RaceHud.backWedge(frame));
+                report.putString("result","PASS: retained standard event list recognized without wide viewport or input");
+                finish(0,report);return;
+            }
+            if(arguments.containsKey("emptyGarageFrame")){
+                File file=new File(getTargetContext().getFilesDir(),"runtime/"+arguments.getString("emptyGarageFrame"));
+                Bitmap image=BitmapFactory.decodeFile(file.getPath());
+                if(image==null)throw new AssertionError("Missing empty garage frame");
+                if(image.getWidth()==1280&&image.getHeight()==720){
+                    Matrix rotation=new Matrix();rotation.postRotate(90);
+                    Bitmap side=Bitmap.createBitmap(image,0,0,1280,720,rotation,false);image.recycle();image=side;
+                }
+                if(image.getWidth()!=720||image.getHeight()!=1280)throw new AssertionError("Unsupported empty garage frame");
+                int[] pixels=new int[720*1280];image.getPixels(pixels,0,720,0,0,720,1280);
+                Matrix rotation=new Matrix();rotation.postRotate(270);
+                Bitmap upright=Bitmap.createBitmap(image,0,0,720,1280,rotation,false);
+                Text text=Tasks.await(ocr.process(InputImage.fromBitmap(upright,0)),15,TimeUnit.SECONDS);
+                List<Object> words=new ArrayList<>();
+                for(Text.TextBlock block:text.getTextBlocks())for(Text.Line line:block.getLines()){
+                    Rect b=line.getBoundingBox();if(b!=null)words.add(Map.of("text",line.getText(),"x",b.centerX(),"y",b.centerY()));
+                }
+                PixelFrame frame=new PixelFrame(720,1280,pixels);
+                report.putString("ocr",text.getText());
+                if(ModalPopup.locate(frame)!=null||Boolean.TRUE.equals(GarageFilter.read(frame,16.0/9).get("present"))||
+                        !DailyEventUi.classifySolo(text.getText()).equals("cars")||
+                        !GarageOcr.soloEmpty(ocr,frame,words,16.0/9))throw new AssertionError("Empty garage not confirmed: "+words);
+                if(!GarageOcr.soloEmpty(ocr,frame,List.of(),16.0/9))throw new AssertionError("Focused OCR did not recover the empty heading");
+                var garage=MultiplayerGarage.soloSlots(frame,words,16.0/9);
+                try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
+                    LocalStore store=new LocalStore(getTargetContext());lua.set("garage",garage);
+                    lua.load("utilities",store.asset("lua/utilities.lua"));
+                    lua.load("grid",store.asset("lua/multiplayer_current.lua"));
+                    lua.load("replay","data={['项目']='每日战利品',['用车次数']={}};run={data={['选车筛选']='0,1,2'}};local frame=0;"+
+                            "utils.configureGarageFilter=function()return true end;function print()end;"+
+                            "function _soloGarageUi(fast)assert(not fast);frame=frame+1;return {scene='unknown',focusedGarage=true,frameId=frame,garageEmpty=true,garage=garage}end;"+
+                            "function test()assert(utils.chooseCarCup({1})=='garageEmpty' and not next(data['用车次数']));done=true end");
+                    lua.start("test");for(int i=0;i<40&&lua.step(i*1000L);i++){};lua.load("result","assert(done)");
+                }
+                upright.recycle();image.recycle();
+                report.putString("result","PASS: retained empty garage recognized and skipped without any touch or car-use count");
+                finish(0,report);return;
+            }
             if(arguments.containsKey("dailyHeadingFrame")){
                 File file=new File(getTargetContext().getFilesDir(),"runtime/"+arguments.getString("dailyHeadingFrame"));
                 Bitmap image=BitmapFactory.decodeFile(file.getPath());

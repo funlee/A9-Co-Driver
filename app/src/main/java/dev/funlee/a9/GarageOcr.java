@@ -16,6 +16,11 @@ final class GarageOcr {
         return heading.contains("车辆选择")||heading.contains("车辅选择");
     }
 
+    static boolean soloEmpty(TextRecognizer ocr,PixelFrame frame,List<?> words,double aspect)throws Exception{
+        if(MultiplayerGarage.soloEmpty(frame,words,aspect))return true;
+        return MultiplayerGarage.soloEmpty(frame,words,aspect,true)&&soloHeading(ocr,frame);
+    }
+
     /** Read identity from separate crops of the same frame, away from the busy garage background. */
     static Map<String,Object> detail(TextRecognizer ocr,PixelFrame frame,boolean wide)throws Exception{
         String name=region(ocr,frame,160,100,670,180,4);

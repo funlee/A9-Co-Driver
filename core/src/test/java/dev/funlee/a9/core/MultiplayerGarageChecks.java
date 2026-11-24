@@ -185,6 +185,21 @@ final class MultiplayerGarageChecks {
                 "Standard World garage can also have white borders on the blue gutter");checks++;
         masterFuelFallback(assets,masterPage);checks++;
         checks+=leagueSelection(assets);
+        int[] emptyPixels=new int[720*1280];Arrays.fill(emptyPixels,0xff040d22);
+        for(int x=29;x<=53;x++)for(int y=43;y<=76;y++)emptyPixels[x*720+719-y]=0xffffffff;
+        List<Object> emptyWords=List.of(word("车辆选择",190,99),word("选择参与此赛事的车辆",235,140));
+        PixelFrame emptyFrame=new PixelFrame(720,1280,emptyPixels);
+        for(double aspect:new double[]{16.0/9,2.0,2670.0/1200}){
+            require(MultiplayerGarage.soloEmpty(emptyFrame,emptyWords,aspect),"Empty blue garage with heading is positive evidence");checks++;
+        }
+        require(!MultiplayerGarage.soloEmpty(emptyFrame,List.of(),16.0/9),"Empty card detection without heading is not an empty garage");checks++;
+        require(MultiplayerGarage.soloEmpty(emptyFrame,List.of(),16.0/9,true),"Verified focused heading recovers full OCR omissions");checks++;
+        require(!MultiplayerGarage.soloEmpty(new PixelFrame(720,1280,new int[720*1280]),List.of(),16.0/9,true),"Focused heading alone cannot prove empty");checks++;
+        require(!MultiplayerGarage.soloEmpty(new PixelFrame(720,1280,new int[720*1280]),emptyWords,16.0/9),"Black/stale capture is not an empty garage");checks++;
+        List<Object> loadedWords=new ArrayList<>(emptyWords);loadedWords.add(word("加载中",630,360));
+        require(!MultiplayerGarage.soloEmpty(emptyFrame,loadedWords,16.0/9),"Loading or list text cannot prove empty");checks++;
+        for(int x=100;x<220;x++)for(int y=195;y<415;y++)emptyPixels[x*720+719-y]=0xff101829;
+        require(!MultiplayerGarage.soloEmpty(new PixelFrame(720,1280,emptyPixels),emptyWords,16.0/9),"An unrecognized dark car still blocks empty detection");checks++;
         String fallbackCases;
         try(var input=MultiplayerGarageChecks.class.getResourceAsStream("/world-league-fallback.lua")){
             fallbackCases=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
@@ -225,7 +240,7 @@ final class MultiplayerGarageChecks {
         try(var input=MultiplayerGarageChecks.class.getResourceAsStream("/world-car-pagination.lua")){
             paginationCases=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
         }
-        for(String scenario:List.of("car27","empty27","locked27","remembered","reversePage","differentPage","unreadableAfterRace","emptyBoth","delayedPage","missingBottom","slowPagination","fuzzyName","sameColumnShift","clippedOverlap","lockedOverlap","overshoot","targetMoved","targetSettled","stuckPage","wideCar10","wideCar10Overscroll")){
+        for(String scenario:List.of("car27","empty27","locked27","remembered","reversePage","differentPage","unreadableAfterRace","emptyBoth","delayedPage","missingBottom","slowPagination","fuzzyName","sameColumnShift","clippedOverlap","lockedOverlap","overshoot","targetMoved","targetSettled","stuckPage","wideCar10","wideCar10Overscroll","filtered","filteredMaster")){
             try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
                 lua.set("scenario",scenario);
                 lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));

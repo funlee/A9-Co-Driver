@@ -76,6 +76,9 @@ public final class LocalStore {
             changed|=removeOptions(task.optJSONObject("data"),RETIRED_PROJECT_OPTIONS);
             if("杯赛".equals(task.optString("项目"))&&task.optJSONObject("data")!=null)
                 changed|=task.getJSONObject("data").remove("每日战利品")!=null;
+            if("车联".equals(task.optString("项目"))&&task.optJSONObject("data")!=null)
+                changed|=task.getJSONObject("data").remove("车手联会选路")!=null
+                        |task.getJSONObject("data").remove("杯赛线路5")!=null;
             if(hasTaskRoute(task.optString("项目")))changed|=migrateTaskRoute(task.optString("项目"),task.optJSONObject("data"));
             if("多人上".equals(task.optString("项目")))
                 changed|=migrateWorldCars(task.optJSONObject("data"));
@@ -143,7 +146,7 @@ public final class LocalStore {
         JSONArray spec=forms.getJSONArray("多人上");
         for(int i=0;i<spec.length();i++) {
             JSONObject field=spec.getJSONObject(i);String key=field.getString("key");
-            if(key.endsWith("用车")&&!settings.has(key)) {
+            if((key.endsWith("用车")||key.equals("选车筛选"))&&!settings.has(key)) {
                 settings.put(key,field.getString("value"));changed=true;
             }
         }
@@ -224,6 +227,9 @@ public final class LocalStore {
     }
     public void resetProjects() throws JSONException,IOException {
         config.put("projects",defaultProjects());save();
+    }
+    public int defaultProjectCount() {
+        try{return new JSONArray(asset("data/default-projects.json")).length();}catch(Exception e){return 0;}
     }
     public void moveProject(int from,int to) throws JSONException {
         JSONArray projects=config.getJSONArray("projects");

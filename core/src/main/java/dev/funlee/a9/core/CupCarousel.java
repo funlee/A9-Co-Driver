@@ -103,6 +103,13 @@ public final class CupCarousel {
         }
         cards.add(card(frame,center,selected,true));
     }
+    /** Standard event list evidence, independent of device aspect-ratio branches. */
+    public static boolean listVisible(PixelFrame frame){
+        if(frame.width!=720||frame.height!=1280||!RaceHud.backWedge(frame))return false;
+        List<Map<String,Object>> cards=cards(frame);
+        return cards.size()>=3&&cards.stream().anyMatch(card->Boolean.TRUE.equals(card.get("selected")));
+    }
+
     /** A white caption flanked by pink rails directly above the highlighted claim card. */
     public static boolean claimSpotlight(PixelFrame frame){
         if(frame.width!=720||frame.height!=1280)return false;
@@ -122,11 +129,11 @@ public final class CupCarousel {
     }
 
     private static boolean whiteCaption(PixelFrame frame,int x){
-        return near(frame.pixel(719-385,x),255,255,255,20)&&near(frame.pixel(719-421,x),255,255,255,20);
+        return near(frame.pixel(719-403,x),255,255,255,20)&&near(frame.pixel(719-421,x),255,255,255,20);
     }
 
     private static boolean pinkRail(PixelFrame frame,int x){
-        return near(frame.pixel(719-385,x),255,0,84,45)&&near(frame.pixel(719-421,x),255,0,84,45);
+        return near(frame.pixel(719-403,x),255,0,84,45)&&near(frame.pixel(719-421,x),255,0,84,45);
     }
 
     /** Bottom yellow strip with a centered two-character label, on an already selected event. */

@@ -36,7 +36,7 @@ final class TaskRouteChecks {
             lua.load("auto setup","data={['项目']='"+(module.equals("cup")?"杯赛":"每日战利品")+"'};run={data={['路线来源']='2',['跑法代码']='99,22',['已配置地图']='other'}};utils={};ROUTES={chosen='0,21'};LOCAL_ROOT='/tmp/test';UIconfig={gamePkg='test'};multiple1={};multiple2={};dsCup={};cup=cup or {};spCup={};dailyCup=dailyCup or {};localInit();"+
                 "workflow="+(module.equals("cup")?"cup":"dailyCup")+";function print()end;function keepCapture()end;function releaseCapture()end;function _dailyTaskStatus()return '' end;"+
                 "local stage=0;function cmpColorEx(pattern)if string.find(pattern,'664|436',1,true) then return stage==0 and 1 or 0 end;return stage==2 and 1 or 0 end;"+
-                "utils.localOCR=function()return 'chosen' end;reads=0;function _dailyEventUi()reads=reads+1;return reads<3 and {scene='loading',route='chosen'} or {scene='race'} end;"+
+                "utils.localOCR=function()return 'chosen' end;reads=0;function _soloEventUi()reads=reads+1;return reads<3 and {scene='loading',route='chosen'} or {scene='race'} end;"+
                 "function test()assert(utils.taskRouteAuto());utils.prepareTaskRoute(true);assert(data['线路']=='');workflow.readMap();assert(data['线路']=='0,21');"+
                 "utils.prepareTaskRoute();assert(data['线路']=='0,21');"+
                 "stage=2;reads=9;utils.prepareTaskRoute(true);workflow.readMap();assert(data['线路']=='','Previous race route leaked into failed recognition');"+

@@ -113,27 +113,14 @@ dsCup.operation = {
   {
     config.racing,
     function()
-      local xl = utils.defultCfg(run.data["车手联会选路"], "0")
-      if xl == "3" then
-        data["线路"] = utils.defultCfg(run.data["车手联会线路"], "")
-        data["多人地图"] = "百分比选路中"
-        utils.newAutoDriver()
-      elseif xl == "4" then
-        utils.getMapName(utils.defultCfg(run.data["车手联会线路"], "无线路"))
-        utils.newAutoDriver()
-      end
       data["信息"] = "比赛中"
       repeat
         keepCapture()
         if cmpColorEx(config.racing, 1) == 1 then
           tap(236, 1100)
           sleep(650)
-          if xl == "0" then
-          elseif xl == "1" then
-            swipe(288, 840, 288, 440, 50)
-          elseif xl == "2" then
-            swipe(288, 440, 288, 840, 50)
-          end
+          -- 车手联会选路固定为左划（原版选路档位1），不提供其他选路与广告回油
+          swipe(288, 840, 288, 440, 50)
         end
         if data["超时状态"] then
           return -1

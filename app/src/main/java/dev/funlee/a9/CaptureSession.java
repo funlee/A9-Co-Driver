@@ -13,8 +13,6 @@ import android.view.WindowManager;
 import dev.funlee.a9.core.GameViewport;
 import dev.funlee.a9.core.LegacyPopup;
 import java.nio.ByteBuffer;
-import java.util.function.Supplier;
-
 /** Captures the full display. Owns every Image/Bitmap and closes them promptly. */
 public final class CaptureSession implements AutoCloseable {
     static final class Unavailable extends IllegalStateException {
@@ -56,9 +54,19 @@ public final class CaptureSession implements AutoCloseable {
             if(d!=null){d.getRealMetrics(m);resize(m.widthPixels,m.heightPixels);}
         }
     };
-    @SuppressWarnings("deprecation") public CaptureSession(Context context,int resultCode,Intent data,Runnable onStopped) {
+    @SuppressWarnings("deprecation") static DisplayMetrics requireSupportedDisplay(Context context) {
+        DisplayMetrics metrics=new DisplayMetrics();
+        ((WindowManager)context.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRealMetrics(metrics);
+        requireSupportedSize(metrics.widthPixels,metrics.heightPixels);
+        return metrics;
+    }
+    private static void requireSupportedSize(int width,int height) {
+        if(!GameViewport.supportsDevice(width,height))
+            throw new Unavailable(GameViewport.DISPLAY_REQUIREMENT+"，当前 "+width+"×"+height+"；请修改设备分辨率并关闭分屏或小窗");
+    }
+    public CaptureSession(Context context,int resultCode,Intent data,Runnable onStopped) {
         this.onStopped=onStopped;
-        DisplayMetrics metrics=new DisplayMetrics(); ((WindowManager)context.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRealMetrics(metrics);
+        DisplayMetrics metrics=requireSupportedDisplay(context);
         // Service WindowMetrics can describe the natural portrait bounds even while MuMu's
         // display is landscape. MediaProjection requires the actual current display dimensions.
         width=metrics.widthPixels;height=metrics.heightPixels;
@@ -142,13 +150,13 @@ public final class CaptureSession implements AutoCloseable {
         while(frameTime<=after&&display!=null&&SystemClock.elapsedRealtime()<until)wait(Math.max(1,until-SystemClock.elapsedRealtime()));
         if(frameTime<=after)throw new IllegalStateException("等待悬浮窗避让后的新截图超时");
     }
-    synchronized Snapshot frame(int clockwise,Supplier<Rect> gameBounds) {
+    synchronized Snapshot frame(int clockwise) {
         long until=SystemClock.elapsedRealtime()+3000;
         while (true) {
             OrientationPending pending = null;
             if (latest != null) {
                 try {
-                    GameViewport viewport = viewport(latest.getWidth(), latest.getHeight(), clockwise, gameBounds);
+                    GameViewport viewport = viewport(latest.getWidth(), latest.getHeight(), clockwise);
                     lastReadFrame = frameTime;
                     return new Snapshot(normalizeFrame(latest, viewport), viewport);
                 } catch (OrientationPending e) {
@@ -160,7 +168,7 @@ public final class CaptureSession implements AutoCloseable {
                 if (pending != null) throw pending;
                 throw new Unavailable("未收到截屏画面，请停止后重新授权截屏");
             }
-            // Accessibility window bounds can settle after the first landscape frame.
+            // Wait for a fresh frame while the supported display rotates into the game orientation.
             try { wait(remaining); }
             catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -168,17 +176,9 @@ public final class CaptureSession implements AutoCloseable {
             }
         }
     }
-    private static GameViewport viewport(int width,int height,int clockwise,Supplier<Rect> gameBounds) {
+    private static GameViewport viewport(int width,int height,int clockwise) {
+        requireSupportedSize(width,height);
         if(!GameViewport.supports(width,height,clockwise))throw orientationPending(width,height);
-        // A framed game on a wide display may occupy a smaller, offset application window.
-        if(width>height*2.07&&gameBounds!=null){
-            Rect bounds=gameBounds.get();
-            if(bounds!=null){
-                GameViewport window=new GameViewport(bounds.left,bounds.top,bounds.width(),bounds.height(),clockwise);
-                if(!window.isFullHeightWindow(width,height))throw orientationPending(width,height);
-                return window;
-            }
-        }
         return new GameViewport(0,0,width,height,clockwise);
     }
     private static OrientationPending orientationPending(int width,int height) {
@@ -186,14 +186,15 @@ public final class CaptureSession implements AutoCloseable {
     }
     /** Converts an owned snapshot without consuming it; shared by live capture and rotation replay. */
     static Bitmap normalizeFrame(Bitmap source,int clockwise,int width,int height) {
-        return normalizeFrame(source,viewport(width,height,clockwise,null));
+        return normalizeFrame(source,viewport(width,height,clockwise));
     }
     static Bitmap normalizeFrame(Bitmap source,GameViewport viewport) {
+        requireSupportedSize(source.getWidth(),source.getHeight());
+        if(!viewport.isFullHeightWindow(source.getWidth(),source.getHeight()))
+            throw new Unavailable(GameViewport.DISPLAY_REQUIREMENT+"；不支持缩放或裁剪游戏窗口");
         Matrix m=new Matrix();m.postRotate(viewport.rotation);
-        Bitmap rotated=Bitmap.createBitmap(source,viewport.left,viewport.top,viewport.width,viewport.height,m,false);
-        Bitmap scaled=Bitmap.createScaledBitmap(rotated,720,1280,false);
-        if(rotated!=source && rotated!=scaled)rotated.recycle();
-        return scaled==source?scaled.copy(Bitmap.Config.ARGB_8888,false):scaled;
+        Bitmap rotated=Bitmap.createBitmap(source,0,0,viewport.width,viewport.height,m,false);
+        return rotated==source?rotated.copy(Bitmap.Config.ARGB_8888,false):rotated;
     }
     public synchronized long frameId(){return lastReadFrame;}
 

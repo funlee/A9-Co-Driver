@@ -234,6 +234,23 @@ local function sameSoloPage(before,after)
   return matches>=math.min(2,#after.cards) and matches>0
 end
 
+function vehicleGrid.confirmEmptyGarage()
+  local lastFrame,firstAt,frames=nil,nil,0
+  for sample=1,8 do
+    local page=_soloGarageUi(false,true)
+    if data['超时状态'] then error('车库空列表确认超时，已保留任务进度') end
+    -- Fast grid reads assume a garage scene; only full observations can prove an empty list.
+    local inGarage=page.scene=='cars' or (page.scene=='unknown' and page.focusedGarage==true)
+    if not inGarage or page.gridOnly or page.garageEmpty~=true or not page.garage or #page.garage.cards~=0 then return false end
+    if page.frameId and (not lastFrame or page.frameId>lastFrame) then
+      lastFrame=page.frameId;firstAt=firstAt or tickCount();frames=frames+1
+      if frames>=3 and tickCount()-firstAt>=1200 then return true end
+    end
+    sleep(600)
+  end
+  error('未确认车库空列表的新画面，已保留任务进度')
+end
+
 local function readSoloGrid(waitForSettle)
   local previous
   local stable=0
@@ -258,7 +275,10 @@ end
 
 function vehicleGrid.soloOrigin(entrySwipes)
   if entrySwipes and entrySwipes>0 then
-    if not readSoloGrid(false) then error('未确认赛事车库车辆列表，已保留任务进度') end
+    if not readSoloGrid(false) then
+      if vehicleGrid.confirmEmptyGarage() then return nil,'garageEmpty' end
+      error('未确认赛事车库车辆列表，已保留任务进度')
+    end
     data['信息']='每日战利品选车：向右滑回最左侧'
     print(data['信息']..'（'..entrySwipes..' 次）')
     for i=1,entrySwipes do
@@ -270,7 +290,10 @@ function vehicleGrid.soloOrigin(entrySwipes)
   local previous,stalled,drags=nil,0,0
   while stalled<5 and not data['超时状态'] do
     local current=readSoloGrid(true)
-    if not current then break end
+    if not current then
+      if vehicleGrid.confirmEmptyGarage() then return nil,'garageEmpty' end
+      break
+    end
     if current.garage.start then
       print('赛事车库已回到最左，确认第 1 列（回拖 '..drags..' 次）')
       return current
@@ -295,9 +318,7 @@ end
 function currentMultiplayer.run(resumingTutorial)
   local count=tonumber(run.data['次数']) or 1
   local completed=_sessionProject(data['项目'],count) or 0
-  for _,key in ipairs({'选车筛选'}) do
-    if utils.defultCfg(run.data[key],'')~='' then error('新版多人菜单尚未适配“'..key..'”，请关闭此选项后运行') end
-  end
+  local garageFilter=tostring(utils.defultCfg(run.data['选车筛选'],''))
   local rotate=tostring(utils.defultCfg(run.data['用车模式'],'0'))=='1'
   local usedCars={}
   local lastPage=nil
@@ -322,7 +343,7 @@ function currentMultiplayer.run(resumingTutorial)
     local rosterSeen=false
     local tutorialPressedAt=nil
     local demotionPressedAt=nil
-    local lastPulse=0;local carRetries=0;local carListAligned=false
+    local lastPulse=0;local carRetries=0;local carListAligned=false;local garageFilterApplied=false
     local eventPressedAt=nil;local carPressedAt=nil;local selectedCar=nil
     local deferredCarPrompt=false
     local unverifiedCarBackAt=nil;local unverifiedCarBacks=0
@@ -756,6 +777,18 @@ function currentMultiplayer.run(resumingTutorial)
           targetLeague=verifiedLeague
           if not targetLeague then error('未确认世界系列赛当前段位，保留任务') end
         end
+        -- The cup garage filter (已拥有 / 性能分 / 降序) is the same panel here, so apply it
+        -- once per race before any ordinal is trusted: the panel reorders the whole list.
+        if garageFilter~='' and not garageFilterApplied and not carPressedAt then
+          garageFilterApplied=true
+          status('设置车库筛选')
+          utils.configureGarageFilter(garageFilter)
+          carListAligned=false;alignAttempts=0;alignKey=nil;alignFrames=0
+          verifiedKey=nil;alignFrame=nil;alignSwipeFrame=nil
+          pageOffset=nil;pageLeft=nil;pageFrame=nil;lastPage=nil
+          sleep(1500)
+          goto garageRefreshed
+        end
         local correctLeague=not targetLeague or (garage.rank==targetLeague and
           (not tabs.selected or tabs.selected==targetLeague))
         local reusePage,confirmPage=false,false
@@ -958,6 +991,7 @@ function currentMultiplayer.run(resumingTutorial)
         if not started and has(screen.text,'新手狂欢礼') then keyPress('back');sleep(1200) end
       end
       sleep(350)
+      ::garageRefreshed::
     end
   end
 end

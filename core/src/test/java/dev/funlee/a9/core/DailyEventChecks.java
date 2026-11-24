@@ -55,11 +55,15 @@ final class DailyEventChecks {
                 !VehicleUnlockGuard.laterLabel("稍后査看",380,625,500,665)||
                 VehicleUnlockGuard.laterLabel("升星",800,625,880,665))
             throw new AssertionError("Star-up prompt must share the vehicle protection and authorize only Later");
+        if(!DailyEventUi.classifySolo("限时 赛事 巅峰对决 喧闹铁路 打破你的最佳用时纪录").equals("loading")||
+                !DailyEventUi.classifySolo("限时赛事 购买优惠 立即购买").equals("unknown")||
+                !DailyEventUi.classifySolo("周五 挑战限时 赛事 探索赛事").equals("unknown"))
+            throw new AssertionError("Configured non-daily loading is readable without accepting a purchase page");
         String setup="data={};run={data={}};utils={getMapName=function(k)data['多人地图']=k;data['线路']='route' end};"+
             "function keepCapture()end;function cmpColorEx(s)assert(s~=nil,'nil color pattern');return 0 end;function print()end;"+
             "taps=0;rewards=0;function tap(x,y)assert(x>=0 and y>=0);taps=taps+1 end;"+
             "function _sessionLegacyRewards(c,f)rewards=rewards+1;coins=c;fame=f end;"+
-            "local i=0;function _dailyEventUi()i=i+1;return screens[math.min(i,#screens)] end;";
+            "local i=0;function _soloEventUi()i=i+1;return screens[math.min(i,#screens)] end;";
         String continueButton="words={{text='继续',x=1100,y=650}}";
         List<String> cases=List.of(
             "screens={{scene='results',"+continueButton+"},{scene='profileUnlock',words={{text='稍后查看',x=473,y=659},{text='前往',x=808,y=659}}},{scene='event'}};tap=function(x,y)assert(y==1100 or (x==60 and y==473),'Wrong profile action');taps=taps+1 end;assert(dailyCup.settle()==0 and taps==2)",
@@ -68,8 +72,8 @@ final class DailyEventChecks {
             "local screen={scene='profileUnlock',words={{text='稍后查看',x=473,y=659}}};assert(not pcall(dailyCup.dismissProfile,screen,function()return screen end));assert(taps==3,'Stuck popup must have bounded retries')",
             "assert(not dailyCup.dismissProfile({scene='unknown',words={{text='稍后查看',x=473,y=659}}}));assert(taps==0)",
             "for _,label in ipairs({'稍后查査看','稍后查着'}) do assert(dailyCup.dismissProfile({scene='profileUnlock',words={{text=label,x=473,y=659},{text='前往',x=808,y=659}}},function()return {scene='event'}end)) end;assert(taps==2)",
-            "local reads=0;_dailyEventUi=function()reads=reads+1;assert(reads<=9,'alternating lobby OCR timed out');if reads==1 then return {scene='cards',words={}} end;return {scene=reads%3==0 and 'event' or 'unknown'} end;assert(dailyCup.settle()==0 and taps==0)",
-            "screens={{scene='cards',words={}},{scene='event'},{scene='unknown'},{scene='event'},{scene='event'}};local reads=0;_dailyEventUi=function()reads=reads+1;assert(reads<=5,'brief OCR miss restarted full grace period');return screens[reads] end;assert(dailyCup.settle()==0)",
+            "local reads=0;_soloEventUi=function()reads=reads+1;assert(reads<=9,'alternating lobby OCR timed out');if reads==1 then return {scene='cards',words={}} end;return {scene=reads%3==0 and 'event' or 'unknown'} end;assert(dailyCup.settle()==0 and taps==0)",
+            "screens={{scene='cards',words={}},{scene='event'},{scene='unknown'},{scene='event'},{scene='event'}};local reads=0;_soloEventUi=function()reads=reads+1;assert(reads<=5,'brief OCR miss restarted full grace period');return screens[reads] end;assert(dailyCup.settle()==0)",
             "screens={{scene='cards',words={}},{scene='unknown',closeX={x=1115,y=140},words={{text='购买赛季通行证',x=900,y=550}}},{scene='event'}};tap=function(x,y)assert(x==579 and y==1115);taps=taps+1 end;assert(dailyCup.settle()==0 and taps==1)",
             "screens={{scene='vehicleUnlock',closeX={x=1115,y=140},words={}}};assert(not pcall(dailyCup.settle));assert(taps==0)",
             "screens={{scene='vehicleUnlock',unlockLater={x=438,y=645},words={{text='升星',x=841,y=645}}},{scene='event'}};tap=function(x,y)assert(x==74 and y==438,'Wrong star-up action');taps=taps+1 end;assert(dailyCup.settle()==0 and taps==1)",
@@ -92,6 +96,11 @@ final class DailyEventChecks {
             "screens={{scene='cards',frameId=1000,words={{text='点击任意区域可跳过',x=640,y=665}}},"+
                 "{scene='cards',frameId=2200,"+continueButton+"},{scene='event'}};"+
                 "tap=function(x,y)assert(y==1100);taps=taps+1 end;assert(dailyCup.settle('特殊赛事')==0 and taps==1)",
+            "screens={{scene='results',"+continueButton+"},{scene='unknown',frameId=1000},{scene='unknown',frameId=2000},{scene='unknown',frameId=3000}};"+
+                "function cmpColorEx(pattern)assert(pattern==dailyCup.operation[3][1]);return 1 end;assert(dailyCup.settle()==0 and taps==1)",
+            "screens={{scene='unknown'}};function cmpColorEx(pattern)assert(pattern==dailyCup.operation[3][1]);return 1 end;assert(not pcall(dailyCup.settle) and taps==0,'A lobby color alone is not a completed race')",
+            "screens={{scene='unknown',closeX={x=1115,y=140}}};local probes=0;function cmpColorEx()probes=probes+1;return 1 end;"+
+                "local ok,reason=pcall(dailyCup.settle);assert(not ok and probes==0 and tostring(reason):find('未确认返回赛事'),'Popup background must not confirm the lobby')",
             "screens={{scene='event'}};assert(not pcall(dailyCup.settle));assert(taps==0)",
             "screens={{scene='unknown',"+continueButton+"}};assert(not pcall(dailyCup.settle));assert(taps==0)",
             "screens={{scene='loading',route='旧金山喧闹铁路'},{scene='loading',route='旧金山喧闹铁路'},{scene='race'}};dailyCup.readMap();assert(data['多人地图']=='旧金山喧闹铁路' and data['线路']=='route')",
@@ -122,6 +131,6 @@ final class DailyEventChecks {
         for(int y=639;y<=657;y++)button[1170*720+719-y]=0xff263e45;
         if(DailyEventUi.zeroTicketStart(vehicle,mixedIcon,new PixelFrame(720,1280,button)))
             throw new AssertionError("An additional digit cannot pass the zero-cost check");
-        return scenes.length+cases.size()+10;
+        return scenes.length+cases.size()+11;
     }
 }

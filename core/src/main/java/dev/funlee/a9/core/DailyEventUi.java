@@ -106,6 +106,8 @@ public final class DailyEventUi {
         if(t.contains("俱乐部奖励")&&t.contains("单人奖励")) {
             if(t.contains("比赛")&&(t.contains("最佳用时")||t.contains("阶段")||t.contains("赛事")))return "event";
         }
+        if(t.contains("限时")&&t.contains("赛事")&&!t.contains("单人奖励")&&!t.contains("继续")&&
+                !t.contains("探索赛事")&&!t.contains("挑战限时"))return "loading";
         return "unknown";
     }
 

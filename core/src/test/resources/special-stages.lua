@@ -7,7 +7,7 @@ local chapterSelected,stageSelected=false,false
 utils.openSpecialEntry=function(_,position)assert(position==2)end
 local returned=false
 function keyPress(key)
-  assert(scenario=='saved-fifth' and key=='back' and not returned)
+  assert((scenario=='saved-fifth' or scenario=='reselect-fifth') and key=='back' and not returned)
   returned=true
 end
 function keepCapture()end
@@ -44,7 +44,7 @@ function _soloEventUi(_,stageProbe)
     local actual=scenario=='wrong-stage' and 2 or target
     return {scene='specialRanking',words={{text='阶段'..actual,x=195,y=112},{text='开始',x=1100,y=650}}}
   end
-  if scenario=='saved-fifth' and not returned then
+  if (scenario=='saved-fifth' or scenario=='reselect-fifth') and not returned then
     return {scene='missionRewards',stageLabel='阶段5',words={{text='继续',x=1100,y=650}}}
   end
   if not chapterSelected then return {scene='unknown',words={{text='章节1',x=165,y=250}}} end
@@ -74,7 +74,13 @@ function _soloEventUi(_,stageProbe)
 end
 
 function test()
-  local ok,result=pcall(utils.intoSpecial,{})
+  local ok,result
+  if scenario=='reselect-fifth' then
+    utils.openSpecialEntry=function()error('Reselect inside the event without reopening it')end
+    ok,result=pcall(utils.selectSpecialStage,_soloEventUi())
+  else
+    ok,result=pcall(utils.intoSpecial,{})
+  end
   if scenario=='stuck' then
     assert(not ok and result:find('列表最左',1,true) and not stageSelected,result)
   elseif scenario=='wrong-stage' then

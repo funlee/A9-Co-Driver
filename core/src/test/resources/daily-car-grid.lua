@@ -5,14 +5,20 @@ local tapped={}
 local entrySwipes=0
 local confirmCase=scenario:match('^confirm%-(.*)')
 local fullReads=0
-local filtered=scenario=='filtered-slide' or scenario=='filtered-click' or confirmCase
+local emptyCase=scenario:match('^empty%-(.*)')
+local emptyFullReads=0
+local filtered=scenario=='filtered-slide' or scenario=='filtered-click' or confirmCase or emptyCase
 if filtered then
   run.data['选车筛选']='0,1,2'
   utils.configureGarageFilter=function()return true end
   if scenario:find('click') then run.data['选车方式']='1' end
 end
 if filtered or scenario=='at-start' then offset=0 end
-local blankReads=2
+if emptyCase=='cup' then data['项目']='杯赛';run.data['选车方式']='1' end
+if emptyCase=='special' then data['项目']='特殊赛事' end
+if emptyCase=='club' then data['项目']='车联' end
+if emptyCase=='unfiltered' then run.data['选车筛选']='' end
+local blankReads=emptyCase and 0 or 2
 local bounceReads=0
 local returns=0
 function print()end
@@ -27,6 +33,15 @@ local function signature(index)
 end
 function _soloGarageUi(fast)
   frame=frame+250
+  if emptyCase and (emptyCase~='recovered' or frame==250) then
+    if not fast then emptyFullReads=emptyFullReads+1 end
+    if emptyCase=='timeout' then data['超时状态']=true end
+    return {scene=(emptyCase=='unknown' or emptyCase=='focused') and 'unknown' or 'cars',
+      focusedGarage=emptyCase=='focused',
+      frameId=emptyCase~='missing-frame' and (emptyCase=='stale' and 250 or frame) or nil,
+      gridOnly=fast,garageEmpty=not fast and emptyCase~='unconfirmed' and (emptyCase~='delayed' or emptyFullReads>1),
+      garage={start=false,left=-1,pitch=474,cards={}}}
+  end
   if blankReads>0 then
     blankReads=blankReads-1
     return {scene='cars',frameId=frame,gridOnly=fast,garage={start=false,left=-1,pitch=474,cards={}}}
@@ -93,7 +108,18 @@ utils.carFuel=function()
 end
 utils.backToGarage=function()returns=returns+1 end
 function test()
-  if confirmCase then
+  if emptyCase then
+    function toast()end
+    local ok,result=pcall(utils.chooseCarCup,{1})
+    if emptyCase=='filtered' or emptyCase=='cup' or emptyCase=='special' or emptyCase=='club' or emptyCase=='focused' or emptyCase=='delayed' or emptyCase=='unfiltered' then
+      assert(ok and result=='garageEmpty' and #tapped==0 and resets==0 and not next(data['用车次数']),tostring(result))
+      assert(run.data['选车筛选']==(emptyCase=='unfiltered' and '' or '0,1,2'),'Keep configured filters unchanged')
+    elseif emptyCase=='recovered' then
+      assert(ok and result==true and tapped[1]==1,'Transient empty list must recover')
+    else
+      assert(not ok and #tapped==0 and not next(data['用车次数']),'Unconfirmed/stale/timeout is not a normal skip: '..tostring(result))
+    end
+  elseif confirmCase then
     function toast()end
     local ok,result=pcall(utils.chooseCarCup,{1})
     if confirmCase=='home' or confirmCase=='car-click' then

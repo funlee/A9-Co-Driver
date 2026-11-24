@@ -25,7 +25,11 @@ final class CupCarRotationChecks {
             "local reads,taps=0,0;function tap(y,x)assert(y==690 and x==38);taps=taps+1 end;function _soloEventUi()reads=reads+1;if reads<4 then return {scene='vehicleUpgrade',frameId=reads} end;return {scene='car',frameId=reads,fuel=7}end;assert(utils.carFuel()==7 and taps==1 and reads==5)",
             "local taps=0;function tap()taps=taps+1 end;function _soloEventUi()return {scene='vehicleUpgrade',frameId=1}end;assert(not pcall(utils.carFuel) and taps==1)",
             "empty[1]=true;selected=1;run.data['杯赛用车']={1};function tap()error('Must not click refuel/Skip/Start')end;assert(utils.startConfiguredRace()=='fuelEmpty')",
-            "run.data['广告修车']='0';empty[1]=true;local cars={1,2};assert(utils.chooseCarCup(cars));assert(table.concat(calls,',')=='1,2' and ads==0)"
+            "run.data['广告修车']='0';empty[1]=true;local cars={1,2};assert(utils.chooseCarCup(cars));assert(table.concat(calls,',')=='1,2' and ads==0)",
+            "local reads=0;function _soloEventUi()reads=reads+1;if reads%2==0 then return {scene='unknown',frameId=reads} end;return {scene='car',frameId=reads,fuel=2}end;assert(utils.carFuel()==2,'Flickering unknown frames must not reset fuel confirmation')",
+            "utils.mycolor=function()return 1 end;function cmpColor(x,y)return x==75 and 1 or 0 end;function tap()error('Must not tap when the start button is white')end;function _soloEventUi()return {scene='car',frameId=1}end;assert(utils.startRace()=='fuelEmpty','White start button means locked or empty even without a fuel reading')",
+            "utils.mycolor=function()return 1 end;function cmpColor()return 0 end;local taps=0;function tap(x,y)assert(x==80 and y==1080);taps=taps+1 end;function _soloEventUi()return {scene='car',frameId=1}end;assert(utils.startRace()==1 and taps==2,'Pixel confirmation must start the race without an OCR fuel reading')",
+            "run.data['选车方式']='0';run.data['广告修车']='0';vehicleGrid={soloOrigin=function()return {cards={{1}}} end,soloCar=function(origin,car)return {index=car,signature='sig'..car,availability=car==1 and 'empty' or 'unknown',x=100,y=100} end};function _soloGarageUi()return {scene='cars',frameId=1,garage={cards={{1}}}}end;function tap(x,y)calls[#calls+1]=x..','..y end;assert(utils.chooseCarCup({1,2})==true and #calls==1 and calls[1]=='619,100','List-level empty badge must skip the detail page')"
         );
         for(String script:cases)try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
             lua.load("utilities",Files.readString(assets.resolve("lua/utilities.lua")));lua.load("fixture",setup);
@@ -43,7 +47,7 @@ final class CupCarRotationChecks {
                 "return string.find(pattern,'302|142',1,true)and 1 or 0 end;"+
                 "utils.mycolor=function(x,y)return x==50 and y==830 and 1 or 0 end;"+
                 "utils.carFuel=function()return 2 end;function _soloEventUi()return {scene='car',fuel=2,words={{text='开始A2',x=1080,y=639},{text='跳过',x=1100,y=650}}}end;function _racePanel(visible)shown=visible end;"+
-                "function test()assert(utils.startRace()==1 and taps==1 and not shown,'Panel must stay hidden while loading')end");
+                "function test()assert(utils.startRace()==1 and taps==2 and not shown,'Panel must stay hidden while loading')end");
             lua.start("test");boolean alive=true;for(int i=0;i<30&&alive;i++)alive=lua.step(i*1000L);
             if(alive)throw new AssertionError("Obscured nitro start did not terminate");
         }
@@ -54,7 +58,7 @@ final class CupCarRotationChecks {
         try(var input=CupCarRotationChecks.class.getResourceAsStream("/daily-car-grid.lua")){
             fixture=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
         }
-        var scenarios=List.of("at-start","filtered-click","filtered-slide","confirm-click","confirm-slide","confirm-obscured","confirm-home","confirm-car-click","confirm-moving","confirm-stale","ordered","stuck","mismatch","model","large","locked","locked-only","locked-detail","star-card","star-detail","star-only");
+        var scenarios=List.of("empty-focused","empty-delayed","empty-unfiltered","empty-filtered","empty-cup","empty-special","empty-club","empty-stale","empty-unknown","empty-timeout","empty-missing-frame","empty-recovered","empty-unconfirmed","at-start","filtered-click","filtered-slide","confirm-click","confirm-slide","confirm-obscured","confirm-home","confirm-car-click","confirm-moving","confirm-stale","ordered","stuck","mismatch","model","large","locked","locked-only","locked-detail","star-card","star-detail","star-only");
         for(String scenario:scenarios)
                 try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
             lua.set("scenario",scenario);
@@ -85,9 +89,20 @@ final class CupCarRotationChecks {
                 !"locked".equals(((Map<?,?>)cards.get(0)).get("availability"))||
                 "locked".equals(((Map<?,?>)cards.get(2)).get("availability")))
             throw new AssertionError("Daily garage counts red and gold tiles and reads the expected lower card");
+        // Fuel pill: bright yellow-green while fuel remains, pink once the tank is empty.
+        for(int y=393;y<=431;y++)for(int x=579;x<=666;x++)pixels[x*720+719-y]=0xffe04080;
+        for(int y=637;y<=675;y++)for(int x=579;x<=666;x++)pixels[x*720+719-y]=0xffc3fb13;
+        cards=(List<?>)MultiplayerGarage.soloSlots(new PixelFrame(720,1280,pixels),List.of(),16.0/9).get("cards");
+        if(!"empty".equals(((Map<?,?>)cards.get(2)).get("availability"))||
+                !"ready".equals(((Map<?,?>)cards.get(3)).get("availability")))
+            throw new AssertionError("Solo cards must expose the fuel pill at the lower-left");
+        cards=(List<?>)MultiplayerGarage.soloSlots(new PixelFrame(720,1280,pixels),
+                List.of(Map.of("x",611,"y",654,"text","0/4")),16.0/9).get("cards");
+        if(!"empty".equals(((Map<?,?>)cards.get(3)).get("availability")))
+            throw new AssertionError("A 0/N counter overrides the bright fuel pill");
         for(int x=46;x<87;x++)for(int y=195;y<670;y++)pixels[x*720+719-y]=0xff963815;
         if(Boolean.TRUE.equals(MultiplayerGarage.soloSlots(new PixelFrame(720,1280,pixels),List.of(),16.0/9).get("start")))
             throw new AssertionError("A clipped preceding card cannot be counted as the origin");
-        return scenarios.size()+2;
+        return scenarios.size()+4;
     }
 }

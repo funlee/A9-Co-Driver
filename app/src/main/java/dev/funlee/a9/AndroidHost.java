@@ -87,6 +87,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
 
     void checkRecoveryAvailable() throws Exception {
         if(hardStop!=null)throw new IllegalStateException(hardStop);
+        CaptureSession.requireSupportedDisplay(context);
         if(capture.authorizationEnded())throw new IllegalStateException("截屏授权已结束");
         if(touch==null||touch!=TouchService.instance)throw new IllegalStateException("无障碍服务已断开，请重新连接");
         if(context.getSystemService(android.app.KeyguardManager.class).isKeyguardLocked())
@@ -148,9 +149,9 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     private String s(Lua l,int i) {return l.toString(i);}
     private int result(Lua l,Object... values) {for(Object value:values)LuaRuntime.push(l,value);return values.length;}
     private void capture() {
+        CaptureSession.requireSupportedDisplay(context);
         if(touch!=null)touch.requireGameForeground();
-        CaptureSession.Snapshot snapshot=capture.frame(store.config.optInt("rotation",90),
-                touch==null?null:touch::foregroundGameBounds);
+        CaptureSession.Snapshot snapshot=capture.frame(store.config.optInt("rotation",90));
         Bitmap b=snapshot.bitmap;
         int[] p=new int[720*1280];b.getPixels(p,0,720,0,0,720,1280);b.recycle();
         viewport=snapshot.viewport;
@@ -180,9 +181,10 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         }
         return panelOnFrame;
     }
-    private double viewportAspect(){return viewport.width/(double)viewport.height;}
-    private boolean wideViewport(){return viewportAspect()>=2.0;}
-    private boolean ultrawideViewport(){return viewportAspect()>2.07;}
+    // All production recognition and task coordinates use the original 16:9 layout.
+    private double viewportAspect(){return GameViewport.LANDSCAPE_ASPECT;}
+    private boolean wideViewport(){return false;}
+    private boolean ultrawideViewport(){return false;}
     private void addHomeButton(Map<String,Object> out){
         Map<String,Integer> button=RaceHud.homeButton(frame,ultrawideViewport());
         if(!button.isEmpty())out.put("homeButton",button);
@@ -572,8 +574,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 scene="car";out.put("zeroTicketStart",true);
             }
             if(solo&&scene.equals("unknown")&&DailyEventUi.rewardOnly(full.getText(),words,frame))scene="dailyRewardOnly";
-            if(solo&&scene.equals("unknown")&&wideViewport()&&RaceHud.backWedge(frame)&&
-                    CupCarousel.cards(frame,true).size()>=3)scene="wideCupList";
+            if(solo&&scene.equals("unknown")&&CupCarousel.listVisible(frame))scene="cupList";
             boolean settlement=scene.equals("missionRewards")||scene.equals("results")||scene.equals("rewards")||scene.equals("cards")||scene.equals("conversion")||ResultRank.personalReward(full.getText())||(scene.equals("unknown")&&SessionState.resultOverlay);
             if(settlement!=SessionState.resultOverlay){
                 prepareOverlay(settlement,false);
@@ -805,9 +806,17 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                             if(!obscured && "unknown".equals(ui.get("scene")) && RaceHud.backWedge(frame)
                                     && GarageOcr.soloHeading(recognizer,frame))ui.put("focusedGarage",true);
                         }
-                        if("cars".equals(ui.get("scene"))||Boolean.TRUE.equals(ui.get("focusedGarage"))){
-                            List<?> words=(List<?>)ui.get("words");
+                        boolean obscured=popupPanel()!=null||ui.containsKey("closeX")||
+                                Boolean.TRUE.equals(GarageFilter.read(frame,viewportAspect()).get("present"));
+                        List<?> words=(List<?>)ui.getOrDefault("words",List.of());
+                        boolean garageScene="cars".equals(ui.get("scene"))||Boolean.TRUE.equals(ui.get("focusedGarage"));
+                        boolean empty=!obscured&&(garageScene||"unknown".equals(ui.get("scene")))&&
+                                GarageOcr.soloEmpty(recognizer,frame,words,viewportAspect());
+                        if(garageScene||empty){
+                            ui=new LinkedHashMap<>(ui);
                             ui.put("garage",MultiplayerGarage.soloSlots(frame,words,viewportAspect()));
+                            ui.put("garageEmpty",empty);
+                            if(empty)ui.put("focusedGarage",true);
                         }
                         return result(l,ui);
                     }

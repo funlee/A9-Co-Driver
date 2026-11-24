@@ -1,7 +1,10 @@
 package dev.funlee.a9.core;
 
-/** Maps the automation's 720 × 1280 frame to the captured game window on the display. */
+/** Maps the original 720 × 1280 automation frame to the full display without scaling. */
 public final class GameViewport {
+    public static final int FRAME_WIDTH=720,FRAME_HEIGHT=1280;
+    public static final double LANDSCAPE_ASPECT=FRAME_HEIGHT/(double)FRAME_WIDTH;
+    public static final String DISPLAY_REQUIREMENT="设备分辨率不符合要求：仅支持 720×1280（游戏横屏 1280×720）";
     public final int left, top, width, height, rotation;
 
     public GameViewport(int left, int top, int width, int height, int rotation) {
@@ -9,16 +12,20 @@ public final class GameViewport {
         this.rotation=Math.floorMod(rotation,360);
     }
 
-    public static boolean supports(int width,int height,int rotation) {
-        if(width<=0||height<=0||rotation%90!=0)return false;
-        double ratio=rotation%180==0?width/(double)height:height/(double)width;
-        // Keep the existing narrow-screen tolerance and accept landscape displays up to 2.5:1.
-        return ratio>=.4&&ratio<=720.0/1280+.08;
+    /** Device admission is orientation-independent; both dimensions must match the original. */
+    public static boolean supportsDevice(int width,int height) {
+        return (width==FRAME_WIDTH&&height==FRAME_HEIGHT)||(width==FRAME_HEIGHT&&height==FRAME_WIDTH);
     }
 
+    public static boolean supports(int width,int height,int rotation) {
+        if(rotation%90!=0)return false;
+        return rotation%180==0?width==FRAME_WIDTH&&height==FRAME_HEIGHT:
+                width==FRAME_HEIGHT&&height==FRAME_WIDTH;
+    }
+
+    /** Letterboxing, split-screen and offset windows are not supported. */
     public boolean isFullHeightWindow(int displayWidth,int displayHeight) {
-        return left>=0&&top>=0&&left+width<=displayWidth&&top+height<=displayHeight&&
-                width>=displayWidth*.7&&height>=displayHeight*.9&&supports(width,height,rotation);
+        return left==0&&top==0&&width==displayWidth&&height==displayHeight&&supports(width,height,rotation);
     }
 
     public float[] toScreen(int x,int y) {

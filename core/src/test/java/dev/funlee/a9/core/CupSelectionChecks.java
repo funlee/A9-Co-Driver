@@ -22,6 +22,12 @@ final class CupSelectionChecks {
         cards=CupCarousel.cards(new PixelFrame(720,1280,pixels));
         if(!cards.get(1).get("selected").equals(true)||!cards.get(0).get("selected").equals(false))throw new AssertionError("Task panel obscures card selection");
         if(!CupCarousel.cards(new PixelFrame(720,1280,new int[720*1280])).isEmpty())throw new AssertionError("Empty screen detected as carousel");
+        if(CupCarousel.listVisible(new PixelFrame(720,1280,pixels)))throw new AssertionError("Cards without Back must not identify a list");
+        for(int x=29;x<=53;x++)for(int y=43;y<=76;y++)pixels[x*720+719-y]=0xffffffff;
+        if(!CupCarousel.listVisible(new PixelFrame(720,1280,pixels)))throw new AssertionError("Standard carousel must not require a wide viewport");
+        int[] noSelection=pixels.clone();
+        for(int edge:new int[]{238,435})for(int x=99;x<=199;x++)noSelection[edge*720+x]=0xff00335d;
+        if(CupCarousel.listVisible(new PixelFrame(720,1280,noSelection)))throw new AssertionError("List requires a selected event");
         int[] widePixels=new int[720*1280];
         widePixels[50*720+680]=widePixels[70*720+660]=0xffffffff;
         if(!RaceHud.visible(new PixelFrame(720,1280,widePixels)))throw new AssertionError("Pause-button samples stopped matching");
@@ -72,7 +78,7 @@ final class CupSelectionChecks {
         if(wideCards.size()!=3||!wideCards.get(1).get("center").equals(317))
             throw new AssertionError("A bright C-class shield must not split a card into two short edges");
         int[] spotlight=new int[720*1280];
-        for(int y=371;y<=438;y++){
+        for(int y=394;y<=438;y++){
             for(int x=390;x<=398;x++)spotlight[x*720+719-y]=0xffff0054;
             for(int x=409;x<=870;x++)spotlight[x*720+719-y]=0xffffffff;
             for(int x=881;x<=889;x++)spotlight[x*720+719-y]=0xffff0054;
@@ -86,7 +92,7 @@ final class CupSelectionChecks {
         PixelFrame claim=new PixelFrame(720,1280,spotlight);
         if(!CupCarousel.claimSpotlight(claim)||!CupCarousel.claimOnlyAt(claim,639)||CupCarousel.claimOnlyAt(claim,803))
             throw new AssertionError("Claim spotlight applies only to the highlighted card");
-        for(int x=881;x<=889;x++)for(int y=371;y<=438;y++)spotlight[x*720+719-y]=0;
+        for(int x=881;x<=889;x++)for(int y=394;y<=438;y++)spotlight[x*720+719-y]=0;
         if(CupCarousel.claimSpotlight(new PixelFrame(720,1280,spotlight)))
             throw new AssertionError("An unrelated single pink border is not a claim spotlight");
         String fixture="realFindCup=utils.findCup;data={};run={index=3,data={['杯赛位置']='3'}};LOCAL_ROOT='/tmp/a9-cup-check';"+
@@ -113,20 +119,20 @@ final class CupSelectionChecks {
             "function _cupClaimState(x)return x==310 and 'claimOnly' or '' end;"+
                 "function _cupCards()return {{center=155},{center=310,selected=true}}end;"+
                 "function tap()error('must not enter a claim-only card')end;assert(utils.chooseCup('2',true)=='cupClaimOnly')",
-            "local ok=pcall(utils.chooseCup,'0');assert(not ok and #taps==0 and removed==0,'zero position emits input')",
-            "local ok=pcall(utils.chooseCup,'no');assert(not ok and #taps==0 and removed==0,'invalid text silently chooses position two')",
-            "local ok=pcall(utils.chooseCup,'2.5');assert(not ok and #taps==0,'fractional position emits input')",
+            "assert(utils.chooseCup('0')=='cupPositionInvalid' and #taps==0 and removed==0,'zero position emits input')",
+            "assert(utils.chooseCup('no')=='cupPositionInvalid' and #taps==0 and removed==0,'invalid text silently chooses position two')",
+            "assert(utils.chooseCup('2.5')=='cupPositionInvalid' and #taps==0,'fractional position emits input')",
             "utils.chooseCup('3');local count=0;utils.findCup=function(...)count=count+1;if count==3 then return {16,300,350,212} end;return {-1,-1,-1,-1} end;utils.chooseCup('3');assert(run.data['杯赛位置']=='2','rediscovered event saves zero-based position')",
             "utils.chooseCup('3');utils.findCup=function(...)return {-1,-1,-1,-1} end;utils.chooseCup('3');assert(selected==3,'exhausted search retries default position two')",
             "selected=1;utils.mycolor=function(x,y,color)return selected==math.floor((y-120)/180+1.5) and color=='12FBC3-101010' and 1 or 0 end;local originalTap=tap;tap=function(x,y)assert(not (y==150 and selected==1),'entered first event while resetting carousel');originalTap(x,y)end;utils.chooseCup('3');assert(selected==3 and snapshots[1]==3)",
             "selected=1;utils.mycolor=function(x,y,color)return color=='12FBC3-101010' and 1 or 0 end;utils.chooseCup('1');assert(#taps==1 and #snapshots==1,'already selected first event entered twice')",
             "_findColorTriple=function(x,y,x2,y2,color)if color=='12FBC3-101010' then return 0,16,435 end;return -1,-1,-1 end;_findPicTriple=function(...)return 0,350,212 end;local r=realFindCup('cache');assert(r[1]==16 and r[2]==435 and r[3]==350,'lime cached event not recognized')",
             "_findPicTriple=function(...)return 0,350,212 end;local r=realFindCup('cache');assert(r[3]==-1,'matched image without selected card would click invalid coordinates')",
-            "utils.mycolor=function(...)return 0 end;local ok=pcall(utils.chooseCup,'3');assert(not ok and #snapshots==0 and #taps==1,'unconfirmed selection entered an event')",
+            "utils.mycolor=function(...)return 0 end;assert(utils.chooseCup('3')=='cupPositionUnavailable' and #snapshots==0 and #taps==1,'unconfirmed selection entered an event')",
             "selected=1;function _cupCards() return {{center=159,selected=selected==1},{center=317,selected=false},{center=467,selected=selected==3}} end;"+
                 "function tap(x,y)assert(y==467);selected=3;taps[#taps+1]=y end;assert(utils.chooseCup('3',true)==1 and #taps==2)",
             "function _cupCards()return {{center=159,selected=true},{center=467}}end;"+
-                "assert(not pcall(utils.chooseCup,'2',true) and #taps==0,'a missing intermediate card changed the requested position')",
+                "assert(utils.chooseCup('2',true)=='cupPositionUnavailable' and #taps==0,'a missing intermediate card changed the requested position')",
             "selected=1;local first=1;local entered=0;"+
                 "function _cupCards()local cards={};for i=first,first+2 do cards[#cards+1]={center=159+(i-first)*150,selected=i==selected}end;return cards end;"+
                 "function swipe(x,y,x2,y2)if y2<y then first=first+1 else first=1 end end;"+
@@ -144,8 +150,9 @@ final class CupSelectionChecks {
                 "if selected==2 then entered=entered+1 else selected=2 end end;"+
                 "assert(utils.chooseCup('-2',true)==1 and entered==1,'transient missing card prevented a verified selection')"
         );
-        int checked=11;
+        int checked=14;
         for(String script:cases){
+            cleanCupCache();
             try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
                 lua.load("utilities",Files.readString(assets.resolve("lua/utilities.lua")));lua.load("cup-fixture",fixture);
                 lua.load("cup-case","function test()"+script+" end");lua.start("test");
@@ -157,6 +164,7 @@ final class CupSelectionChecks {
         // Five real cards fit before the garage-unlock footer. Negative positions
         // must count cards, including those requiring a scroll, not screen slots.
         for(int position:new int[]{-1,-2,-6,-8,-20,-21}){
+            cleanCupCache();
             try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
                 lua.load("utilities",Files.readString(assets.resolve("lua/utilities.lua")));lua.load("cup-fixture",fixture);
                 lua.load("negative-carousel","offset=16;selected=18;entered=0;"+
@@ -165,13 +173,86 @@ final class CupSelectionChecks {
                         "function tap(x,y)for _,card in ipairs(_cupCards())do if card.center==y then local id=offset+(y-80)/185;if id==selected then entered=entered+1 else selected=id end;return end end;error('tap outside real cards')end;"+
                         "utils.mycolor=function(x,y,color)return 0 end;"+
                         "function test()local ok,result=pcall(utils.chooseCup,'"+position+"');"+
-                        (position==-21?"assert(not ok and entered==0,'out-of-range position entered an event')":
+                        (position==-21?"assert(ok and result=='cupPositionUnavailable' and entered==0,'out-of-range position entered an event')":
                         "assert(ok,result);assert(result==1 and selected=="+(21+position)+" and entered==1,'wrong negative event');assert(#snapshots==1 and snapshots[1]==selected,'wrong identity cached')")+" end");
                 lua.start("test");boolean alive=true;for(int n=0;n<500&&alive;n++)alive=lua.step(n*1000L);
                 if(alive)throw new AssertionError("Negative cup selector did not terminate");
             }
             checked++;
         }
+        // Regression for the short fixed-scroll bug: 25 cards in pixel space,
+        // each rightward swipe flings 800px like a real gesture, reaching the
+        // true right stop within the six-attempt cap.
+        cleanCupCache();
+        try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
+            lua.load("utilities",Files.readString(assets.resolve("lua/utilities.lua")));lua.load("cup-fixture",fixture);
+            lua.load("slow-carousel","offset=0;selected=0;entered=0;swipes=0;"+
+                    "function visibleCards()local cards={};for id=1,25 do local c=(id-0.5)*185-offset;if c>=92 and c<=908 then cards[#cards+1]={center=math.floor(c+0.5),selected=id==selected} end end;return cards end;"+
+                    "function _cupCards()return visibleCards() end;"+
+                    "function swipe(x,y,x2,y2)swipes=swipes+1;if y2<y then offset=math.min(3625,offset+800) else offset=math.max(0,offset-320) end end;"+
+                    "function tap(x,y)if not swipesAtAnchor then swipesAtAnchor=swipes end;for _,card in ipairs(visibleCards())do if math.abs(card.center-y)<3 then local id=math.floor((card.center+offset)/185+0.5);if id==selected then entered=entered+1 else selected=id end;return end end;error('tap outside real cards')end;"+
+                    "utils.mycolor=function(x,y,color)return 0 end;"+
+                    "function test()local ok,result=pcall(utils.chooseCup,'-6');"+
+                    "assert(ok,result);assert(result==1 and selected==20 and entered==1,'short scroll anchored mid-list: selected '..tostring(selected));"+
+                    "assert(swipesAtAnchor and swipesAtAnchor<=6,'endpoint detection must stay within the six-attempt cap') end");
+            lua.start("test");boolean alive=true;for(int n=0;n<500&&alive;n++)alive=lua.step(n*1000L);
+            if(alive)throw new AssertionError("Slow-scroll cup selector did not terminate");
+        }
+        checked++;
+        // Inertia and edge bounce make consecutive reads differ by a couple of
+        // pixels: stability must tolerate 3px instead of exact equality.
+        cleanCupCache();
+        try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
+            lua.load("utilities",Files.readString(assets.resolve("lua/utilities.lua")));lua.load("cup-fixture",fixture);
+            lua.load("jitter-carousel","wobble=0;selected=0;entered=0;"+
+                    "function _cupCards()wobble=-wobble;local cards={};for id=1,5 do cards[#cards+1]={center=139+(id-1)*185+wobble*2,selected=id==selected} end;return cards end;"+
+                    "function swipe(x,y,x2,y2)end;"+
+                    "function tap(x,y)for i,card in ipairs(_cupCards())do if math.abs(card.center-y)<15 then if i==selected then entered=entered+1 else selected=i end;return end end;error('tap outside real cards')end;"+
+                    "utils.mycolor=function(x,y,color)return 0 end;"+
+                    "function test()local ok,result=pcall(utils.chooseCup,'-2');"+
+                    "assert(ok,result);assert(result==1 and selected==4 and entered==1,'2px jitter blocked endpoint stability') end");
+            lua.start("test");boolean alive=true;for(int n=0;n<500&&alive;n++)alive=lua.step(n*1000L);
+            if(alive)throw new AssertionError("Jitter cup selector did not terminate");
+        }
+        checked++;
+        // A list that never settles must still anchor on the current rightmost
+        // card after six attempts instead of failing the whole task.
+        cleanCupCache();
+        try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
+            lua.load("utilities",Files.readString(assets.resolve("lua/utilities.lua")));lua.load("cup-fixture",fixture);
+            lua.load("restless-carousel","shift=0;selected=0;entered=0;reads=0;"+
+                    "function _cupCards()reads=reads+1;shift=math.min(60,shift+10);return {{center=200+shift,selected=selected==1},{center=450+shift,selected=selected==2}} end;"+
+                    "function swipe(x,y,x2,y2)end;"+
+                    "function tap(x,y)for i,card in ipairs(_cupCards())do if math.abs(card.center-y)<15 then if i==selected then entered=entered+1 else selected=i end;return end end;error('tap outside real cards')end;"+
+                    "utils.mycolor=function(x,y,color)return 0 end;"+
+                    "function test()local ok,result=pcall(utils.chooseCup,'-1');"+
+                    "assert(ok,result);assert(result==1 and entered==1,'restless list must anchor and enter: '..tostring(result)) end");
+            lua.start("test");boolean alive=true;for(int n=0;n<500&&alive;n++)alive=lua.step(n*1000L);
+            if(alive)throw new AssertionError("Restless cup selector did not terminate");
+        }
+        checked++;
+        // An abnormal gap between the selected card and its left neighbour means
+        // an intermediate card was missed: fail loudly instead of entering.
+        cleanCupCache();
+        try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
+            lua.load("utilities",Files.readString(assets.resolve("lua/utilities.lua")));lua.load("cup-fixture",fixture);
+            lua.load("gap-anomaly","selected=1;entered=0;"+
+                    "function _cupCards()return {{center=200,selected=selected==1},{center=600,selected=selected==2}} end;"+
+                    "function tap(x,y)if y==600 then selected=2 elseif y==200 then selected=1 else error('unexpected tap') end end;"+
+                    "utils.mycolor=function(x,y,color)return 0 end;"+
+                    "function test()local ok,result=pcall(utils.chooseCup,'-2');"+
+                    "assert(ok and result=='cupPositionUnavailable' and entered==0,'abnormal card gap entered an event') end");
+            lua.start("test");boolean alive=true;for(int n=0;n<500&&alive;n++)alive=lua.step(n*1000L);
+            if(alive)throw new AssertionError("Gap-anomaly cup selector did not terminate");
+        }
+        checked++;
         return checked;
+    }
+    private static void cleanCupCache()throws Exception{
+        Path dir=Paths.get("/tmp/a9-cup-check");
+        Files.createDirectories(dir);
+        try(var stream=Files.list(dir)){
+            for(Path file:(Iterable<Path>)stream::iterator)Files.deleteIfExists(file);
+        }
     }
 }

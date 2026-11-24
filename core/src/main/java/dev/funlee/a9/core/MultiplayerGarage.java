@@ -335,9 +335,54 @@ public final class MultiplayerGarage {
                 "cards",cards,"pitch",pitch);
     }
 
+    /** The observed empty solo list keeps its heading over an uninterrupted blue background. */
+    public static boolean soloEmpty(PixelFrame frame,List<?> words,double aspect){
+        return soloEmpty(frame,words,aspect,false);
+    }
+
+    /** Focused heading OCR can recover text hidden or omitted in the full-screen read. */
+    public static boolean soloEmpty(PixelFrame frame,List<?> words,double aspect,boolean focusedHeading){
+        boolean heading=false,instruction=false;
+        for(Object value:words){
+            Map<?,?> word=(Map<?,?>)value;
+            int x=pos(word,"x"),y=pos(word,"y");
+            String label=MapMatcher.normalize(word.get("text").toString()).replace('擇','择').replace('賽','赛');
+            if(x>=70&&x<=460&&y>=75&&y<=125&&(label.equals("车辆选择")||label.equals("车辅选择")))heading=true;
+            if(x>=70&&x<=620&&y>=120&&y<=165&&label.contains("选择参与此赛事的车辆"))instruction=true;
+            if(x>=90&&x<=1240&&y>=180&&y<=610)return false;
+        }
+        if((!focusedHeading&&(!heading||!instruction))||!RaceHud.backWedge(frame)||
+                !((List<?>)soloSlots(frame,words,aspect).get("cards")).isEmpty())return false;
+        int background=0,total=0;
+        for(int y=185;y<=610;y+=5)for(int x=90;x<=1240;x+=5){
+            int color=frame.pixel(719-y,x),r=color>>16&255,g=color>>8&255,b=color&255;
+            if(r<=12&&g>=8&&g<=45&&b>=25&&b<=85&&b-g>=14)background++;
+            total++;
+        }
+        return background*1000>=total*995;
+    }
+
     private static String soloAvailability(PixelFrame frame,int left,int top,List<?> words){
         String ribbon=availabilityRibbon(frame,left,top,words);
         if(!ribbon.isEmpty())return ribbon;
+        // Solo cards carry the multiplayer fuel pill at the lower-left: bright
+        // yellow-green while fuel remains, pink once the tank is empty.
+        int green=0,pink=0,samples=0;
+        for(int y=top+198;y<=top+236;y+=2)for(int x=left+8;x<=left+95;x+=2){
+            int c=frame.pixel(719-y,x),r=c>>16&255,g=c>>8&255,b=c&255;
+            if(r>=150&&g>=200&&b<=90&&g>r+30)green++;
+            if(r>=195&&g<=75&&b>=50&&b<=185)pink++;
+            samples++;
+        }
+        if(pink>=samples/3)return "empty";
+        if(green>=samples/3){
+            for(Object word:words){
+                Map<?,?> w=(Map<?,?>)word;
+                int x=pos(w,"x")-left,y=pos(w,"y")-top;
+                if(x>0&&x<95&&y>=190&&y<=240&&pair(w.get("text").toString()).matches("0/[1-9]"))return "empty";
+            }
+            return "ready";
+        }
         // Locked cards have the same dark background under both the fuel area
         // and the artwork. Unlocked cards keep their colored background.
         return darkCardPatch(frame,left+12,left+69,top+186,top+215)&&

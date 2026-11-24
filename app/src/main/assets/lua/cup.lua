@@ -44,6 +44,7 @@ function cup.readMap()
       if not ok then data["多人地图"]="";data["线路"]="";print("杯赛地图未确认，使用左划兜底") end
       return
     elseif cmpColorEx(config.noTicket,1)==1 or cmpColorEx(config.tips,1)==1 or cmpColorEx(config.racing,1)==1 then break end
+    utils.tipsHandle()
     sleep(100)
   end
   releaseCapture()
@@ -127,6 +128,7 @@ cup.operation = {
         if cmpColorEx(config.racing, 1) == 1 or cmpColorEx(config.noTicket, 1) == 1 then
           break
         end
+        utils.tipsHandle()
         sleep(500)
       end
     end

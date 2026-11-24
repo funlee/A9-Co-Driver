@@ -9,12 +9,16 @@ public final class CoreChecks {
     private static int checks;
     static void check(boolean value,String message) { checks++; if(!value) throw new AssertionError(message); }
     private static void viewportChecks(){
-        check(GameViewport.supports(1280,720,90),"Existing landscape capture supported");
-        check(GameViewport.supports(2670,1200,90),"Xiaomi 15 landscape capture supported");
-        check(!GameViewport.supports(1200,2670,90),"Portrait transition remains unsupported");
-        check(!GameViewport.supports(3600,1200,90),"Extreme aspect ratio remains unsupported");
+        check(GameViewport.supportsDevice(720,1280)&&GameViewport.supportsDevice(1280,720),"Original device dimensions admitted in either orientation");
+        for(int[] size:new int[][]{{1920,1080},{1440,720},{2670,1200},{720,1600},{800,1280},{0,1280},{-720,1280}})
+            check(!GameViewport.supportsDevice(size[0],size[1])&&!GameViewport.supports(size[0],size[1],90),"Reject other dimensions, including same-ratio and one-matching-axis devices: "+Arrays.toString(size));
+        check(GameViewport.supports(1280,720,90)&&GameViewport.supports(1280,720,270),"Original landscape capture supported in either rotation");
+        check(GameViewport.supports(720,1280,0)&&GameViewport.supports(720,1280,180),"Original portrait frame supports matching rotations");
+        check(!GameViewport.supports(720,1280,90)&&!GameViewport.supports(1280,720,0)&&!GameViewport.supports(1280,720,45),"Wrong orientation and non-quarter rotation rejected");
+        check(new GameViewport(0,0,1280,720,90).isFullHeightWindow(1280,720),"Only full original display supported");
         GameViewport framed=new GameViewport(268,0,2134,1200,90);
-        check(framed.isFullHeightWindow(2670,1200),"Accept a full-height letterboxed game");
+        check(!framed.isFullHeightWindow(2670,1200),"Reject a full-height letterboxed game instead of cropping");
+        check(!new GameViewport(100,0,1280,720,90).isFullHeightWindow(1480,720),"Original-sized window on a larger display is not supported");
         check(!new GameViewport(0,0,1335,1200,90).isFullHeightWindow(2670,1200),"Reject split-screen bounds");
         check(!new GameViewport(268,160,2134,880,90).isFullHeightWindow(2670,1200),"Reject floating-window bounds");
         check(Arrays.equals(framed.toScreen(719,0),new float[]{268,0}),"Window top left");

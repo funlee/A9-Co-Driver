@@ -31,41 +31,16 @@ function spCup.atStartTutorial(screen)
   return cmpColorEx(config.startTutorial, 1) == 1
 end
 
--- Confirm the loading title on two separate frames before using its route.
-local failedStarts=0
-function spCup.observeStart(stopAtTutorial)
-  local candidate,lastFrame,carSince,carFrame
-  local homeFrame
-  local started=tickCount()
-  while tickCount()-started<90000 do
-    local auto=utils.taskRouteAuto()
-    local screen=_soloEventUi(auto and data['线路']=='')
-    local key=screen.specialRoute
-    if key and candidate==key and lastFrame~=screen.frameId then
-      utils.getMapName(key)
-      print('特赛地图连续确认：'..data['多人地图'])
-    end
-    candidate=key;lastFrame=screen.frameId
-    if screen.scene=='race' then failedStarts=0;return end
-    if stopAtTutorial and spCup.atStartTutorial(screen) then return end
-    if screen.scene=='noTicket' then return 'noTicket' end
-    if screen.scene=='home' and screen.frameId then
-      if homeFrame and homeFrame~=screen.frameId then
-        failedStarts=failedStarts+1
-        if failedStarts>2 then error('特殊赛事开赛后反复返回主界面，保留当前任务') end
-        print('特殊赛事开赛后返回主界面，重试当前局 '..failedStarts..'/2')
-        return
-      end
-      homeFrame=screen.frameId
-    else homeFrame=nil end
-    if screen.scene=='car' and screen.fuel and screen.fuel>=0 then
-      if not carSince then carSince=tickCount();carFrame=screen.frameId end
-      if screen.frameId~=carFrame and tickCount()-carSince>=3000 then return end
-    else carSince=nil end
-    data['信息']='特赛开赛中，等待比赛画面'
-    sleep(350)
+-- Map observation is supplementary and never blocks the original page dispatch.
+local candidate,lastFrame
+function spCup.observeStart(screen)
+  if not utils.soloStartAt then candidate=nil;lastFrame=nil;return end
+  local key=screen.specialRoute
+  if key and candidate==key and lastFrame~=screen.frameId and data['线路']=='' then
+    utils.getMapName(key)
+    print('特赛地图连续确认：'..data['多人地图'])
   end
-  error('特殊赛事点击开始后未确认比赛画面，保留当前任务')
+  candidate=key;lastFrame=screen.frameId
 end
 
 spCup.operation = {
@@ -76,7 +51,9 @@ spCup.operation = {
       print("特殊赛事：已识别开赛教学，点击开始")
       utils.prepareTaskRoute(true)
       if button then tap(719-button.y,button.x) else tap(73,1157) end
-      return spCup.observeStart(false)
+      utils.soloStartAt=utils.soloStartAt or tickCount()
+      sleep(2000)
+      -- Return to the original color/popup loop, including an unchanged tutorial.
     end
   },
   {
@@ -123,7 +100,8 @@ spCup.operation = {
       elseif sRet == -1 or sRet == 2 then
         return nil
       end
-      return spCup.observeStart(true)
+      -- Automatic routing must see short loading titles in the main loop.
+      if not utils.taskRouteAuto or not utils.taskRouteAuto() then sleep(3000) end
     end
   },
   {

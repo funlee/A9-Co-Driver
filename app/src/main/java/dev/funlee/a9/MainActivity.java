@@ -223,7 +223,7 @@ public final class MainActivity extends Activity {
         LinearLayout queueActions=row();weighted(queueActions,compactButton("新增任务",()->projectEditor(-1)),0);
         weighted(queueActions,compactButton("重置编排",this::confirmResetProjects),1);
         LinearLayout.LayoutParams queueActionsLayout=new LinearLayout.LayoutParams(-1,-2);queueActionsLayout.bottomMargin=dp(ROW_GAP);body.addView(queueActions,queueActionsLayout);
-        if(all.length()==0)body.addView(label("暂无任务，点击“新增任务”添加，或“重置编排”恢复默认 5 项。",BODY));
+        if(all.length()==0)body.addView(label("暂无任务，点击“新增任务”添加，或“重置编排”恢复默认 "+store.defaultProjectCount()+" 项。",BODY));
         TaskQueueView queue=new TaskQueueView(this,pageScroll,(from,to)->{try{store.moveProject(from,to);render();}catch(Exception e){message(e.getMessage());}});body.addView(queue);
         for(int i=0;i<all.length();i++){
             final int index=i;JSONObject p=all.optJSONObject(i),d=p.optJSONObject("data");boolean active=p.optBoolean("enabled");LinearLayout line=row();line.setGravity(Gravity.CENTER_VERTICAL);line.setPadding(dp(SPACE_SMALL),dp(SPACE_SMALL),dp(SPACE_LARGE),dp(SPACE_SMALL));surface(line,SURFACE,active?0xffb8dbd1:LINE,9);
@@ -242,10 +242,10 @@ public final class MainActivity extends Activity {
     }
     private void confirmResetProjects(){
         showDialog(new AlertDialog.Builder(this).setTitle("重置任务编排？")
-                .setMessage("重置将舍弃当前任务编排配置，并恢复默认的 5 个任务配置。确认重置吗？")
+                .setMessage("重置将舍弃当前任务编排配置，并恢复默认的 "+store.defaultProjectCount()+" 个任务配置。确认重置吗？")
                 .setNegativeButton("取消",null)
                 .setPositiveButton("确认重置",(dialog,which)->{
-                    try{store.resetProjects();render();Toast.makeText(this,"已恢复默认的 5 个任务配置",Toast.LENGTH_SHORT).show();}
+                    try{store.resetProjects();render();Toast.makeText(this,"已恢复默认的 "+store.defaultProjectCount()+" 个任务配置",Toast.LENGTH_SHORT).show();}
                     catch(Exception e){message(e.getMessage());}
                 }).create());
     }
@@ -294,8 +294,8 @@ public final class MainActivity extends Activity {
             else if(type.equals("EditText")){
                 boolean eventPosition=key.equals("杯赛位置");String title=eventPosition?"赛事位置":key;
                 fields.addView(heading(title,BODY));
-                if(eventPosition)fields.addView(label("正数从左起计数，负数从右起计数；3 表示从左起第 3 个赛事。",DETAIL));
-                EditText e=edit(data.optString(key));e.setContentDescription(title);if(eventPosition)e.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_SIGNED);fields.addView(e);views.put(key,e);
+                if(eventPosition)fields.addView(label("仅支持正数，从左起计数；3 表示从左起第 3 个赛事。",DETAIL));
+                EditText e=edit(data.optString(key));e.setContentDescription(title);if(eventPosition){e.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_SIGNED);e.setOnFocusChangeListener((v,hasFocus)->{if(!hasFocus)sanitizeCupPosition((EditText)v);});}fields.addView(e);views.put(key,e);
             }
             else if(type.equals("CheckBoxGroup")){
                 LinearLayout checks=column();String selected=","+data.optString(key)+",";
@@ -311,14 +311,6 @@ public final class MainActivity extends Activity {
         }
         if(mode.equals("多人上"))worldRewardFields(fields,views,data);
         if(mode.equals("多人下"))fields.addView(label("比赛时自动识别地图并执行“地图配置”中的跑法；识别失败或缺少有效跑法时左划兜底。",DETAIL));
-        else if(!mode.equals("多人上")&&!LocalStore.hasTaskRoute(mode)){
-            fields.addView(label("选路为“百分比选路”时，线路填写进度指令；“自定义选图”时可通过下方按钮填入本地地图。",DETAIL));
-            fields.addView(button("选择本地路线",()->chooseRoute(key->{
-                String prefix=mode.equals("车联")?"车手联会":mode.equals("每日战利品")?"杯赛":mode;
-                View target=views.get(prefix+"线路");if(target instanceof EditText)((EditText)target).setText(store.routes.get(key).raw);
-                View choice=views.get(prefix+"选路");if(choice instanceof Spinner)((Spinner)choice).setSelection(3);
-            })));
-        }
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle((index<0?"新增任务 · ":(index+1)+". ")+MultiplayerUi.displayMode(mode)).setView(scroll(fields)).setNegativeButton("取消",null).setPositiveButton("保存",null).create();
         dialog.setOnShowListener(v->dialog.getButton(-1).setOnClickListener(b->{
             try{
@@ -332,7 +324,7 @@ public final class MainActivity extends Activity {
                     data.put(e.getKey(),value);
                 }
                 int times=Integer.parseInt(data.optString("次数","1"));if(times<1||times>10000)throw new IllegalArgumentException("执行次数需为 1–10000");
-                if(data.has("杯赛位置")){try{if(Integer.parseInt(data.getString("杯赛位置"))==0)throw new NumberFormatException();}catch(NumberFormatException e){throw new IllegalArgumentException("赛事位置必须为非零整数");}}
+                if(data.has("杯赛位置")){try{int position=Integer.parseInt(data.getString("杯赛位置"));if(position==0)throw new NumberFormatException();if(position<0){data.put("杯赛位置",String.valueOf(-position));View field=views.get("杯赛位置");if(field instanceof EditText)((EditText)field).setText(String.valueOf(-position));Toast.makeText(this,"杯赛位置不支持负数，已自动改为正数",Toast.LENGTH_SHORT).show();}}catch(NumberFormatException e){throw new IllegalArgumentException("赛事位置必须为非零整数");}}
                 if(mode.equals("特殊赛事")){
                     if(!data.optString("称霸模式").isEmpty()&&!data.optString("称霸位置").matches("[1-9][0-9]*"))
                         throw new IllegalArgumentException("称霸模式章节请填写游戏显示的正整数");
@@ -352,6 +344,9 @@ public final class MainActivity extends Activity {
         }));showDialog(dialog);
     }
     private void worldRewardFields(LinearLayout fields,Map<String,View> views,JSONObject data) {
+        TextView section=heading("动态奖励",BODY);
+        section.setPadding(0,dp(SPACE_LARGE),0,dp(SPACE_SMALL));
+        fields.addView(section);
         CheckBox automatic=checkBox("自选奖励");
         automatic.setChecked("0".equals(data.optString("自选奖励")));
         fields.addView(automatic);views.put("自选奖励",automatic);
@@ -659,7 +654,6 @@ public final class MainActivity extends Activity {
                 }).create();
         showDialog(confirmation);confirmation.getButton(-1).setTextColor(0xffb74d49);
     }
-    private void chooseRoute(java.util.function.Consumer<String> chosen){List<String> keys=store.routeKeys();keys.removeIf(key->store.routes.get(key).raw.isEmpty());String[] labels=new String[keys.size()];for(int i=0;i<labels.length;i++)labels[i]=store.matcher.displayName(keys.get(i));showDialog(new AlertDialog.Builder(this).setTitle("选择已收录的跑法").setAdapter(listOptions(Arrays.asList(labels)),(d,w)->chosen.accept(keys.get(w))).setNegativeButton("取消",null).create());}
     private final List<Runnable> permissionRefreshers=new ArrayList<>();
     private LinearLayout settingsGroup(String title){
         LinearLayout group=card();group.setPadding(dp(PAGE_GUTTER),dp(SPACE_MEDIUM),dp(PAGE_GUTTER),dp(SPACE_MEDIUM));
@@ -834,6 +828,8 @@ public final class MainActivity extends Activity {
     private void requestStart(String route,boolean inspect,boolean resume){
         if(SessionState.running){message("请先停止当前任务");return;}
         SessionState.inspecting=inspect;
+        try{CaptureSession.requireSupportedDisplay(this);}
+        catch(CaptureSession.Unavailable e){showRunIssue(e.getMessage());return;}
         if(inspect&&!Settings.canDrawOverlays(this)&&!getSystemService(NotificationManager.class).areNotificationsEnabled()){showRunIssue("请先开启悬浮窗或通知，以便在游戏中点击取样");return;}
         if(!inspect&&TouchService.instance==null){showRunIssue(TouchService.unavailableReason(this));return;}
         try{
@@ -850,6 +846,7 @@ public final class MainActivity extends Activity {
         super.onActivityResult(request,result,data);if(request!=101)return;
         if(result!=RESULT_OK||data==null){showRunIssue("未授权截屏，任务没有启动");return;}
         try{
+            CaptureSession.requireSupportedDisplay(this);
             JSONObject serviceConfig=store.config;
             if(pendingResume){
                 JSONObject saved=SessionRecord.read(this);
@@ -876,6 +873,13 @@ public final class MainActivity extends Activity {
     }
     private void control(String action){if(!SessionState.running)return;if(action.equals(AutomationService.STOP))SessionState.status("已手动停止");startService(new Intent(this,AutomationService.class).setAction(action));}
     private void message(String text){showDialog(new AlertDialog.Builder(this).setMessage(text==null?"操作失败":text).setPositiveButton("确定",null).create());}
+    private void sanitizeCupPosition(EditText field){
+        String raw=field.getText().toString().trim();
+        if(raw.startsWith("-")){
+            field.setText(raw.substring(1));
+            Toast.makeText(this,"杯赛位置不支持负数，已自动改为正数",Toast.LENGTH_SHORT).show();
+        }
+    }
     @Override protected void onResume(){super.onResume();if(store!=null&&body!=null&&tab==PREFERENCES)render();SessionState.listener=this::updateSession;SessionState.changed();}
     @Override protected void onSaveInstanceState(Bundle out){out.putInt("tab",tab);out.putBoolean("routeOnlyWithoutCode",routeOnlyWithoutCode);out.putBoolean("pendingInspect",pendingInspect);out.putBoolean("pendingResume",pendingResume);out.putString("routeSelectedTrack",routeSelectedTrack);out.putString("routeSelectedMap",routeSelectedMap);out.putStringArrayList("expandedTracks",new ArrayList<>(expandedTracks));out.putStringArrayList("collapsedFilteredTracks",new ArrayList<>(collapsedFilteredTracks));super.onSaveInstanceState(out);}
     @Override protected void onPause(){if(failureNotice!=null)failureNotice.dismiss();SessionState.listener=null;super.onPause();}

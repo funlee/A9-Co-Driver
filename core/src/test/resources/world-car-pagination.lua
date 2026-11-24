@@ -7,20 +7,36 @@ local dispatched=0
 local oldOffset=0
 local pageLeft=500
 local unreadableAfterRace=scenario=='unreadableAfterRace'
-local repeatRace=scenario=='remembered' or scenario=='differentPage' or scenario=='reversePage' or unreadableAfterRace
+local filtered=scenario=='filtered' or scenario=='filteredMaster'
+local master=scenario=='filteredMaster'
+local repeatRace=scenario=='remembered' or scenario=='differentPage' or scenario=='reversePage' or unreadableAfterRace or filtered
 local wideCar10=scenario=='wideCar10' or scenario=='wideCar10Overscroll'
 local firstSwipes=nil
 local fullPageReads=0
-data={['项目']='多人上',['多人']=0}
-run={data={['次数']=repeatRace and 2 or 1,['青铜用车']={27,28,5},['用车模式']='1'}}
+local filterCalls=0
+data={['项目']=master and '多人下' or '多人上',['多人']=0}
+run={data={['次数']=repeatRace and 2 or 1,['用车模式']='1'}}
+if master then run.data['多人下用车']={27,28,5} else run.data['青铜用车']={27,28,5} end
 if scenario=='reversePage' then run.data['青铜用车']={28,5} end
 if wideCar10 then run.data['青铜用车']={10} end
+if filtered then run.data['选车筛选']='0,1,2' end
 local resets=0
 utils={defultCfg=function(v,d)return v or d end}
+if filtered then
+  utils.configureGarageFilter=function(selection)
+    assert(selection=='0,1,2','Selection string must be passed through unchanged')
+    assert(phase=='cars','Filter belongs on the garage list, not '..phase)
+    if filterCalls==0 then assert(chosen==0,'Filter must precede the first car tap') end
+    filterCalls=filterCalls+1
+    -- The panel re-sorts the garage, so the previous scroll position is void.
+    offset=0;pageLeft=500;oldOffset=0
+  end
+end
 function print()end
 local notices=0
 function _taskNotice(message,duration)
-  assert(phase=='event' and message==(unreadableAfterRace and firstSwipes and '未能确认当前段位' or '青铜') and duration>0)
+  local expected=master and '无段位' or (unreadableAfterRace and firstSwipes and '未能确认当前段位' or '青铜')
+  assert(phase=='event' and message==expected and duration>0)
   notices=notices+1
 end
 function _hud()end
@@ -74,14 +90,14 @@ function _multiplayerUi(_,__,pixelsOnly)
   if phase=='event' then
     local league='青铜'
     if unreadableAfterRace and firstSwipes then league=nil end
-    return {scene='event',text='世界系列赛',frameId=frame,worldLeague=league,words={{text='开始',x=1110,y=650}}}
+    return {scene='event',text=master and '大师系列赛' or '世界系列赛',frameId=frame,worldLeague=league,words={{text='开始',x=1110,y=650}}}
   end
   dispatched=dispatched+1
   if swipes>0 and not pixelsOnly then fullPageReads=fullPageReads+1 end
   local visible=(scenario=='delayedPage' and dispatched<3) and oldOffset or offset
   local s={scene='cars',text='车辆选择',frameId=frame,words={},leagueTabs={selected='青铜',['青铜']={x=560,y=106}}}
   s.gridOnly=pixelsOnly
-  s.garage={start=visible==0,rank=visible==0 and '青铜' or '',key=visible==0 and 'origin' or '',pitch=359,left=pageLeft,cards={}}
+  s.garage={start=visible==0,rank=visible==0 and (master and '大师系列赛' or '青铜') or '',key=visible==0 and 'origin' or '',pitch=359,left=pageLeft,cards={}}
   for i=1,6 do
     local n=visible+i
     local fuel=3
@@ -123,6 +139,10 @@ function test()
     if scenario=='car27' then assert(fullPageReads==1,'Only the destination needs full OCR after scrolling') end
     if scenario=='reversePage' then assert(resets==0 and swipes>firstSwipes,'Move left from remembered position without a reset') end
     if scenario=='remembered' then assert(firstSwipes==swipes,'Adjacent car repeated the origin search') end
+    if filtered then
+      assert(filterCalls==2,'Filter applied once before each race, got '..filterCalls)
+      assert(resets==0,'Filtered garage restarts at the list origin without a league detour')
+    end
     if scenario=='differentPage' then assert(swipes>firstSwipes,'Changed page must recount from the origin') end
     if wideCar10 then
       assert(swipes==(scenario=='wideCar10Overscroll' and 3 or 2),'Verify each column before selecting car 10')

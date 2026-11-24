@@ -83,7 +83,7 @@ final class SpecialEventListChecks {
         }
         for (String scenario : List.of("first", "third", "wideThird", "fourth", "noOrigin", "wrongPreview",
                 "directChapter", "directLeftLabels", "directRanking", "pixelButton", "retry", "stale", "clamped",
-                "skip", "wrongTab", "wrongRankStage", "previousPreview")) {
+                "skip", "wrongTab", "wrongRankStage", "previousPreview", "noTitles")) {
             try (LuaRuntime lua = new LuaRuntime((name, state) -> 0, List.of())) {
                 lua.set("scenario", scenario);
                 lua.load("utilities", utilities);
@@ -96,7 +96,7 @@ final class SpecialEventListChecks {
         try (var input = SpecialEventListChecks.class.getResourceAsStream("/special-stages.lua")) {
             fixture = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         }
-        for (String scenario : List.of("first", "third", "focused", "noisy-first", "stuck", "wrong-stage", "saved-fifth")) {
+        for (String scenario : List.of("first", "third", "focused", "noisy-first", "stuck", "wrong-stage", "saved-fifth", "reselect-fifth")) {
             try (LuaRuntime lua = new LuaRuntime((name, state) -> 0, List.of())) {
                 lua.set("scenario", scenario);
                 lua.load("utilities", utilities);
@@ -106,7 +106,7 @@ final class SpecialEventListChecks {
                 lua.load("verify", "assert(done,scenario)");
             }
         }
-        return 32;
+        return 34;
     }
 
     private static void checkEntryButton() {

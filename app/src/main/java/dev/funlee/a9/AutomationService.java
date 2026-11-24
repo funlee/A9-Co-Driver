@@ -63,6 +63,7 @@ public final class AutomationService extends Service {
             notifications.createNotificationChannel(new NotificationChannel(CHANNEL,"本地自动化",NotificationManager.IMPORTANCE_LOW));
             Notification notification=notification();
             if(Build.VERSION.SDK_INT>=29)startForeground(1,notification,android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);else startForeground(1,notification);
+            CaptureSession.requireSupportedDisplay(this);
             Intent consent=intent.getParcelableExtra("consent");
             if(consent==null)throw new IllegalStateException("缺少截屏授权，请重新启动");
             captureConsent=consent;captureResult=intent.getIntExtra("result",Activity.RESULT_CANCELED);

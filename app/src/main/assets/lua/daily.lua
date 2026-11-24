@@ -13,15 +13,8 @@ local config = {
   tips = "190|808|FFFFFF-101010,190|912|12FBC3-101010"
 }
 dailyCup.carList = {}
-dailyCup.matchTimeout = 30000
-
-function dailyCup.matchesLobby(screen)
-  local title = (screen.text or ''):gsub('%s', '')
-  return screen.scene=='event' and title:find('每日车辆战利品',1,true)~=nil
-end
-
 function dailyCup.openRaceGarage(screen)
-  if not dailyCup.matchesLobby(screen) then return false end
+  if screen.scene~='event' then return false end
   keepCapture()
   if cmpColorEx(config.cupInfo, 1) == 1 then return false end
   if not cup.openRaceGarage(screen, '每日战利品') then return false end
@@ -113,7 +106,7 @@ function dailyCup.readMap(readRoute)
   local candidate=nil;local frames=0;local chosen=nil
   local tipsFrames=0
   for i=1,60 do
-    local screen=_dailyEventUi()
+    local screen=_soloEventUi()
     if screen.scene=="race" then break end
     if screen.scene=="loading" then
       if not readRoute then break end
@@ -160,7 +153,7 @@ local function packSkipHint(screen)
 end
 function dailyCup.settle(label,readScreen)
   label=label or '每日战利品'
-  readScreen=readScreen or _dailyEventUi
+  readScreen=readScreen or _soloEventUi
   if _racePanel then _racePanel(false) end
   data["信息"]=label.."结算中"
   local special=label=='特殊赛事'
@@ -182,6 +175,11 @@ function dailyCup.settle(label,readScreen)
   end
   while tickCount()-started<90000 do
     local screen=readScreen();local scene=screen.scene
+    -- The same lobby label can be missed after settlement. Keep the original color fallback.
+    if (label=='每日战利品' or label=='杯赛') and scene=='unknown' and not screen.closeX then
+      keepCapture()
+      if cmpColorEx(config.cupInfo,1)==1 then scene='event' end
+    end
     if scene=="event" or scene=="car" or (special and scene=='specialRanking') then
       if special and scene~=returnedScene then eventFrames=0;eventSince=nil end
       if not screen.frameId or screen.frameId~=returnedFrame then eventFrames=eventFrames+1 end
@@ -283,9 +281,8 @@ dailyCup.operation = {
       data["信息"] = "选择指定杯赛"
       local chosen=utils.chooseCup(run.data['杯赛位置'] or '2',false,true)
       if type(chosen)=='string' then return chosen end
-      if chosen==1 then
-        data['信息']='已进入配置位置，核对每日战利品标题'
-      end
+      if chosen==0 then return -1 end
+      if chosen==1 then data['信息']='已进入配置的赛事位置' end
       sleep(3000)
     end
   },

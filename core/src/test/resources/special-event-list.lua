@@ -68,12 +68,12 @@ function _soloEventUi(_,probe)
     screen.words={{text=scenario=='wrongRankStage' and '阶段2' or '阶段1',x=170,y=112},{text='开始',x=1100,y=650}}
   elseif scenario=='pixelButton' then
     screen.words={};screen.specialEntryButton={x=1098,y=514}
-  elseif scenario=='retry' and #taps==1 then
+  elseif scenario=='retry' and #taps==3 then
     screen.words={}
   elseif scenario=='stale' then
     screen.frameId=1
   end
-  if screen.specialSeasonTab then
+  if screen.specialSeasonTab and scenario~='noTitles' then
     local top=position==1 and 84 or position==4 and 516 or scenario=='wideThird' and 446 or scenario=='clamped' and 490 or 310
     table.insert(screen.words,{text='N VISION 74',x=180,y=top+15})
     table.insert(screen.words,{text=scenario=='previousPreview' and 'MISTRAL' or 'N VISION 74',x=580,y=140})
@@ -91,20 +91,18 @@ function test()
   elseif scenario=='wrongTab' then
     assert(not ok and message:find('赛季赛事标签') and #taps==0 and down==0,message)
   elseif scenario=='wrongPreview' or scenario=='stale' or scenario=='wrongRankStage' then
-    assert(not ok and message:find('进入按钮') and #taps==1,message)
-  elseif scenario=='previousPreview' then
-    assert(not ok and message:find('进入按钮'))
-    for _,coordinates in ipairs(taps) do assert(coordinates:find('220,')==1) end
+    assert(not ok and message:find('进入按钮') and #taps==3,message)
   elseif scenario=='skip' then
     assert(not ok and message:find('未确认特殊赛事入口位置') and #taps==0,message)
   else
     assert(ok,scenario.." "..tostring(message))
     local y=position==1 and 174 or scenario=='wideThird' and 503 or
         scenario=='clamped' and 531 or position==4 and 550 or 400
-    local expected='220,'..y
+    local expected=table.concat({'220,'..y,'220,'..y,'220,'..y},';')
     if scenario=='retry' then expected=expected..';220,'..y end
     if not scenario:find('direct') then
-      expected=expected..(scenario=='pixelButton' and ';1098,514' or ';1100,530')
+      local entry=scenario=='pixelButton' and ';1098,514' or ';1100,530'
+      expected=expected..entry..entry
     end
     assert(table.concat(taps,';')==expected,table.concat(taps,';'))
     assert(up==(position==4 and 2 or position==1 and 0 or 1))

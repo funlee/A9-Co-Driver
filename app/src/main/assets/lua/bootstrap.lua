@@ -247,9 +247,12 @@ local skipReasons={
   dailyExpired='赛事仅剩奖励页',
   cupClaimOnly='配置位置仅可领取奖励，已保留奖励',
   cupListObscured='待领奖励提示持续遮挡赛事位置，已保留奖励',
+  cupPositionUnavailable='无法定位配置的赛事位置，请检查杯赛位置',
+  cupPositionInvalid='杯赛位置必须为非零整数，请检查任务配置',
   fuelEmpty='配置车辆均无油或暂不可用',
   vehicleLocked='配置车辆尚未解锁',
-  vehicleUnavailable='没有可开赛的配置车辆',
+  vehicleUnavailable='没有可用车辆',
+  garageEmpty='没有可用车辆',
   noTicket='赛事门票不足',
   [-1]='未完成配置场次'
 }
@@ -352,9 +355,6 @@ function main()
           run.data['次数']=original
         end
         local reason=skipReasons[outcome]
-        if outcome=='dailyUnmatched' then
-          reason='未能在配置位置 '..(cfg.data['杯赛位置'] or '2')..' 确认赛事'
-        end
         if reason then
           taskNotice('本轮跳过项目 '..i..' · '..data['项目']..'\n'..reason)
         else

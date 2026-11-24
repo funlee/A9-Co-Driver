@@ -42,6 +42,7 @@ public final class RecoveryDeviceCheck extends Instrumentation {
             else if(mode.equals("daily-schedule"))DailyScheduleDeviceCheck.run(this,report);
             else if(mode.equals("daily-screenshots"))DailyScreenshotCheck.run(this,report);
             else if(mode.equals("garage-screenshots"))new GarageFilterDeviceCheck(this).screenshots(report);
+            else if(mode.equals("resolution-support"))RotationRecoveryDeviceCheck.displaySupport(this,report);
             else if(mode.equals("rotation-recovery"))RotationRecoveryDeviceCheck.run(this,report);
             else if(mode.equals("home-replay")||mode.equals("home-clean"))homeReplay(report,mode.equals("home-clean"));
             else if(mode.equals("league-demotion"))leagueDemotionReplay(report);

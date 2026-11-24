@@ -108,14 +108,14 @@ public final class TouchService extends AccessibilityService implements RouteEng
         ImageButton button=new ImageButton(this);
         button.setImageResource(R.drawable.ic_steering_mark);
         button.setContentDescription("A9 任务控制");
-        button.setPadding(dp(4),dp(4),dp(4),dp(4));
+        button.setPadding(dp(3),dp(3),dp(3),dp(3));
         GradientDrawable background=new GradientDrawable();
         background.setShape(GradientDrawable.OVAL);
         background.setColor(0xeeecf6f3);
         background.setStroke(dp(1),0xff087f73);
         button.setBackground(background);
         button.setOnClickListener(v->toggleTaskControls());
-        WindowManager.LayoutParams params=new WindowManager.LayoutParams(dp(48),dp(48),
+        WindowManager.LayoutParams params=new WindowManager.LayoutParams(dp(32),dp(32),
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
                 PixelFormat.TRANSLUCENT);

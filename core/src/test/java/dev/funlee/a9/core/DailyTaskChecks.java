@@ -18,7 +18,7 @@ final class DailyTaskChecks {
         for(String time:List.of("00:30:00","00:30:01","12:00:00","23:59:59"))
             check(policy("2026-11-09T"+time).skipReason().isEmpty(),"Allowed boundary: "+time);
         for(String reason:List.of("dailyQuietHours",""))queue(assets,reason);
-        for(String scene:List.of("unknown","event","cars","car"))unmatchedQueue(assets,scene);
+        for(String scene:List.of("unknown","event","cars","car"))configuredEventQueue(assets,scene);
         try(LuaRuntime lua=new LuaRuntime((n,l)->0,List.of())) {
             lua.load("workflows",Files.readString(assets.resolve("lua/workflows.lua")));
             lua.load("retired daily options","utils={defultCfg=function(v,d)return v or d end};"+
@@ -42,10 +42,10 @@ final class DailyTaskChecks {
         }
         return checks;
     }
-    private static void unmatchedQueue(Path assets,String scene)throws Exception {
+    private static void configuredEventQueue(Path assets,String scene)throws Exception {
         try(LuaRuntime lua=new LuaRuntime((n,l)->0,List.of())) {
             lua.set("unmatchedScene",scene);
-            for(String module:List.of("bootstrap","workflows","daily"))
+            for(String module:List.of("bootstrap","workflows","daily","cup"))
                 lua.load(module,Files.readString(assets.resolve("lua/"+module+".lua")));
             try(var input=DailyTaskChecks.class.getResourceAsStream("/daily-unmatched-queue.lua")){
                 lua.load("fixture",new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8));

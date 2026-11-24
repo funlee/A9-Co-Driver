@@ -4,9 +4,7 @@ import android.app.*;
 import android.content.*;
 import android.content.pm.ActivityInfo;
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Paint;
 import android.os.*;
 import dev.funlee.a9.core.GameViewport;
 import java.io.File;
@@ -58,23 +56,57 @@ final class RotationRecoveryDeviceCheck {
             return true;
         }finally{snapshot.recycle();}
     }
-    private void testWideWindow(Bundle report){
-        Bitmap wide=Bitmap.createBitmap(2670,1200,Bitmap.Config.ARGB_8888);
-        GameViewport window=new GameViewport(268,0,2134,1200,90);
+    static void displaySupport(Instrumentation test,Bundle report){
+        android.util.DisplayMetrics metrics=new android.util.DisplayMetrics();
+        ((android.view.WindowManager)test.getTargetContext().getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRealMetrics(metrics);
+        boolean supported=GameViewport.supportsDevice(metrics.widthPixels,metrics.heightPixels);
         try{
-            wide.eraseColor(Color.BLACK);
-            Canvas canvas=new Canvas(wide);Paint paint=new Paint();
-            paint.setColor(Color.BLUE);canvas.drawRect(268,0,2402,1200,paint);
-            paint.setColor(Color.RED);
-            float[] target=window.toScreen(200,1000);
-            canvas.drawCircle(target[0],target[1],20,paint);
-            Bitmap normalized=CaptureSession.normalizeFrame(wide,window);
+            CaptureSession.requireSupportedDisplay(test.getTargetContext());
+            if(!supported)throw new AssertionError("Unsupported real display admitted");
+        }catch(CaptureSession.Unavailable expected){
+            if(supported||!expected.getMessage().contains(GameViewport.DISPLAY_REQUIREMENT))throw expected;
+        }
+        report.putString("displaySize",metrics.widthPixels+"×"+metrics.heightPixels);
+        report.putString("displayAdmission",supported?"supported":"rejected before capture allocation");
+        for(int[] size:new int[][]{{1920,1080},{1440,720},{2670,1200},{720,1600},{800,1280}}){
+            Bitmap raw=Bitmap.createBitmap(size[0],size[1],Bitmap.Config.ARGB_8888);
             try{
-                if(normalized.getPixel(0,0)!=Color.BLUE||normalized.getPixel(719,1279)!=Color.BLUE||
-                        normalized.getPixel(200,1000)!=Color.RED)throw new AssertionError("Wide capture and touch disagree");
+                try{
+                    Bitmap unexpected=CaptureSession.normalizeFrame(raw,90,size[0],size[1]);unexpected.recycle();
+                    throw new AssertionError("Unexpected resolution normalized: "+Arrays.toString(size));
+                }catch(CaptureSession.Unavailable expected){
+                    if(!expected.getMessage().contains(GameViewport.DISPLAY_REQUIREMENT))throw expected;
+                }
+            }finally{raw.recycle();}
+        }
+        Bitmap landscape=Bitmap.createBitmap(1280,720,Bitmap.Config.ARGB_8888);
+        GameViewport viewport=new GameViewport(0,0,1280,720,90);
+        try{
+            landscape.eraseColor(Color.BLUE);
+            float[] target=viewport.toScreen(200,1000);
+            landscape.setPixel(Math.round(target[0]),Math.round(target[1]),Color.RED);
+            Bitmap normalized=CaptureSession.normalizeFrame(landscape,90,1280,720);
+            try{
+                if(normalized.getWidth()!=720||normalized.getHeight()!=1280||
+                        normalized.getPixel(0,0)!=Color.BLUE||normalized.getPixel(200,1000)!=Color.RED)
+                    throw new AssertionError("Original capture and touch must agree without resampling");
+                landscape.setPixel(0,0,Color.GREEN);
+                if(normalized.getPixel(719,0)!=Color.BLUE)throw new AssertionError("Snapshot must own its bitmap");
             }finally{normalized.recycle();}
-            report.putString("wideWindow","2670×1200 offset window crops both margins and maps a touch to the normalized pixel");
-        }finally{wide.recycle();}
+            try{
+                Bitmap unexpected=CaptureSession.normalizeFrame(landscape,new GameViewport(80,0,1200,720,90));unexpected.recycle();
+                throw new AssertionError("Offset crop admitted");
+            }catch(CaptureSession.Unavailable expected){
+                if(!expected.getMessage().contains(GameViewport.DISPLAY_REQUIREMENT))throw expected;
+            }
+            Bitmap portrait=CaptureSession.normalizeFrame(landscape,90,1280,720);
+            try{
+                Bitmap copy=CaptureSession.normalizeFrame(portrait,0,720,1280);
+                try{if(copy==portrait||copy.getPixel(200,1000)!=Color.RED)throw new AssertionError("Portrait snapshot ownership broken");}
+                finally{copy.recycle();}
+            }finally{portrait.recycle();}
+            report.putString("result","PASS: exact original display admission, other dimensions rejected, no crop/resampling, rotation pixels and bitmap ownership verified");
+        }finally{landscape.recycle();}
     }
     private GameRecovery recovery(java.util.function.BooleanSupplier stopped,java.util.function.BooleanSupplier paused,Callable<Boolean> ready)throws Exception{
         return new GameRecovery(test.getTargetContext(),touch,test.getTargetContext().getPackageName(),stopped,paused,ready);
@@ -85,7 +117,7 @@ final class RotationRecoveryDeviceCheck {
         byte[] before=saved.isFile()?Files.readAllBytes(saved.toPath()):null;
         String originalStatus=SessionState.status,originalHud=SessionState.hud;
         try{
-            testWideWindow(report);
+            displaySupport(test,report);
             ui=test.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES);
             monitor=test.addMonitor(MainActivity.class.getName(),null,false);
             activity=(MainActivity)test.startActivitySync(new Intent(context,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
