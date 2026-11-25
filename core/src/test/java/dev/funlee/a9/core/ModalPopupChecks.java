@@ -96,9 +96,13 @@ final class ModalPopupChecks {
         expect("万能图纸福利领取".equals(action(blueprint,List.of(banner,headline,immediate)).get("label")),
                 "Recognize the campaign even when OCR misreads the small banner");
         expect(action(blueprint,List.of(immediate))==null,"Generic claim buttons do not identify the campaign");
-        expect(action(blueprint,List.of(banner,headline,word("立即购买",874,567))).isEmpty(),
-                "A purchase button cannot advance the blueprint gift");
-        count+=3;
+expect(action(blueprint,List.of(banner,headline,word("立即购买",874,567))).isEmpty(),
+"A purchase button cannot advance the blueprint gift");
+expect("万能图纸福利领取".equals(action(blueprint,List.of(banner,headline,word("立P领耳！",874,567))).get("label")),
+"Tolerate OCR misreads on the claim button of the confirmed campaign");
+expect("万能图纸福利领取".equals(action(blueprint,List.of(banner,headline,word("立即",790,567),word("领取！",874,567))).get("label")),
+"A claim caption split by OCR still advances the confirmed campaign");
+count+=5;
 
         for (int halfWidth : new int[]{388, 486}) {
             int right = 640 + halfWidth;
@@ -139,6 +143,15 @@ final class ModalPopupChecks {
         count+=2;
 
         int[] store = panel(336, 223, 914, 619, 0x915032);
+        // 车联赛事页：亮卡压在暗背景上，但由 club.lua 自己驱动，文案可证明它不是遮挡弹窗。
+        var clubCards = List.of(word("任务", 240, 300), word("任务", 520, 300), word("任务", 800, 300),
+                word("速度纪元", 240, 150), word("铭蛇竞速", 520, 150), word("铭蛇竞速", 800, 150));
+        expect(action(store, List.of()) != null, "The club fixture must still satisfy the panel geometry");
+        expect(action(store, clubCards) == null, "Club stage cards belong to the club workflow, not a dialog");
+        var clubRows = List.of(word("危险等级", 240, 300), word("危险等级", 520, 300), word("危险等级", 800, 300));
+        expect(action(store, clubRows) == null, "Club task rows belong to the club workflow, not a dialog");
+        count += 2;
+
         var storeWords = List.of(word("充值活动", 128, 84), word("高级通行证", 139, 157),
                 word("限时钜惠", 128, 304), word("卡牌包", 116, 670),
                 word("卡牌包详情", 438, 164), word("开始", 468, 596), word("免费", 764, 596));

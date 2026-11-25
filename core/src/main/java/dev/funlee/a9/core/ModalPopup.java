@@ -16,6 +16,10 @@ public final class ModalPopup {
             "raceDisconnected", "raceCancelled", "noOpponents", "serverError", "loginHistory", "tutorial",
             "result", "rewardClaim");
     private static final Set<String> SETTLEMENT = Set.of("results", "rewards", "missionRewards", "conversion", "cards");
+    private static final Pattern GARAGE_CARD = Pattern.compile("性能分|规定车辆|規定车辆|規定車輛|规定车輛");
+    // 车联赛事页（章节卡片、任务列表、额外车联包）都是亮卡压在暗背景上，几何上像弹窗，
+    // 但它们由车联流程自己操作。用页面文案识别，避免把正常页面当成需要关闭的弹窗。
+    private static final Pattern CLUB_PAGE = Pattern.compile("危险等级|危險等級|车联包|車聯包|特殊任务|特殊任務|下一奖励|下一獎勵");
 
     private ModalPopup() {}
 
@@ -53,24 +57,37 @@ public final class ModalPopup {
         // The series cards supply two vertical edges between the game's full-width
         // header and tab bar. Those horizontal seams continue past both card edges.
         if (spansBothMargins(frame, top, left, right) && spansBothMargins(frame, bottom, left, right)) return null;
-        // The wait notice can supply a short top seam. Verify the selected tab
-        // and the two full-height gutters between the three series cards.
+        // Menu screens (series cards, daily promos, the wait notice) draw bright
+        // card regions that satisfy the panel geometry. The selected tab's pink
+        // highlight stays undimmed on all of them; a real modal dims the whole
+        // screen, breaking the highlight colors. The two gutters between the
+        // series cards must also remain visible for a menu to be unobstructed.
         int third = (right - left) / 3;
-        if (selectedMultiplayerTab(frame, bottom)
-                && cardGutter(frame, left + third, top + inset, bottom - inset)
-                && cardGutter(frame, right - third, top + inset, bottom - inset)) return null;
+        if (selectedTabHighlight(frame, bottom) &&
+                cardGutter(frame, left + third, top + inset, bottom - inset) &&
+                cardGutter(frame, right - third, top + inset, bottom - inset)) return null;
         return new Panel(left, top, right, bottom);
     }
 
-    private static boolean selectedMultiplayerTab(PixelFrame frame, int bottom) {
+    // The selected tab draws a pink line at the bar's top edge over a white tab.
+    // Scan the full tab-bar width at the panel bottom: notification badges can
+    // cover fixed sample points. A dimming modal breaks both colors, so real
+    // popups over the menu still fail this check.
+    private static boolean selectedTabHighlight(PixelFrame frame, int bottom) {
         if (bottom < 590 || bottom > 625) return false;
-        for (int x : new int[]{680, 735, 815}) {
-            if (distance(pixel(frame, x, bottom), 0xff0054) > 70 ||
-                    distance(pixel(frame, x, bottom + 20), 0xffffff) > 60) return false;
+        int run = 0, best = 0;
+        for (int x = 40; x <= 1240; x += 4) {
+            if (distance(pixel(frame, x, bottom), 0xff0054) <= 70 &&
+                    distance(pixel(frame, x, bottom + 20), 0xffffff) <= 60) {
+                run += 4;
+                if (run > best) best = run;
+            } else run = 0;
         }
-        return true;
+        return best >= 60;
     }
 
+    // The gap between two series cards is a narrow seam of the dimmed lobby
+    // bounded by both card edges.
     private static boolean cardGutter(PixelFrame frame, int center, int top, int bottom) {
         int end = boundary(frame, true, center - 28, center - 2, -1, top, bottom);
         int start = boundary(frame, true, center + 2, center + 28, 1, top, bottom);
@@ -136,6 +153,7 @@ public final class ModalPopup {
             return close == null ? Map.of() : Map.of("x", close[0], "y", close[1], "label", "每日目标关闭");
         }
         if (newcomerGift(textOnScreen)) return giftClaim(frame, words, false);
+        if (clubPage(textOnScreen, words)) return null;
         if (panel == null) return null;
         StringBuilder text = new StringBuilder();
         List<Map<String, Object>> later = new ArrayList<>();
@@ -155,6 +173,10 @@ public final class ModalPopup {
             (LATER.contains(label) ? later : next).add(action);
         }
         String content = text.toString();
+        // A filtered multiplayer garage (e.g. owned cars by descending rank) can form
+        // a bright rectangle that satisfies the panel geometry. Card labels inside
+        // the bounds prove it is the garage grid rather than a modal covering it.
+        if (GARAGE_CARD.matcher(content).find()) return null;
         if (SPECIALIZED.contains(MultiplayerUi.classify(content)) || SETTLEMENT.contains(DailyEventUi.classifySolo(content)) ||
                 content.contains("你已降级") || content.contains("你已经降级") ||
                 RecoveryReadiness.incompatibleDevice(content) || AccountLoginDialog.matches(content)) return null;
@@ -172,6 +194,15 @@ public final class ModalPopup {
         return Map.of();
     }
 
+    /** 车联赛事页由 club.lua 自己驱动，这里只负责识别并交还控制权。 */
+    private static boolean clubPage(String textOnScreen, List<?> words) {
+        if (CLUB_PAGE.matcher(textOnScreen).find()) return true;
+        int taskLabels = 0;
+        for (Object value : words) {
+            if (normalize(((Map<?, ?>) value).get("text").toString()).equals("任务")) taskLabels++;
+        }
+        return taskLabels >= 3;
+    }
     private static boolean unobstructedPackStore(PixelFrame frame, Panel panel, List<?> words) {
         if (panel.left < 280 || panel.right > 970) return false;
         boolean hasPacks = false, hasDetails = false;
@@ -272,8 +303,14 @@ public final class ModalPopup {
             Map<?, ?> word = (Map<?, ?>) value;
             int x = ((Number) word.get("x")).intValue(), y = ((Number) word.get("y")).intValue();
             if (x < 735 || x > 1120 || y < 445 || y > 670 ||
-                    !normalize(word.get("text").toString()).equals(blueprint ? "立即领取" : "点击领取") ||
                     !limeButton(frame, x, y, blueprint ? 84 : 88)) continue;
+            String label = normalize(word.get("text").toString());
+            // The campaign itself is confirmed by banner text and pixels; the button
+            // word only has to rule out a purchase variant. OCR on the small lime
+            // button misreads or splits the caption, so tolerate that noise.
+            boolean matches = blueprint ? label.contains("领") && !GUARDED.matcher(label).find()
+                    : label.equals("点击领取");
+            if (!matches) continue;
             if (!action.isEmpty()) return Map.of();
             action = Map.of("x", x, "y", y, "label", blueprint ? "万能图纸福利领取" : "新手狂欢礼领取");
         }
@@ -337,12 +374,17 @@ public final class ModalPopup {
         return maximum(pixel(frame, 88, 300)) < 90 && maximum(pixel(frame, 1192, 300)) < 90;
     }
 
+    // Dark caption glyphs can sit exactly on a fixed sample grid and veto a whole
+    // lime button, so judge by the lime fraction inside the button area instead.
     private static boolean limeButton(PixelFrame frame, int x, int y, int margin) {
-        int hits = 0;
-        for (int dx : new int[]{-margin, margin}) for (int dy : new int[]{-14, 0, 14}) {
+        int hits = 0, total = 0;
+        for (int dx = -margin; dx <= margin; dx += 4) for (int dy = -14; dy <= 14; dy += 7) {
+            total++;
             if (lime(pixel(frame, x + dx, y + dy))) hits++;
         }
-        return hits >= 5;
+        // The caption can cover most of the area (worst case ~73% in tests), so
+        // one fifth lime is enough proof against a non-button background.
+        return hits * 5 >= total;
     }
 
     private static boolean white(int color) {
