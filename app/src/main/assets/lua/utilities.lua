@@ -1449,6 +1449,67 @@ local function verifiedDailyDetail(slot,detail)
   return slot.score and slot.score~='' and _soloDetailScore and _soloDetailScore()==slot.score
 end
 
+-- 比赛 HUD 左上角的 TouchDrive 开关：布局固定（一条指示带 + 开/关字形），
+-- 状态优先按文字判断，文字认不出来再退到字形颜色（开=青柠、关=红）。
+-- 车联这类从任务面板直接开赛的赛事没有开赛前选车页，只能在这里确认自动驾驶。
+local TOUCHDRIVE_TAP = { 609, 90 }
+local TOUCHDRIVE_GLYPH = { 595, 204, 614, 222 }
+local function touchDriveWordState()
+  if not _textWords then return nil end
+  keepCapture()
+  local ok, words = pcall(_textWords, 585, 20, 625, 235)
+  if not ok or type(words) ~= "table" then return nil end
+  for _, w in ipairs(words) do
+    local text = tostring(w.text or ""):gsub("%s+", "")
+    if text == "开" or text == "開" or text == "ON" or text == "On" then return "on" end
+    if text == "关" or text == "關" or text == "OFF" or text == "Off" then return "off" end
+  end
+  return nil
+end
+local function touchDriveColorState()
+  if not getPixelColor then return nil end
+  keepCapture()
+  local sawOff = false
+  for cx = TOUCHDRIVE_GLYPH[1], TOUCHDRIVE_GLYPH[3], 2 do
+    for cy = TOUCHDRIVE_GLYPH[2], TOUCHDRIVE_GLYPH[4], 2 do
+      local hex = getPixelColor(cx, cy)
+      if type(hex) == "string" and 6 <= #hex then
+        local hexs = string.sub(hex, -6)
+        local b = tonumber(string.sub(hexs, 1, 2), 16) or 0
+        local g = tonumber(string.sub(hexs, 3, 4), 16) or 0
+        local r = tonumber(string.sub(hexs, 5, 6), 16) or 0
+        if 170 < g and 120 < r and b < 90 then return "on" end
+        if 180 < r and g < 80 and b < 80 then sawOff = true end
+      end
+    end
+  end
+  if sawOff then return "off" end
+  return nil
+end
+function utils.touchDriveState()
+  local state = touchDriveWordState()
+  if state then return state end
+  return touchDriveColorState()
+end
+-- 开关是翻转语义，状态未识别时绝不盲点，避免把已开启的关掉。
+function utils.ensureTouchDrive()
+  local state = utils.touchDriveState()
+  if state == "on" then
+    print("TouchDrive 已开启")
+    return true
+  end
+  if state ~= "off" then
+    print("TouchDrive 状态未识别，保持原状")
+    return false
+  end
+  print("TouchDrive 为关，点击开启")
+  tap(TOUCHDRIVE_TAP[1], TOUCHDRIVE_TAP[2])
+  sleep(900)
+  state = utils.touchDriveState()
+  print("点击后 TouchDrive 状态：" .. tostring(state or "未识别"))
+  return state == "on"
+end
+
 function utils.startRace()
   -- The original APK never OCRs fuel here: a white start button means the vehicle
   -- is locked or empty, and unrecognized frames are ignored. Fuel OCR stays a
@@ -1496,7 +1557,9 @@ function utils.startRace()
       elseif fuel=='trial' and not ticketedTrial(screen) then
         data['信息']='等待重新确认赛事试驾按钮'
       elseif utils.mycolor(50,830,'12FBC3-303030')~=1 then
-        tap(50,830);print('打开TouchDrive');sleep(1000)
+        local off=utils.mycolor(51,921,'12FBC3-303030')==1
+        print('开赛页 TouchDrive 为关（关亮='..tostring(off)..'），点击开启')
+        tap(50,830);sleep(1000)
       else
         local button=startButton(screen)
         if button or colorReady then

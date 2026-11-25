@@ -125,9 +125,16 @@ dsCup.operation = {
     config.racing,
     function()
       data["信息"] = "比赛中"
+      -- 车联从任务面板直接开赛，没有开赛前选车页，自动驾驶只能进比赛后按 HUD 开关确认
+      local tdReady = false
+      local tdTries = 0
       repeat
         keepCapture()
         if cmpColorEx(config.racing, 1) == 1 then
+          if not tdReady and tdTries < 10 then
+            tdTries = tdTries + 1
+            tdReady = utils.ensureTouchDrive()
+          end
           tap(236, 1100)
           sleep(650)
           -- 车手联会选路固定为左划（原版选路档位1），不提供其他选路与广告回油
