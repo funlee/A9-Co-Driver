@@ -9,6 +9,24 @@ public final class MultiplayerGarage {
     private static final Pattern PAIR=Pattern.compile("(\\d[\\d,]*)\\s*/\\s*(\\d[\\d,]*)");
     private static final List<String> LEAGUES=List.of("青铜","白银","黄金","白金","翡翠","钻石","精英","宗师","传奇");
     private static final int[] BADGE_COLORS={0xd88560,0x96b2d4,0xf0ca30,0xb18eff,0x65c6a5,0x21a9ff,0xc0569f,0xc85059,0xf5e2a4};
+    /**
+     * The nine shields as 6x8 colour-ratio grids sampled from the in-game league panel.
+     * Cells store (r,g,b)/sum so the templates ignore the dimming an event page applies,
+     * and FFFF marks a cell too dark to carry colour evidence. 传奇 and 黄金 share a hue
+     * (a hue-band vote cannot separate them) but differ in the grey face of the shield.
+     */
+    private static final String[] EMBLEM_GRIDS={
+        "514F595262546B5057524F4F4C500D535A525B500D5343513C5231534B534E5236523A4F594F585258545B5361515E4C995173556D5570557452C2389B526D5469546A547251CB3498526D556C556B547450CE308452705570557454814FB437",
+        "4355345643573F563355425537593C5A42584556415637543B58305838563C5631553652475449544D554D55485444534E53525452555355545550544E53525452555355545550544D5352545255525553555054375650565355545550564352",
+        "5B585B59665C6D5D5C5B555B5F59775B735B775A7E5A625B735A7159635A675882567F54895B775D7A6177607A5B8F599F5B6358625A6A5C7059A6589E5B6758675B6B5C7359A6589B5B755D705E6F5D785AA458765D71646F63676075648157",
+        "32493C473C453A44394235453E4B3F4B4D514D523F4A3E474B385B2F602F5F2F592F4F354C265B3E5F3C5F3E5A3C51224B255C3E5C435B43574550234A245A425B455C4458444E254C395B3A5C415C4059394E383E4B5353555555555353414A",
+        "287414852B7329741A7F19842F6E3F63535554554C5A2D713E683B69406642653E673D69396D485F4B5E48614F5B41670D9C495F4C5E4C5F4F5A188C198F3E6C3D6C31773D6D2087336B4F585157515851573F65177F39674A5B4D5A485D0F86",
+        "235412543A543E541D54145429543D54525552554854295449574059385B395B3B5A3A5C4158445342513E50385023531E61395647533B51375217580F5C185528551E541F561E5C435351545154515452554A5417524C555355525552552053",
+        "6206700B65405F486C3160017B0F8C0A703365407D21800A9401762B654063426A3A93048B0D6A3A6048683D644295037C2172306245634264429306623D663D5F475B4D6243653F64335453545455555454574C6440564C594458475848663C",
+        "933B654D6B4A72467146C91E704F6B4E6F4B754A784A79489C307047654D6F47674C893A9037674C5E50654D614F7B419E307246654D7047694B813E9C2F7B41774379427A417D40694955555555555555555555FFFF55555957585657555555",
+        "555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555555565555555554555455555555645555555555555555555A55765455555555555555556854725E5C5A585758575A596D5D"
+    };
+    private static final double[][] EMBLEM_TEMPLATES=parseEmblemGrids();
 
     public static String leagueBadge(String text) {
         String normalized=leagueText(text);
@@ -94,8 +112,103 @@ public final class MultiplayerGarage {
             int y=ratingY+offset;
             if(leagueStripe(frame,left,y,right,y+6).equals("黄金"))return "黄金";
         }
-        if(badge.isEmpty()&&silverEmblem(frame,left,right,ratingY))return "白银";
+        if(badge.isEmpty())return silverEmblem(frame,left,right,ratingY)?"白银":emblemMatch(frame,left,right,ratingY);
         return badge;
+    }
+
+    /** Shield colour grids, exposed to the check that renders a template back into a frame. */
+    static String[] emblemGrids(){return EMBLEM_GRIDS.clone();}
+
+    private static double[][] parseEmblemGrids() {
+        double[][] grids=new double[EMBLEM_GRIDS.length][];
+        for(int i=0;i<EMBLEM_GRIDS.length;i++){
+            String hex=EMBLEM_GRIDS[i];
+            double[] grid=new double[hex.length()/2];
+            for(int cell=0;cell<grid.length/2;cell++){
+                if(hex.startsWith("FFFF",cell*4)){grid[cell*2]=Double.NaN;continue;}
+                grid[cell*2]=Integer.parseInt(hex.substring(cell*4,cell*4+2),16)/255.0;
+                grid[cell*2+1]=Integer.parseInt(hex.substring(cell*4+2,cell*4+4),16)/255.0;
+            }
+            grids[i]=grid;
+        }
+        return grids;
+    }
+
+    /**
+     * Nearest shield by colour layout, searched around the rating row because the badge
+     * sits a few pixels off the digits across resolutions. A faint or ambiguous reading
+     * returns nothing instead of guessing a league.
+     */
+    private static String emblemMatch(PixelFrame frame,int left,int right,int ratingY) {
+        String name="";
+        double best=Double.MAX_VALUE,bestSecond=Double.MAX_VALUE;
+        for(int dy=-10;dy<=10;dy+=2)for(int dx=-6;dx<=6;dx+=3){
+            double[] grid=emblemGrid(frame,left+dx,ratingY-21+dy,right+dx,ratingY+38+dy);
+            // A crop that mostly misses the shield has too little colour to name a league.
+            if(emblemCells(grid)*10<grid.length/2*6)continue;
+            double first=Double.MAX_VALUE,second=Double.MAX_VALUE;
+            int league=-1;
+            for(int i=0;i<EMBLEM_TEMPLATES.length;i++){
+                double distance=emblemDistance(grid,EMBLEM_TEMPLATES[i]);
+                if(distance<first){second=first;first=distance;league=i;}
+                else if(distance<second)second=distance;
+            }
+            if(first<best){best=first;bestSecond=second;name=league<0?"":LEAGUES.get(league);}
+        }
+        if(name.isEmpty()||best>LEAGUE_MATCH_LIMIT||bestSecond<best*LEAGUE_MATCH_MARGIN)return "";
+        // 传奇 is the only shield with a bright grey face; a gold shield that reads grey
+        // inside is a dimmed capture, not the legend badge.
+        return name.equals("传奇")&&!legendFace(frame,left,right,ratingY)?"":name;
+    }
+
+    private static final double LEAGUE_MATCH_LIMIT=100,LEAGUE_MATCH_MARGIN=1.35;
+
+    /** Colour-ratio grid of an event badge; the name band under the shield stays out. */
+    private static double[] emblemGrid(PixelFrame frame,int left,int top,int right,int bottom) {
+        int columns=6,rows=8,height=(bottom-top)*82/100;
+        double[] grid=new double[columns*rows*2];
+        for(int row=0;row<rows;row++)for(int column=0;column<columns;column++){
+            int y0=top+height*row/rows,y1=Math.max(y0+1,top+height*(row+1)/rows);
+            int x0=left+(right-left)*column/columns,x1=Math.max(x0+1,left+(right-left)*(column+1)/columns);
+            int red=0,green=0,blue=0,count=0;
+            for(int y=y0;y<y1;y++)for(int x=x0;x<x1;x++){
+                int pixel=frame.pixel(719-y,x);
+                red+=pixel>>16&255;green+=pixel>>8&255;blue+=pixel&255;count++;
+            }
+            int total=red+green+blue,index=(row*columns+column)*2;
+            if(count==0||total<90*count){grid[index]=Double.NaN;continue;}
+            grid[index]=red/(double)total;grid[index+1]=green/(double)total;
+        }
+        return grid;
+    }
+
+    private static int emblemCells(double[] grid) {
+        int cells=0;
+        for(int i=0;i<grid.length;i+=2)if(!Double.isNaN(grid[i]))cells++;
+        return cells;
+    }
+
+    private static double emblemDistance(double[] grid,double[] template) {
+        double sum=0;int cells=0;
+        for(int i=0;i<grid.length;i+=2){
+            if(Double.isNaN(grid[i])||Double.isNaN(template[i]))continue;
+            double red=grid[i]-template[i],green=grid[i+1]-template[i+1];
+            sum+=red*red+green*green;cells++;
+        }
+        return cells==0?Double.MAX_VALUE:1000*Math.sqrt(sum/cells);
+    }
+
+    /** The legend shield carries a bright low-saturation face; every other shield stays saturated. */
+    private static boolean legendFace(PixelFrame frame,int left,int right,int ratingY) {
+        int top=ratingY-21,height=(ratingY+38-top)*82/100,hits=0,count=0;
+        for(int y=top+height*18/100;y<top+height*42/100;y++)
+            for(int x=left+(right-left)*30/100;x<left+(right-left)*70/100;x++){
+                int pixel=frame.pixel(719-y,x);
+                int red=pixel>>16&255,green=pixel>>8&255,blue=pixel&255,max=Math.max(red,Math.max(green,blue));
+                count++;
+                if(max-Math.min(red,Math.min(green,blue))<26&&max>120)hits++;
+            }
+        return count>0&&hits*100>=count*30;
     }
 
     // Silver has a low-saturation face between a pale blue crest and a darker blue base.

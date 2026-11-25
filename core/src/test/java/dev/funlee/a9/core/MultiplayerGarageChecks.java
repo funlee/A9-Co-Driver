@@ -26,6 +26,29 @@ final class MultiplayerGarageChecks {
         return s;
     }
     private static Map<String,Object> word(String t,int x,int y){return Map.of("text",t,"x",x,"y",y);}
+    /**
+     * Draw a shield template back into the badge crop an event page shows, so the template
+     * search can be exercised without shipping screenshots. faceFactor dims the shield face
+     * only, which is how a gold badge would look if it were mistaken for the legend shield.
+     */
+    private static int[] renderEmblem(String grid,double shade,double faceFactor){
+        int[] pixels=new int[720*1280];
+        int left=72,right=120,ratingY=307,top=ratingY-21,height=(ratingY+38-top)*82/100;
+        for(int row=0;row<8;row++)for(int column=0;column<6;column++){
+            int index=(row*6+column)*4;
+            double red=Integer.parseInt(grid.substring(index,index+2),16)/255.0;
+            double green=Integer.parseInt(grid.substring(index+2,index+4),16)/255.0;
+            double blue=Math.max(.02,1-red-green);
+            double total=255*shade/Math.max(red,Math.max(green,blue));
+            double factor=row>=1&&row<=3&&column>=1&&column<=4?faceFactor:1;
+            int rgb=Math.min(255,(int)(red*total*factor))<<16|Math.min(255,(int)(green*total*factor))<<8
+                    |Math.min(255,(int)(blue*total*factor));
+            int y0=top+height*row/8,y1=Math.max(y0+1,top+height*(row+1)/8);
+            int x0=left+(right-left)*column/6,x1=Math.max(x0+1,left+(right-left)*(column+1)/6);
+            for(int y=y0;y<y1;y++)for(int x=x0;x<x1;x++)pixels[x*720+719-y]=0xff000000|rgb;
+        }
+        return pixels;
+    }
     private static Map<String,Object> screen(String scene){return Map.of("scene",scene,"text",scene.equals("series")?"世界系列赛 大师系列赛":scene.equals("event")?"世界系列赛 排行榜 里程碑 开始":"车辆选择 青铜","words",scene.equals("series")?List.of(word("世界系列赛",350,450)):scene.equals("event")||scene.equals("car")?List.of(word("开始",1100,650)):List.of(word("6/6",240,390)));}
     static int run(Path assets)throws Exception{
         int checks=0;int[] pixels=new int[720*1280];
@@ -71,6 +94,21 @@ final class MultiplayerGarageChecks {
         require(MultiplayerGarage.eventLeagueIcon(new PixelFrame(720,1280,wideEmblem),
                         List.of(word("1,287",166,331),word("34,000",357,590)),true).equals("黄金"),
                 "The rating number locates a shifted Gold icon without OCRing the league text");checks++;
+        String[] grids=MultiplayerGarage.emblemGrids();
+        require(grids.length==9,"All nine league shields keep a colour template");checks++;
+        List<Object> legendWords=List.of(word("2,629",170,307));
+        require(MultiplayerGarage.eventLeagueIcon(new PixelFrame(720,1280,renderEmblem(grids[8],.75,1)),legendWords,false).equals("传奇"),
+                "The legend shield reads 传奇 from its silver face, which a hue vote cannot separate from 黄金");checks++;
+        require(MultiplayerGarage.eventLeagueIcon(new PixelFrame(720,1280,renderEmblem(grids[8],.55,1)),legendWords,false).equals("传奇"),
+                "A dimmed legend shield keeps its league");checks++;
+        require(MultiplayerGarage.eventLeagueIcon(new PixelFrame(720,1280,renderEmblem(grids[8],.75,.25)),legendWords,false).isEmpty(),
+                "A dark face is not accepted as the legend shield");checks++;
+        require(MultiplayerGarage.eventLeagueIcon(new PixelFrame(720,1280,renderEmblem(grids[2],.8,1)),
+                        List.of(word("1,174",174,307)),false).equals("黄金"),
+                "A gold shield beside the rating stays 黄金 with the templates in place");checks++;
+        require(MultiplayerGarage.eventLeagueIcon(new PixelFrame(720,1280,renderEmblem(grids[4],.78,1)),
+                        List.of(word("1,585",170,307)),false).equals("翡翠"),
+                "An emerald shield reads through the template search");checks++;
         require(MultiplayerGarage.read(new PixelFrame(720,1280,pixels),words,"铂金").get("rank").equals("白金"),"Legacy platinum OCR uses the current white-gold config key");checks++;
         require(MultiplayerGarage.validPerformance("1,868/1,868")&&!MultiplayerGarage.validPerformance("1,868/1,368"),
                 "Reject impossible OCR performance before replacing a valid card reading");checks++;
