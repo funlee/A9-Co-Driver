@@ -2177,16 +2177,38 @@ function utils.chooseCup(num,wide,configuredOnly)
     -- Host gestures block; yield once so the settling delay starts after they finish.
     sleep(1);sleep(2000)
     if not awaitCupList() then return 'cupListObscured' end
+    -- 复用原版起点锚定（复用函数层.lua chooseCup）：滑到左端后第 1 张卡未选中时
+    -- 才点选（点已选中卡会进入赛事，故必须先判）。游戏会把轮播吸附/居中到选中
+    -- 卡，计数基点由此确定；缺少锚定时某次滑动被遮罩消耗会导致整体选位偏移。
+    if not utils.cupSelectedAt(150) then
+      tap(100, 150)
+      sleep(1);sleep(1500)
+      if not awaitCupList() then return 'cupListObscured' end
+      if not utils.waitCupSelected(150) then
+        return unavailable('无法锚定杯赛列表起点，未进入赛事')
+      end
+    end
     if 7 <= num then
       print("7位以上的杯赛")
+      local lastBar
       for i = 1, num - 7 do
         keepCapture()
         ret, x, y = _findColorTriple(224, 1180, 224, 1278, "5400FF-101010", 0, 1.0)
+        local bar = y
         if y ~= -1 then
           y = 1208 - y
+        else
+          -- 未命中蓝色指示条时按基准距离推进，避免用 -1 算出越界滑动距离。
+          y = 0
         end
         utils.mySwipe(22, 1195, 22, 987 + y)
         sleep(500)
+        -- 指示条位置不变说明滑动未生效（可能被遮罩消耗），按基准距离补偿一次。
+        if bar ~= -1 and lastBar and math.abs(bar - lastBar) < 5 then
+          utils.mySwipe(22, 1195, 22, 987)
+          sleep(500)
+        end
+        if bar ~= -1 then lastBar = bar end
       end
       xy = {100, 1250}
     elseif num ~= 1 then
