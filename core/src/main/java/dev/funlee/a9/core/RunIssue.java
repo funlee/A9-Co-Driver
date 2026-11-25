@@ -34,7 +34,7 @@ public final class RunIssue {
         if(has(text,"无障碍"))
             return new RunIssue("请开启无障碍触控","请在系统无障碍设置中开启 A9辅助驾驶，然后返回任务编排重新开始任务。","开启触控权限",Action.ACCESSIBILITY);
         if(has(text,"设备分辨率不符合要求"))
-            return new RunIssue("设备分辨率不受支持","仅支持 720×1280（游戏横屏 1280×720）。请修改设备或模拟器的分辨率，关闭分屏和小窗后重新开始；不再适配其他尺寸。","查看设置",Action.SETTINGS);
+            return new RunIssue("设备分辨率不受支持","仅支持 720×1280（游戏横屏 1280×720）。请修改设备或模拟器的分辨率并关闭分屏和小窗；其他分辨率可在开始任务时选择「仍要运行」，画面将缩放换算，可能出现识别异常，需自行承担风险。","查看设置",Action.SETTINGS);
         if(has(text,"画面方向或比例不匹配","校准旋转方向"))
             return new RunIssue("游戏画面方向不匹配","请打开游戏并保持横屏，关闭分屏或小窗后，再返回任务编排重新开始。","打开游戏",Action.GAME);
         if(has(text,"截屏","MediaProjection"))

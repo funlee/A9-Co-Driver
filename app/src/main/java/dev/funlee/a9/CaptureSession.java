@@ -55,14 +55,37 @@ public final class CaptureSession implements AutoCloseable {
         }
     };
     @SuppressWarnings("deprecation") static DisplayMetrics requireSupportedDisplay(Context context) {
+        loadRiskAccepted(context);
         DisplayMetrics metrics=new DisplayMetrics();
         ((WindowManager)context.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRealMetrics(metrics);
         requireSupportedSize(metrics.widthPixels,metrics.heightPixels);
         return metrics;
     }
     private static void requireSupportedSize(int width,int height) {
-        if(!GameViewport.supportsDevice(width,height))
-            throw new Unavailable(GameViewport.DISPLAY_REQUIREMENT+"，当前 "+width+"×"+height+"；请修改设备分辨率并关闭分屏或小窗");
+        if(GameViewport.supportsDevice(width,height)||riskAccepted(width,height))return;
+        throw new Unavailable(GameViewport.DISPLAY_REQUIREMENT+"，当前 "+width+"×"+height+"；请修改设备分辨率并关闭分屏或小窗，或确认风险后继续运行");
+    }
+    /** Display size the user explicitly accepted despite the mismatch warning; landscape-normalized pair. */
+    private static volatile int[] riskAcceptedSize;
+    private static final String RISK_PREFS="display-risk";
+    /** Persists the user's decision to run on a non-standard display at their own risk. */
+    public static void acceptDisplayRisk(Context context,int width,int height) {
+        int landscape=Math.max(width,height),portrait=Math.min(width,height);
+        context.getSharedPreferences(RISK_PREFS,Context.MODE_PRIVATE).edit().putString("accepted",landscape+","+portrait).apply();
+        riskAcceptedSize=new int[]{landscape,portrait};
+        SessionState.log("已确认在非标准分辨率 "+landscape+"×"+portrait+" 下运行：画面缩放换算，识别可能异常，风险自担");
+    }
+    private static void loadRiskAccepted(Context context) {
+        if(riskAcceptedSize!=null)return;
+        String value=context.getSharedPreferences(RISK_PREFS,Context.MODE_PRIVATE).getString("accepted","");
+        int comma=value.indexOf(',');
+        if(comma<=0)return;
+        try{riskAcceptedSize=new int[]{Integer.parseInt(value.substring(0,comma)),Integer.parseInt(value.substring(comma+1))};}
+        catch(NumberFormatException ignored){}
+    }
+    static boolean riskAccepted(int width,int height) {
+        int[] accepted=riskAcceptedSize;
+        return accepted!=null&&(accepted[0]==width&&accepted[1]==height||accepted[0]==height&&accepted[1]==width);
     }
     public CaptureSession(Context context,int resultCode,Intent data,Runnable onStopped) {
         this.onStopped=onStopped;
@@ -178,7 +201,9 @@ public final class CaptureSession implements AutoCloseable {
     }
     private static GameViewport viewport(int width,int height,int clockwise) {
         requireSupportedSize(width,height);
-        if(!GameViewport.supports(width,height,clockwise))throw orientationPending(width,height);
+        if(!GameViewport.supports(width,height,clockwise)
+                &&!(riskAccepted(width,height)&&GameViewport.supportsOrientation(width,height,clockwise)))
+            throw orientationPending(width,height);
         return new GameViewport(0,0,width,height,clockwise);
     }
     private static OrientationPending orientationPending(int width,int height) {
@@ -190,11 +215,18 @@ public final class CaptureSession implements AutoCloseable {
     }
     static Bitmap normalizeFrame(Bitmap source,GameViewport viewport) {
         requireSupportedSize(source.getWidth(),source.getHeight());
-        if(!viewport.isFullHeightWindow(source.getWidth(),source.getHeight()))
+        if(!viewportMatches(viewport,source.getWidth(),source.getHeight()))
             throw new Unavailable(GameViewport.DISPLAY_REQUIREMENT+"；不支持缩放或裁剪游戏窗口");
         Matrix m=new Matrix();m.postRotate(viewport.rotation);
         Bitmap rotated=Bitmap.createBitmap(source,0,0,viewport.width,viewport.height,m,false);
-        return rotated==source?rotated.copy(Bitmap.Config.ARGB_8888,false):rotated;
+        if(rotated==source)rotated=rotated.copy(Bitmap.Config.ARGB_8888,false);
+        // Risk-accepted displays still feed the fixed automation frame, resampled to 720 × 1280.
+        if(rotated.getWidth()!=GameViewport.FRAME_WIDTH||rotated.getHeight()!=GameViewport.FRAME_HEIGHT) {
+            Bitmap scaled=Bitmap.createScaledBitmap(rotated,GameViewport.FRAME_WIDTH,GameViewport.FRAME_HEIGHT,false);
+            rotated.recycle();
+            rotated=scaled;
+        }
+        return rotated;
     }
     public synchronized long frameId(){return lastReadFrame;}
 
@@ -219,7 +251,11 @@ public final class CaptureSession implements AutoCloseable {
     }
 
     private boolean hasViewport(GameViewport viewport) {
-        return latest!=null&&viewport!=null&&viewport.isFullHeightWindow(latest.getWidth(),latest.getHeight());
+        return latest!=null&&viewport!=null&&viewportMatches(viewport,latest.getWidth(),latest.getHeight());
+    }
+    private static boolean viewportMatches(GameViewport viewport,int width,int height) {
+        return viewport.isFullHeightWindow(width,height)
+                ||(riskAccepted(width,height)&&viewport.left==0&&viewport.top==0&&viewport.width==width&&viewport.height==height);
     }
 
     // Inspect just the opaque navy header and the pink close-button area before spending an OCR pass.

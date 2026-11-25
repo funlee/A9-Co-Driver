@@ -13,6 +13,9 @@ public final class CoreChecks {
         for(int[] size:new int[][]{{1920,1080},{1440,720},{2670,1200},{720,1600},{800,1280},{0,1280},{-720,1280}})
             check(!GameViewport.supportsDevice(size[0],size[1])&&!GameViewport.supports(size[0],size[1],90),"Reject other dimensions, including same-ratio and one-matching-axis devices: "+Arrays.toString(size));
         check(GameViewport.supports(1280,720,90)&&GameViewport.supports(1280,720,270),"Reference landscape capture supported in either rotation");
+        check(GameViewport.supportsOrientation(2670,1200,90)&&GameViewport.supportsOrientation(1200,2670,0)
+                &&!GameViewport.supportsOrientation(1200,2670,90)&&!GameViewport.supportsOrientation(2670,1200,0)
+                &&!GameViewport.supportsOrientation(2670,1200,45),"Risk-accepted orientation admits only consistent landscape or portrait frames");
         check(GameViewport.supports(720,1280,0)&&GameViewport.supports(720,1280,180),"Reference portrait frame supports matching rotations");
         check(!GameViewport.supports(720,1280,90)&&!GameViewport.supports(1280,720,0)&&!GameViewport.supports(1280,720,45),"Wrong orientation and non-quarter rotation rejected");
         check(new GameViewport(0,0,1280,720,90).isFullHeightWindow(1280,720),"Only the full display supported");

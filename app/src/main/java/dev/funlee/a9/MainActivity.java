@@ -829,7 +829,7 @@ public final class MainActivity extends Activity {
         if(SessionState.running){message("请先停止当前任务");return;}
         SessionState.inspecting=inspect;
         try{CaptureSession.requireSupportedDisplay(this);}
-        catch(CaptureSession.Unavailable e){showRunIssue(e.getMessage());return;}
+        catch(CaptureSession.Unavailable e){confirmDisplayRisk(e,()->requestStart(route,inspect,resume));return;}
         if(inspect&&!Settings.canDrawOverlays(this)&&!getSystemService(NotificationManager.class).areNotificationsEnabled()){showRunIssue("请先开启悬浮窗或通知，以便在游戏中点击取样");return;}
         if(!inspect&&TouchService.instance==null){showRunIssue(TouchService.unavailableReason(this));return;}
         try{
@@ -841,6 +841,22 @@ public final class MainActivity extends Activity {
             if(Build.VERSION.SDK_INT>=34)consent=manager.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay());else consent=manager.createScreenCaptureIntent();
             startActivityForResult(consent,101);
         }catch(Exception e){showRunIssue(e.getMessage());}
+    }
+    /** Non-standard display: warn once per size, then continue at the user's own risk after confirmation. */
+    private void confirmDisplayRisk(CaptureSession.Unavailable failure,Runnable retry) {
+        android.util.DisplayMetrics metrics=new android.util.DisplayMetrics();
+        ((WindowManager)getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRealMetrics(metrics);
+        int width=metrics.widthPixels,height=metrics.heightPixels;
+        if(!failure.getMessage().contains(GameViewport.DISPLAY_REQUIREMENT)||GameViewport.supportsDevice(width,height)) {
+            showRunIssue(failure.getMessage());return;
+        }
+        showDialog(new AlertDialog.Builder(this).setTitle("分辨率不受支持")
+            .setMessage("当前屏幕 "+width+"×"+height+"，不是 720×1280（16:9）。确认继续后，画面会缩放到 720×1280 并按比例换算点击坐标；非 16:9 比例下界面元素位置可能偏差，任务可能识别失败或误点，后果需自行承担。\n\n同一分辨率只提醒一次。")
+            .setNegativeButton("取消",null)
+            .setPositiveButton("仍要运行",(dialog,which)->{
+                CaptureSession.acceptDisplayRisk(this,width,height);
+                retry.run();
+            }).create());
     }
     @Override protected void onActivityResult(int request,int result,Intent data){
         super.onActivityResult(request,result,data);if(request!=101)return;

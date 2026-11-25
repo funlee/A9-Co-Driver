@@ -23,6 +23,12 @@ public final class GameViewport {
                 width==FRAME_HEIGHT&&height==FRAME_WIDTH;
     }
 
+    /** Relaxed orientation check for displays the user accepted at their own risk: any size, consistent orientation. */
+    public static boolean supportsOrientation(int width,int height,int rotation) {
+        if(rotation%90!=0||width<=0||height<=0)return false;
+        return rotation%180==0?width<height:width>height;
+    }
+
     /** Letterboxing, split-screen and offset windows are not supported. */
     public boolean isFullHeightWindow(int displayWidth,int displayHeight) {
         return left==0&&top==0&&width==displayWidth&&height==displayHeight&&supports(width,height,rotation);
