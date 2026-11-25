@@ -20,7 +20,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     public static final List<String> FUNCTIONS=List.of("keepCapture","releaseCapture","tap","swipe","touchDown","touchMove","touchUp",
             "cmpColorEx","cmpColor","getPixelColor","findColor","findMultiColor","findPic","snapShot","rotateImage",
             "getDisplaySize","getDisplayRotate","getWorkPath","getSdPath","getPackageName","getInstalledApk","frontAppName","runApp","stopApp","keyPress",
-            "setScreenScale","setControlBarPos","rnd","toast","print","colorToRGB","_jsonEncode","_jsonDecode","_textOcr","_digit","_mapMatch","_recoverEventStart","_requestGameRestart","_specialEventList","_recoveryUi","_popupUi","_legacyPopupProbe","_legacyPopupDismiss","_soloGarageScore","_soloDetailScore",
+            "setScreenScale","setControlBarPos","rnd","toast","print","colorToRGB","_jsonEncode","_jsonDecode","_textOcr","_textWords","_digit","_mapMatch","_recoverEventStart","_requestGameRestart","_specialEventList","_recoveryUi","_popupUi","_legacyPopupProbe","_legacyPopupDismiss","_soloGarageScore","_soloDetailScore",
             "_validateRoute","_driverBegin","_driverStep","_driverEnd","_racePanel","_hud","_taskNotice","_finished","_multiplayerUi","_rewardUi","_fallbackBegin","_fallbackStep","_sessionCycle","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_sessionLegacyCompleted","_sessionRaceRewards","_sessionLegacyPrepare","_sessionLegacyMap","_legacyRewardSample","_sessionLegacyRewards","_sessionOperation","_routeDisplay","_cupCards","_cupClaimState","_dailyEventUi","_soloEventUi","_soloGarageUi","_garageFilterState","_garageFilterPrepare","_dailyTaskStatus","_queueResume","_queueRewardsDone","_queueEnter","_queueDone","_queueBeginRewards","_queueHomeConfirmed","_requirePlayerAction");
     private final Context context;
     private final LocalStore store;
@@ -209,7 +209,8 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         if(RecoveryReadiness.incompatibleDevice(text))throw new GameRecovery.IncompatibleStartup();
         if("interruptingPopup".equals(screen.get("scene")))return screen.containsKey("dismissPopup");
         if(MultiplayerUi.limitedSalePromo(text))return PopupCloseDetector.findLimitedSale(frame)!=null;
-        return RecoveryReadiness.ready(text,(String)screen.get("scene"),screen.containsKey("homeButton")&&popupPanel()==null);
+        boolean homeButton=screen.containsKey("homeButton");ModalPopup.Panel panel=popupPanel();
+        return RecoveryReadiness.ready(text,(String)screen.get("scene"),homeButton&&panel==null);
     }
     private Map<String,Object> rewardUi(boolean keepDailyGoals) throws Exception {
         capture();
@@ -367,6 +368,13 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 if(later!=null)out.put("unlockLater",Map.of("x",later[0],"y",later[1]));
                 return out;
             }
+        }
+        // A filtered two-column garage (e.g. owned cars sorted by descending rank)
+        // can satisfy the popup panel geometry when fewer than five cars remain.
+        // A readable card grid proves the "panel" is the garage itself, not a modal.
+        if(panel!=null&&scene.equals("cars")){
+            Map<String,Object> garageGrid=MultiplayerGarage.slots(frame,List.of(),"",viewportAspect());
+            if(!((List<?>)garageGrid.get("cards")).isEmpty())panel=null;
         }
         if(addInterruptingPopup(out,panel,words)){
             matching.uncertain(clock);
@@ -724,6 +732,25 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         Text result=readText(x1,y1,x2,y2,scale);
         return result==null?"":result.getText().replace("\n","");
     }
+    /**
+     * Recognized word boxes inside an automation-frame region, mapped back to frame coordinates.
+     * Screens are identified by their wording instead of their palette, so restyling a menu keeps
+     * the same anchor.
+     */
+    public List<Object> textWords(int x1,int y1,int x2,int y2) throws Exception {
+        List<Object> words=new ArrayList<>();
+        Text read=readText(x1,y1,x2,y2,1);
+        if(read==null)return words;
+        int x=Math.max(0,x1),y=Math.max(0,y1),w=Math.min(720,x2+1)-x,h=Math.min(1280,y2+1)-y;
+        if(w<=0||h<=0)return words;
+        for(Text.TextBlock block:read.getTextBlocks())for(Text.Line line:block.getLines()){
+            Rect b=line.getBoundingBox();if(b==null)continue;
+            int cx=x+w-1-b.centerY(),cy=y+b.centerX();
+            if(cx<0||cy<0||cx>=720||cy>=1280)continue;
+            words.add(new LinkedHashMap<>(Map.of("text",line.getText(),"x",cx,"y",cy)));
+        }
+        return words;
+    }
     private Text readText(int x1,int y1,int x2,int y2,int scale) throws Exception {
         PixelFrame f=frame(); int x=Math.max(0,x1),y=Math.max(0,y1),w=Math.min(720,x2+1)-x,h=Math.min(1280,y2+1)-y;
         if(w<=0||h<=0) return null;
@@ -887,6 +914,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 case "_jsonEncode":return result(l,toJson(l.toObject(1)).toString());
                 case "_jsonDecode":return result(l,LocalStore.javaValue(new JSONTokener(s(l,1)).nextValue()));
                 case "_textOcr":return result(l,text(n(l,1),n(l,2),n(l,3),n(l,4)));
+                case "_textWords":return result(l,textWords(n(l,1),n(l,2),n(l,3),n(l,4)));
                 case "_multiplayerUi":return result(l,multiplayerUi(l.toBoolean(1),l.toBoolean(2),l.toBoolean(3)));
                 case "_requestGameRestart":
                     switch(s(l,1)){

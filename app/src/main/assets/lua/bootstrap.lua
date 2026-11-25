@@ -24,6 +24,41 @@ myocr.level=myocr.smartOcrEx
 dialog={newLayout=function(message) error(message) end}
 mt={dialog=function(title,lines) error(title..': '..table.concat(lines,'\n')) end}
 
+-- Off-frame touches are ignored instead of aborting the project. The original host injected the
+-- computed coordinates as they were and the system discarded off-screen pointers, so a stale anchor
+-- only cost one wasted tap. Keep that behaviour explicit and leave a trace for diagnosis.
+local function inFrame(x,y)
+  return type(x)=='number' and type(y)=='number' and x>=0 and y>=0 and x<720 and y<1280
+end
+if tap then
+  local rawTap=tap
+  function tap(x,y,...)
+    if not inFrame(x,y) then print('忽略越界点击',x,y) return end
+    return rawTap(x,y,...)
+  end
+end
+if swipe then
+  local rawSwipe=swipe
+  function swipe(x1,y1,x2,y2,ms)
+    if not inFrame(x1,y1) or not inFrame(x2,y2) then print('忽略越界滑动',x1,y1,x2,y2) return end
+    return rawSwipe(x1,y1,x2,y2,ms)
+  end
+end
+if touchDown then
+  local rawDown=touchDown
+  function touchDown(finger,x,y)
+    if not inFrame(x,y) then print('忽略越界按下',x,y) return end
+    return rawDown(finger,x,y)
+  end
+end
+if touchMove then
+  local rawMove=touchMove
+  function touchMove(finger,x,y)
+    if not inFrame(x,y) then print('忽略越界移动',x,y) return end
+    return rawMove(finger,x,y)
+  end
+end
+
 -- The monitor reads only the original HUD rules. It never changes the frame kept by a task.
 local previousHudPopup,nextHudProbe=nil,0
 local handlingLegacy,handlingModal=false,false

@@ -31,8 +31,14 @@ dsCup.operation = {
         sleep(200)
       end
       for i = 1, 50 do
-        if utils.spChoose() == 1 then
+        local chosen = utils.spChoose()
+        if chosen == 1 then
           break
+        end
+        if chosen == -1 then
+          -- 车联是线性推进：界面上的任务就是当前可打的任务，找不到入口说明界面变了，直接收尾。
+          data["信息"] = "车联任务列表未找到可进入的危险等级"
+          return -1
         end
         if 50 <= i then
           return -1
@@ -82,8 +88,13 @@ dsCup.operation = {
       utils.mySwipe(60, 700, 60, 67)
       sleep(1000)
       for i = 1, 60 do
-        if utils.spChoose() == 1 then
+        local chosen = utils.spChoose()
+        if chosen == 1 then
           break
+        end
+        if chosen == -1 then
+          data["信息"] = "车联任务列表未找到可进入的危险等级"
+          return -1
         end
         if 60 <= i then
           return -1

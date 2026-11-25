@@ -2817,6 +2817,51 @@ function utils.intoSpecial1(screen)
   sleep(1500)
   releaseCapture()
 end
+-- 界面识别以文字为准，不以配色为准：换肤/改配色后文字仍然可定位。
+-- 返回区域内命中任一关键字的词框（config 坐标），按屏幕从上到下排序。
+function utils.textWordsIn(x1, y1, x2, y2, patterns)
+  local found = {}
+  if not _textWords then return found end
+  keepCapture()
+  local ok, words = pcall(_textWords, x1, y1, x2, y2)
+  if not ok or type(words) ~= "table" then return found end
+  for _, w in ipairs(words) do
+    local text = tostring(w.text or ""):gsub("%s+", "")
+    for _, p in ipairs(patterns) do
+      if string.find(text, p, 1, true) then
+        found[#found + 1] = { x = w.x, y = w.y, text = text }
+        break
+      end
+    end
+  end
+  table.sort(found, function(a, b) return a.x > b.x end)
+  return found
+end
+
+-- 失败时把区域里 OCR 看到的文字打到日志，便于区分“界面变了”和“识别没对上”。
+function utils.logTextWords(x1, y1, x2, y2)
+  local words = utils.textWordsIn(x1, y1, x2, y2, { "" })
+  local parts = {}
+  for _, w in ipairs(words) do
+    parts[#parts + 1] = w.text .. "@" .. math.floor(w.x) .. "," .. math.floor(w.y)
+  end
+  print("OCR(" .. x1 .. "," .. y1 .. "," .. x2 .. "," .. y2 .. "): " .. table.concat(parts, " | "))
+end
+
+-- 开始/继续按钮：先用文字定位，找不到再退回原来的固定坐标。
+function utils.startRaceTaps()
+  local rows = utils.textWordsIn(60, 700, 640, 1279, { "开始任务", "開始任務", "继续", "繼續" })
+  local sx, sy = 116, 1100
+  if #rows > 0 then
+    sx, sy = rows[1].x, rows[1].y
+  end
+  tap(sx, sy)
+  sleep(1500)
+  tap(sx, sy)
+  sleep(1000)
+  tap(sx, sy)
+end
+
 function utils.spChoose()
   local ret, x, y, x1, y1, x2, y2 = -1, -1, -1, -1, -1, -1, -1
   local fz = utils.defultCfg(run.data["分支选择"], "0")
@@ -2834,11 +2879,7 @@ function utils.spChoose()
     tap(145, 790)
     toast("刷支线")
     sleep(1000)
-    tap(116, 1100)
-    sleep(1500)
-    tap(116, 1100)
-    sleep(1000)
-    tap(116, 1100)
+    utils.startRaceTaps()
     return 1
   end
   x, y = findMultiColor(324, 58, 379, 502, "FFFFFF-050505", "4|2|FFFFFF-050505|7|3|FFFFFF-050505|11|5|FFFFFF-050505|15|7|FFFFFF-050505|21|9|FFFFFF-050505", 0, 1)
@@ -2851,38 +2892,68 @@ function utils.spChoose()
     tap(340, 160)
     sleep(1500)
     x2, y2 = findMultiColor(73, 48, 515, 535, "FFFFFF-050505", "29|-2|FFFFFF-050505|-5|26|FFFFFF-050505|10|75|FFFFFF-050505|27|77|FFFFFF-050505", 0, 1)
-    local difficul = tonumber(wxdj) + 1 or 1
-    for i = difficul, 1, -1 do
+    -- 危险等级行：先用 OCR 文字定位（文字不随配色变化），
+    -- 其次旧界面的蓝色难度条，最后新界面每行右侧的 SP 奖励徽章。
+    local picks = {}
+    local rows = utils.textWordsIn(40, 400, 660, 1050, { "危险等级", "危險等級", "危险等級", "危險等级" })
+    if #rows == 0 then
+      -- 暗底小字时 OCR 可能只稳定认出“等级”，再兜一次。
+      rows = utils.textWordsIn(40, 400, 660, 1050, { "等级", "等級" })
+    end
+    for _, row in ipairs(rows) do
+      picks[#picks + 1] = { x = row.x, y = row.y }
+    end
+    if #picks == 0 then
       keepCapture()
       ret, x, y = _findColorTriple(70, y2 + 587, 460, y2 + 620, "0089FF-100410", 2, 1.0)
-      ret, x1, y1 = _findColorTriple(70, y2 + 587, 460, y2 + 620, "0089FF-100410", 0, 1.0)
       if x ~= -1 and 360 < x then
-        if i == 1 then
-          tap(x - 10, y + 100)
-        elseif i == 2 then
-          tap(x - 150, y + 100)
-        elseif i == 3 then
-          tap(x - 300, y + 100)
+        picks = { { x = x - 10, y = y + 100 }, { x = x - 150, y = y + 100 }, { x = x - 300, y = y + 100 } }
+      end
+    end
+    if #picks == 0 then
+      keepCapture()
+      for i = 1, 3 do
+        local center = 400 - (i - 1) * 150
+        ret, x, y = _findColorTriple(center - 60, 900, center + 60, 1050, "FA073D-121212", 0, 1.0)
+        if x ~= -1 then
+          picks[#picks + 1] = { x = x, y = y }
         end
-      elseif ndbz == "0" then
-        toast("少于三个难度时选最上面的难度")
-        sleep(2000)
-        tap(x - 10, y + 100)
-      elseif ndbz == "1" then
-        toast("少于三个难度时选最下面的难度")
-        sleep(2000)
-        tap(x1 + 10, y1 + 100)
+      end
+    end
+    if #picks == 0 then
+      utils.logTextWords(40, 400, 660, 1050)
+      data["信息"] = "车联任务列表未找到危险等级"
+      toast("车联任务列表未找到危险等级")
+      print("车联任务列表未找到危险等级")
+      return -1
+    end
+    if #picks == 1 then
+      -- 界面只提供当前这一条任务（车联按进度线性推进），直接点开它。
+      tap(picks[1].x, picks[1].y)
+      sleep(800)
+    else
+      local want = (tonumber(wxdj) or 0) + 1
+      if want > #picks then
+        if ndbz == "1" then
+          toast("少于三个难度时选最下面的难度")
+          sleep(1500)
+          want = #picks
+        else
+          toast("少于三个难度时选最上面的难度")
+          sleep(1500)
+          want = 1
+        end
+      end
+      for i = want, 1, -1 do
+        tap(picks[i].x, picks[i].y)
+        sleep(400)
       end
     end
     releaseCapture()
     toast("刷主线")
     sleep(2000)
-    tap(116, 1100)
+    utils.startRaceTaps()
     sleep(1000)
-    tap(116, 1100)
-    sleep(1000)
-    tap(116, 1100)
-    sleep(2000)
     return 1
   end
   keepCapture()
@@ -2892,11 +2963,7 @@ function utils.spChoose()
     tap(273, 848)
     toast("刷特殊主线")
     sleep(2000)
-    tap(116, 1100)
-    sleep(1500)
-    tap(116, 110)
-    sleep(1000)
-    tap(116, 1100)
+    utils.startRaceTaps()
     return 1
   end
   return 0

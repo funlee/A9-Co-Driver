@@ -305,7 +305,18 @@ public final class TouchService extends AccessibilityService implements RouteEng
         else main.post(refreshControlButton);
         releaseAll();
     }
-    private float[] transform(int x,int y){return viewport.toScreen(x,y);}
+    /**
+     * Frames outside 720 × 1280 are dropped with a log entry. The original host injected whatever
+     * coordinates the scripts computed and let the system discard off-screen pointers, so a stale
+     * anchor degraded to a no-op instead of aborting the run.
+     */
+    private float[] point(int x,int y){
+        if(x<0||y<0||x>=GameViewport.FRAME_WIDTH||y>=GameViewport.FRAME_HEIGHT){
+            SessionState.log("触控坐标越界，已忽略："+x+","+y);
+            return null;
+        }
+        return viewport.toScreen(x,y);
+    }
     private interface Build { void run(CountDownLatch latch,boolean[] ok); }
     private void awaitInput(){
         try{
@@ -373,19 +384,30 @@ public final class TouchService extends AccessibilityService implements RouteEng
             dispatch(builder.build(),latch,ok,next,nextPoints);
         });
     }
-    @Override public void tap(int finger,int x,int y) {unlockGuard.requireTap(y,719-x);change(finger,transform(x,y),true,20);}
-    @Override public void down(int finger,int x,int y) {unlockGuard.requireOtherGesture();change(finger,transform(x,y),false,16);}
-    public void move(int finger,int x,int y) {unlockGuard.requireOtherGesture();change(finger,transform(x,y),false,40);}
+    @Override public void tap(int finger,int x,int y) {
+        float[] at=point(x,y);if(at==null)return;
+        unlockGuard.requireTap(y,719-x);change(finger,at,true,20);
+    }
+    @Override public void down(int finger,int x,int y) {
+        float[] at=point(x,y);if(at==null)return;
+        unlockGuard.requireOtherGesture();change(finger,at,false,16);
+    }
+    public void move(int finger,int x,int y) {
+        float[] at=point(x,y);if(at==null)return;
+        unlockGuard.requireOtherGesture();change(finger,at,false,40);
+    }
     @Override public void up(int finger) {
         if(SessionState.inputPaused()){releaseAll();return;}
         change(finger,null,true,16);
     }
     public void swipe(int x1,int y1,int x2,int y2,long duration) {
-        down(9,x1,y1);change(9,transform(x2,y2),true,Math.max(16,Math.min(2000,duration)));
+        if(point(x1,y1)==null||point(x2,y2)==null)return;
+        down(9,x1,y1);change(9,viewport.toScreen(x2,y2),true,Math.max(16,Math.min(2000,duration)));
     }
     public void dragColumn(int x1,int y1,int x2,int y2,long duration,long hold){
+        if(point(x1,y1)==null||point(x2,y2)==null)return;
         down(9,x1,y1);
-        change(9,transform(x2,y2),false,Math.max(16,Math.min(2000,duration)));
+        change(9,viewport.toScreen(x2,y2),false,Math.max(16,Math.min(2000,duration)));
         // Let the carousel stop under the finger before release to avoid a fling.
         change(9,null,true,Math.max(16,Math.min(500,hold)));
     }
