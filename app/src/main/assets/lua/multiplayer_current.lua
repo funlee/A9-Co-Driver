@@ -441,7 +441,7 @@ function currentMultiplayer.run(resumingTutorial)
           tickCount()-(settlementProgressAt or tickCount())>=90000 then
         error('多人结算长时间未能切页，已保留完赛进度')
       end
-      -- After dispatching Start the original auto-route mode also times out if the
+      -- After dispatching Start the auto-route mode also times out if the
       -- roster never appears. A recognized map/loading page ends this wait.
       if started and (screen.matchingRoster or screen.route or scene=='loading') then rosterSeen=true end
       if started and not raced and not rosterSeen and not tutorial and (scene=='unknown' or scene=='matching')

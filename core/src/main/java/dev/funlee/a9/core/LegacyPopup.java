@@ -1,6 +1,6 @@
 package dev.funlee.a9.core;
 
-/** Fixed 720 × 1280 BGR signatures used by the original popup handler and its HUD monitor. */
+/** Fixed 720 × 1280 BGR signatures used by the popup handler and its HUD monitor. */
 public enum LegacyPopup {
     ACCOUNT(true, 0, 0, "477|1068|5400FF-030303,479|990|2B190C-030303,161|474|1D0D0D-030303,113|116|DB9714-030303,41|62|FFFFFF-030303"),
     TIP_ONE(false, 192, 610, "190|560|FFFFFF-101010,540|330|2C180C-101010,550|1000|2C1A0C-101010"),

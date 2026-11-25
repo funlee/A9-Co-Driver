@@ -204,7 +204,7 @@ public final class CaptureSession implements AutoCloseable {
         PopupSample(LegacyPopup rule,long frameId){this.rule=rule;this.frameId=frameId;}
     }
 
-    /** Read just the original sample points without replacing the workflow's captured frame or ID. */
+    /** Read just the popup sample points without replacing the workflow's captured frame or ID. */
     synchronized PopupSample peekLegacyPopup(GameViewport viewport,boolean backgroundOnly) {
         if(!hasViewport(viewport))return null;
         LegacyPopup rule=LegacyPopup.match((x,y)->{

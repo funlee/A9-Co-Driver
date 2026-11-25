@@ -13,7 +13,7 @@ final class RunIssueChecks {
         check("未收到截屏画面，请停止后重新授权截屏",RunIssue.Action.CAPTURE);
         check("截屏授权已结束",RunIssue.Action.CAPTURE);
         check(GameViewport.DISPLAY_REQUIREMENT+"，当前 1920×1080",RunIssue.Action.SETTINGS);
-        CoreChecks.check(RunIssue.from(GameViewport.DISPLAY_REQUIREMENT).guidance.contains("720×1280"),"Unsupported resolution explains the original exact dimensions");
+        CoreChecks.check(RunIssue.from(GameViewport.DISPLAY_REQUIREMENT).guidance.contains("720×1280"),"Unsupported resolution explains the exact dimensions");
         check("画面方向或比例不匹配，请在设置中校准旋转方向（当前 1280×720）",RunIssue.Action.GAME);
         check("请先开启悬浮窗或通知",RunIssue.Action.SETTINGS);
         check("未找到游戏：com.example.game",RunIssue.Action.TASK_PREFERENCES);

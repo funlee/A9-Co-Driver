@@ -17,7 +17,7 @@ BRAND_IMAGES = {
     'assets/brand/a9-app-icon.png', 'assets/brand/a9-logo.png',
     'assets/brand/a9-mark.png', 'assets/brand/brand-preview.png',
 }
-FORBIDDEN={'private','analysis','down-apk','source-apks','device-tests','dist','vendor','.gradle','.tooling','build','build-private','bin'}
+FORBIDDEN={'private','analysis','game-builds','downloads','device-tests','dist','vendor','.gradle','.tooling','build','build-private','bin'}
 BAD_SUFFIX={'.apk','.aab','.jks','.keystore','.log','.png','.jpg','.jpeg','.lib','.aar','.pom'}
 SECRET=re.compile(rb'(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----)')
 def forbidden(name):

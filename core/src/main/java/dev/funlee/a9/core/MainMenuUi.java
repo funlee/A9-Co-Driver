@@ -32,7 +32,7 @@ public final class MainMenuUi {
         return tabs.size()>=3?"home":"";
     }
 
-    /** Original backToMain color signatures in the automation's rotated BGR coordinates. */
+    /** backToMain color signatures in the automation's rotated BGR coordinates. */
     public static String returnOverlay(PixelFrame frame) {
         if (ColorPattern.matches(frame, "493|416|FF7856-101010,493|425|FF7956-101010,506|441|FFA157-101010", 1)) return "back";
         if (ColorPattern.matches(frame, "70|920|10FBC3-101010,70|970|10FBC3-101010", 1)) return "continue";

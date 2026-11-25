@@ -1511,7 +1511,7 @@ function utils.ensureTouchDrive()
 end
 
 function utils.startRace()
-  -- The original APK never OCRs fuel here: a white start button means the vehicle
+  -- Fuel is never OCR'd here: a white start button means the vehicle
   -- is locked or empty, and unrecognized frames are ignored. Fuel OCR stays a
   -- best-effort hint whose failure must not abort the start attempt.
   local readOk,fuel,latestCar=pcall(utils.carFuel)
@@ -1540,7 +1540,7 @@ function utils.startRace()
         loggedStartPixel=true
         print('开始按钮像素(75,1170)：'..tostring(getPixelColor and getPixelColor(75,1170) or '不可用'))
       end
-      -- Original APK verdict: a white start button means the vehicle is locked or
+      -- Rule: a white start button means the vehicle is locked or
       -- out of fuel. Two consecutive reads debounce transition flashes.
       if cmpColor(75,1170,'FFFFFF-101010',1)==1 then
         whiteFrames=whiteFrames+1
@@ -1564,7 +1564,7 @@ function utils.startRace()
         local button=startButton(screen)
         if button or colorReady then
           if fuel=='trial' then print('使用赛事提供的免费试驾车辆') end
-          -- Original start action: two consecutive taps, then wait two seconds.
+          -- Start action: two consecutive taps, then wait two seconds.
           for press=1,2 do
             if button then tapUiWord(button) else tap(80,1080) end
           end
@@ -1711,7 +1711,7 @@ function utils.carFuel(allowGarage)
       previous=availability;frame=screen.frameId
     elseif screen.scene~='car' and screen.scene~='unknown' and screen.scene~='loading' then
       -- Only a positively identified non-detail screen disproves the last reading;
-      -- flickering 'unknown' frames are ignored, as the original APK does.
+      -- flickering 'unknown' frames are ignored.
       previous=nil
     end
     sleep(500)
@@ -1836,7 +1836,7 @@ function utils.chooseCarCup(carList)
         lastCar=car
         if not fuel then fuel,detail=utils.carFuel(not clickMode) end
         if fuel==nil and retryX then
-          -- A second tap is allowed only while the original garage is still visible.
+          -- A second tap is allowed only while the same garage page is still visible.
           tap(retryX,retryY)
           sleep(1500)
           fuel,detail=utils.carFuel(true)
@@ -2087,9 +2087,8 @@ end
 -- Swipe the cup carousel until it stops moving. Stability tolerates 3px of
 -- inertia/bounce jitter instead of demanding pixel-identical reads, and gives
 -- up after six attempts: the caller then anchors on the current rightmost
--- card and lets the findCup identity check catch a wrong anchor, exactly
--- like the original assistant. Returns the latest card list and whether the
--- list settled.
+-- card and lets the findCup identity check catch a wrong anchor. Returns the
+-- latest card list and whether the list settled.
 local function scrollCupCarouselToEnd(leftwards)
   if not _cupCards then
     if leftwards then for i = 1, 8 do swipe(50, 200, 50, 1000, 100) end
@@ -2227,12 +2226,12 @@ function utils.chooseCup(num,wide,configuredOnly)
   end
   -- Drop the saved reference only when the configured position changed. Keeping
   -- it across restarts lets the artwork check below catch a wrong blind pick
-  -- and re-run the search-and-correct path (原版自愈机制).
+  -- and re-run the search-and-correct path (自愈机制).
   if readRefPos() ~= num then os.remove(cupAddr) end
   local abs = math.abs(num)
   local xy = {100, 150}
   if 0 < num then
-    -- 与原版一致：固定 8 次滑动到左端，随后按固定坐标选位，不判端点；
+    -- 固定 8 次滑动到左端，随后按固定坐标选位，不判端点；
     -- 选位正确性由 findCup 参考图身份校验与搜索矫正兜底。
     for i = 1, 8 do
       swipe(50, 200, 50, 1000, 100)
@@ -2240,7 +2239,7 @@ function utils.chooseCup(num,wide,configuredOnly)
     -- Host gestures block; yield once so the settling delay starts after they finish.
     sleep(1);sleep(2000)
     if not awaitCupList() then return 'cupListObscured' end
-    -- 复用原版起点锚定（复用函数层.lua chooseCup）：滑到左端后第 1 张卡未选中时
+    -- 复用起点锚定（chooseCup）：滑到左端后第 1 张卡未选中时
     -- 才点选（点已选中卡会进入赛事，故必须先判）。游戏会把轮播吸附/居中到选中
     -- 卡，计数基点由此确定；缺少锚定时某次滑动被遮罩消耗会导致整体选位偏移。
     if not utils.cupSelectedAt(150) then
@@ -2518,7 +2517,7 @@ function utils.openSpecialEntry(screen,position)
     end
     if not screen.specialSeasonTab then error('未确认赛季赛事标签，已保留当前任务') end
   end
-  -- The original resets the rail before trying to read any card at a saved scroll position.
+  -- Reset the rail before trying to read any card at a saved scroll position.
   data['信息']='向下拉取特殊赛事入口列表'
   for pull=1,8 do
     swipe(550,220,200,220,300,90)
@@ -2574,7 +2573,7 @@ function utils.openSpecialEntry(screen,position)
   end
 
   local target=page.cards[position-offset]
-  -- Keep the original three card taps; only the coordinates follow the current rail.
+  -- Keep the three card taps; only the coordinates follow the current rail.
   for press=1,3 do tapUiWord(target);sleep(200) end
   local tappedFrame=page.frameId
   for attempt=1,7 do
@@ -2584,7 +2583,7 @@ function utils.openSpecialEntry(screen,position)
       if preview.specialSeasonTab then
         local button=findUiWord(preview,{['开始']=true,['进入']=true,['进人']=true},930,1200,450,575)
             or preview.specialEntryButton
-        -- Original entry selection is positional, not a title-OCR comparison.
+        -- Entry selection is positional, not a title-OCR comparison.
         if button then
           print('已选中特殊赛事入口位置 '..position)
           tapUiWord(button)

@@ -1,6 +1,6 @@
 package dev.funlee.a9.core;
 
-/** Maps the original 720 × 1280 automation frame to the full display without scaling. */
+/** Maps the 720 × 1280 automation frame to the full display without scaling. */
 public final class GameViewport {
     public static final int FRAME_WIDTH=720,FRAME_HEIGHT=1280;
     public static final double LANDSCAPE_ASPECT=FRAME_HEIGHT/(double)FRAME_WIDTH;
@@ -12,7 +12,7 @@ public final class GameViewport {
         this.rotation=Math.floorMod(rotation,360);
     }
 
-    /** Device admission is orientation-independent; both dimensions must match the original. */
+    /** Device admission is orientation-independent; both dimensions must match the frame. */
     public static boolean supportsDevice(int width,int height) {
         return (width==FRAME_WIDTH&&height==FRAME_HEIGHT)||(width==FRAME_HEIGHT&&height==FRAME_WIDTH);
     }

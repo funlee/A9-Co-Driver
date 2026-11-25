@@ -8,7 +8,7 @@ public final class RecoveryReadiness {
     private static final Set<String> WAIT_OR_PROMPT=Set.of("loading","matching","loginHistory","rewardChoice",
             "serverError","raceCancelled","raceDisconnected","noOpponents","exitGame","interruptingPopup");
     private RecoveryReadiness() {}
-    /** Original client signature, sampled on the normalized 720 × 1280 frame. */
+    /** Restart-screen signature, sampled on the normalized 720 × 1280 frame. */
     public static boolean restartScreen(PixelFrame frame){
         return ColorPattern.matches(frame,"689|1251|543E30-050505,678|1251|DAD5D5-050505,701|1252|FFFFFF-050505,690|1262|F4F4F4-101010",1);
     }

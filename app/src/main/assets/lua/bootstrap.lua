@@ -1,4 +1,4 @@
--- Local host compatibility and orchestration. No original account or network code is loaded.
+-- Local host compatibility and orchestration. No account or network code is loaded.
 function splitStr(s,delimiter)
   local out={}; local start=1
   while true do
@@ -24,8 +24,8 @@ myocr.level=myocr.smartOcrEx
 dialog={newLayout=function(message) error(message) end}
 mt={dialog=function(title,lines) error(title..': '..table.concat(lines,'\n')) end}
 
--- Off-frame touches are ignored instead of aborting the project. The original host injected the
--- computed coordinates as they were and the system discarded off-screen pointers, so a stale anchor
+-- Off-frame touches are ignored instead of aborting the project: injecting the
+-- computed coordinates as they were lets the system discard off-screen pointers, so a stale anchor
 -- only cost one wasted tap. Keep that behaviour explicit and leave a trace for diagnosis.
 local function inFrame(x,y)
   return type(x)=='number' and type(y)=='number' and x>=0 and y>=0 and x<720 and y<1280
@@ -59,7 +59,7 @@ if touchMove then
   end
 end
 
--- The monitor reads only the original HUD rules. It never changes the frame kept by a task.
+-- The monitor reads only the HUD popup rules. It never changes the frame kept by a task.
 local previousHudPopup,nextHudProbe=nil,0
 local handlingLegacy,handlingModal=false,false
 local function samePopup(first,second)
@@ -89,7 +89,7 @@ function _handleLegacyTips()
   local second=_legacyPopupProbe(false)
   local closed=samePopup(first,second) and _legacyPopupDismiss(first.rule)
   if closed and first.rule=='TIP_SEQUENCE' then
-    -- The original advances this prompt up to 15 times. Stop the instant it changes.
+    -- The prompt advances up to 15 times. Stop the instant it changes.
     for i=1,15 do
       sleep(500)
       local current=_legacyPopupProbe(false)

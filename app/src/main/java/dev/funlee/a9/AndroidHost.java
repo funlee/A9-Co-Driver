@@ -181,7 +181,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         }
         return panelOnFrame;
     }
-    // All production recognition and task coordinates use the original 16:9 layout.
+    // All production recognition and task coordinates use the fixed 16:9 layout.
     private double viewportAspect(){return GameViewport.LANDSCAPE_ASPECT;}
     private boolean wideViewport(){return false;}
     private boolean ultrawideViewport(){return false;}
@@ -304,7 +304,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         else touch.tap(8,continuation?30:rule.tapX,continuation?1240:rule.tapY);
         lastPopupInput=SystemClock.elapsedRealtime();
         frame=null;
-        SessionState.log("已处理原版弹窗："+rule.name());
+        SessionState.log("已处理游戏弹窗："+rule.name());
         return true;
     }
     private boolean freshAfterPopup(){

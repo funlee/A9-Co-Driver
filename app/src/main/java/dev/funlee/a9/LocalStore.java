@@ -303,7 +303,7 @@ public final class LocalStore {
     }
     @SuppressWarnings("unchecked") public Map<String,Object> luaConfig() throws Exception {
         Map<String,Object> c=new LinkedHashMap<>();
-        // Empty string is the original workflow's disabled-checkbox representation.
+        // Empty string is the workflow's disabled-checkbox representation.
         String[] flags={"getCarInfo","freePkg","autoToken","checkAuto","starWay","rest","setRestTime","closeGame","testTrack","track","adjustDist","rebootShot"};
         JSONObject global=config.optJSONObject("global");
         if(global==null)global=new JSONObject();

@@ -162,7 +162,7 @@ public final class SpecialEventList {
         return (color >> 16 & 255) > 175 && (color >> 8 & 255) < 62 && (color & 255) >= 55 && (color & 255) <= 120;
     }
 
-    // The original selector tracks the purple gap (BGR 360A17 ± 09). Sample across
+    // The selector tracks the purple gap (BGR 360A17 ± 09). Sample across
     // the rail because its left edge moves on wide displays and artwork can share the color.
     private static boolean separatorRow(PixelFrame frame, int y) {
         int hits = 0;

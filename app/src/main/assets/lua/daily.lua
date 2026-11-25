@@ -175,7 +175,7 @@ function dailyCup.settle(label,readScreen)
   end
   while tickCount()-started<90000 do
     local screen=readScreen();local scene=screen.scene
-    -- The same lobby label can be missed after settlement. Keep the original color fallback.
+    -- The same lobby label can be missed after settlement. Keep the color fallback.
     if (label=='每日战利品' or label=='杯赛') and scene=='unknown' and not screen.closeX then
       keepCapture()
       if cmpColorEx(config.cupInfo,1)==1 then scene='event' end

@@ -31,7 +31,7 @@ function spCup.atStartTutorial(screen)
   return cmpColorEx(config.startTutorial, 1) == 1
 end
 
--- Map observation is supplementary and never blocks the original page dispatch.
+-- Map observation is supplementary and never blocks the page dispatch.
 local candidate,lastFrame
 function spCup.observeStart(screen)
   if not utils.soloStartAt then candidate=nil;lastFrame=nil;return end
@@ -53,7 +53,7 @@ spCup.operation = {
       if button then tap(719-button.y,button.x) else tap(73,1157) end
       utils.soloStartAt=utils.soloStartAt or tickCount()
       sleep(2000)
-      -- Return to the original color/popup loop, including an unchanged tutorial.
+      -- Return to the color/popup loop, including an unchanged tutorial.
     end
   },
   {

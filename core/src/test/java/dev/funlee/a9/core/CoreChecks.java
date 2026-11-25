@@ -9,16 +9,16 @@ public final class CoreChecks {
     private static int checks;
     static void check(boolean value,String message) { checks++; if(!value) throw new AssertionError(message); }
     private static void viewportChecks(){
-        check(GameViewport.supportsDevice(720,1280)&&GameViewport.supportsDevice(1280,720),"Original device dimensions admitted in either orientation");
+        check(GameViewport.supportsDevice(720,1280)&&GameViewport.supportsDevice(1280,720),"Reference device dimensions admitted in either orientation");
         for(int[] size:new int[][]{{1920,1080},{1440,720},{2670,1200},{720,1600},{800,1280},{0,1280},{-720,1280}})
             check(!GameViewport.supportsDevice(size[0],size[1])&&!GameViewport.supports(size[0],size[1],90),"Reject other dimensions, including same-ratio and one-matching-axis devices: "+Arrays.toString(size));
-        check(GameViewport.supports(1280,720,90)&&GameViewport.supports(1280,720,270),"Original landscape capture supported in either rotation");
-        check(GameViewport.supports(720,1280,0)&&GameViewport.supports(720,1280,180),"Original portrait frame supports matching rotations");
+        check(GameViewport.supports(1280,720,90)&&GameViewport.supports(1280,720,270),"Reference landscape capture supported in either rotation");
+        check(GameViewport.supports(720,1280,0)&&GameViewport.supports(720,1280,180),"Reference portrait frame supports matching rotations");
         check(!GameViewport.supports(720,1280,90)&&!GameViewport.supports(1280,720,0)&&!GameViewport.supports(1280,720,45),"Wrong orientation and non-quarter rotation rejected");
-        check(new GameViewport(0,0,1280,720,90).isFullHeightWindow(1280,720),"Only full original display supported");
+        check(new GameViewport(0,0,1280,720,90).isFullHeightWindow(1280,720),"Only the full display supported");
         GameViewport framed=new GameViewport(268,0,2134,1200,90);
         check(!framed.isFullHeightWindow(2670,1200),"Reject a full-height letterboxed game instead of cropping");
-        check(!new GameViewport(100,0,1280,720,90).isFullHeightWindow(1480,720),"Original-sized window on a larger display is not supported");
+        check(!new GameViewport(100,0,1280,720,90).isFullHeightWindow(1480,720),"A reference-sized window on a larger display is not supported");
         check(!new GameViewport(0,0,1335,1200,90).isFullHeightWindow(2670,1200),"Reject split-screen bounds");
         check(!new GameViewport(268,160,2134,880,90).isFullHeightWindow(2670,1200),"Reject floating-window bounds");
         check(Arrays.equals(framed.toScreen(719,0),new float[]{268,0}),"Window top left");
@@ -126,7 +126,7 @@ public final class CoreChecks {
         check(!Route.parse("bad","1,99").valid(),"Unknown command cannot execute");
         TouchLog touch=new TouchLog(); RouteEngine engine=new RouteEngine(route,touch,0,false,false);
         engine.update(1,0,false); check(touch.events.isEmpty(),"Choice waits for route icon");
-        engine.tick(1,true); check(touch.events.get(0).equals("tap:3:590:564"),"31 selects original coordinates");
+        engine.tick(1,true); check(touch.events.get(0).equals("tap:3:590:564"),"31 selects unshifted coordinates");
         engine.update(3,1000,true); engine.tick(1749,true); check(touch.events.size()==1,"ZX does not fire early");
         engine.tick(1750,true); check(touch.events.size()==2,"ZX kth interval");
         engine.update(6,1800,true); check(touch.events.get(2).equals("down:2"),"Drift down immediate");
@@ -172,7 +172,7 @@ public final class CoreChecks {
             Route monsoonRoute=bundledRoutes.get(key);check(monsoonRoute!=null,"Every Monsoon map has an explicit route entry: "+entry[0]);
             if(monsoonRoute.valid())monsoonScripts++;else if(monsoonRoute.raw.isEmpty()&&monsoonRoute.events.isEmpty())monsoonEmpty++;
         }
-        check(monsoonScripts==7&&monsoonEmpty==5,"Seven original Monsoon scripts and five empty entries; no fabricated commands");
+        check(monsoonScripts==7&&monsoonEmpty==5,"Seven Monsoon scripts and five empty entries; no fabricated commands");
         Map<String,Integer> regions=Map.ofEntries(Map.entry("季风秘境",12),Map.entry("海港博物馆",12),Map.entry("凌空之巅",12),
             Map.entry("狮城",12),Map.entry("极昼之地",12),Map.entry("旷野飙车",12),Map.entry("花都疾驰",12),Map.entry("冰火岛",14),
             Map.entry("雄鹰之城",15),Map.entry("狂野赛车场",12),Map.entry("沙漠高速",12),Map.entry("摩登城市",12),Map.entry("樱花港",12),

@@ -25,7 +25,7 @@ final class RecoveryChecks {
         int[] pixels=new int[720*1280];
         pixels[1251*720+689]=0xff303e54;pixels[1251*720+678]=0xffd5d5da;
         pixels[1252*720+701]=0xffffffff;pixels[1262*720+690]=0xfff4f4f4;
-        check(RecoveryReadiness.restartScreen(new PixelFrame(720,1280,pixels)),"Original restart screen signature");
+        check(RecoveryReadiness.restartScreen(new PixelFrame(720,1280,pixels)),"Expected restart screen signature");
         pixels[1252*720+701]=0xff303e54;
         check(!RecoveryReadiness.restartScreen(new PixelFrame(720,1280,pixels)),"All four restart pixels must match");
         MatchmakingWatchdog w=new MatchmakingWatchdog();

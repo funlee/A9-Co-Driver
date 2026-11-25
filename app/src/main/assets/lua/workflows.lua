@@ -67,7 +67,7 @@ function run.project()
         dailyCup.confirmChallenge(screen)
         if tickCount()-utils.soloStartAt>=120000 then error('已点击开始，但未确认进入比赛，保留当前任务') end
       end
-      -- Like the original, cup tasks run the configured position without checking its title.
+      -- Cup tasks run the configured position without checking its title.
       local tutorial=data['项目']=='特殊赛事' and spCup and spCup.tutorialButton and spCup.tutorialButton(screen)
       if scene=='race' then soloRaceSeen=true;utils.soloStartAt=nil end
       local homeHandler=run.homeEntries and run.homeEntries[data['项目']]
@@ -125,7 +125,7 @@ function run.project()
         local operations=run.list[data['项目']]
         for im1 = 1, #operations do
           keepCapture()
-          -- OCR is supplementary; a missed label must not block the original color dispatch.
+          -- OCR is supplementary; a missed label must not block the color dispatch.
           if cmpColorEx(operations[im1][1], 1) == 1 then
             if operations[im1][1]=='680|50|FFFFFF-101010,660|70|FFFFFF-101010' then
               soloRaceSeen=true;utils.soloStartAt=nil

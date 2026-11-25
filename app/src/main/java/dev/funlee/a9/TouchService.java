@@ -306,9 +306,9 @@ public final class TouchService extends AccessibilityService implements RouteEng
         releaseAll();
     }
     /**
-     * Frames outside 720 × 1280 are dropped with a log entry. The original host injected whatever
-     * coordinates the scripts computed and let the system discard off-screen pointers, so a stale
-     * anchor degraded to a no-op instead of aborting the run.
+     * Frames outside 720 × 1280 are dropped with a log entry: injecting whatever
+     * coordinates the scripts computed would let the system discard off-screen pointers, so a stale
+     * anchor degrades to a no-op instead of aborting the run.
      */
     private float[] point(int x,int y){
         if(x<0||y<0||x>=GameViewport.FRAME_WIDTH||y>=GameViewport.FRAME_HEIGHT){

@@ -25,7 +25,7 @@ final class GameRecovery {
         PORTRAIT("运行中游戏窗口持续为竖屏"),
         HEARTBEAT_TIMEOUT("任务超过 7 分钟未报告进展"),
         MATCH_TIMEOUT("多人匹配超过 "+MatchmakingWatchdog.TIMEOUT_SECONDS+" 秒"),
-        RESTART_SCREEN("启动或回主时命中原版的异常画面特征"),
+        RESTART_SCREEN("启动或回主时命中游戏的异常画面特征"),
         FOREGROUND_LOST("游戏已退出到桌面或助手"),
         INPUT_INTERRUPTED("游戏触控中断"),
         EVENT_START_TIMEOUT("点击赛事开始后未进入选车页");
@@ -172,7 +172,7 @@ final class GameRecovery {
                 try{actionable=ready.call();}
                 catch(IncompatibleStartup | RestartScreen failure){
                     boolean restartScreen=failure instanceof RestartScreen;
-                    if(!allowRelaunch)throw new IllegalStateException(restartScreen?"重启后再次命中原版异常画面":"重启后游戏报告设备不兼容");
+                    if(!allowRelaunch)throw new IllegalStateException(restartScreen?"重启后再次命中游戏异常画面":"重启后游戏报告设备不兼容");
                     recordAttempt();
                     restartGame(restartScreen?Reason.RESTART_SCREEN.detail:"游戏启动时报告设备不兼容",restartScreen);
                     launchedAt=activeTime();until=launchedAt+STARTUP_TIMEOUT_MS;stable=-1;

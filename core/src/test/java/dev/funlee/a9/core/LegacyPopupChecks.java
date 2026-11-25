@@ -25,7 +25,7 @@ final class LegacyPopupChecks {
             for (int i=0; i<points.length; i+=3) pixels[points[i+1]*720+points[i]]=points[i+2];
             if (LegacyPopup.match(new PixelFrame(720,1280,pixels)) != expected ||
                     LegacyPopup.match((x,y)->pixels[y*720+x],true) != ((boolean)test[1]?expected:null))
-                throw new AssertionError("Original popup scope: "+expected);
+                throw new AssertionError("Popup scope: "+expected);
             pixels[points[1]*720+points[0]]=0x556677;
             if (LegacyPopup.match(new PixelFrame(720,1280,pixels)) != null)
                 throw new AssertionError("Partial popup signature: "+expected);

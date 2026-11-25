@@ -133,7 +133,7 @@ final class OrchestrationRecoveryChecks {
             "function _soloEventUi()error('No nested polling after start')end;"+
             "function test()spCup.operation[1][2]();local started=utils.soloStartAt;spCup.operation[1][2]();assert(taps==2 and utils.soloStartAt==started,'An unchanged tutorial can be handled again without extending timeout');done=true end");
         script(assets,List.of("special"),"data={};local auto=false;utils={prepareTaskRoute=function()end,startConfiguredRace=function()return 1 end,taskRouteAuto=function()return auto end};"+
-            "function _soloEventUi()error('Car start must return to the original main loop')end;"+
+            "function _soloEventUi()error('Car start must return to the main loop')end;"+
             "function test()local before=tickCount();assert(spCup.operation[5][2]()==nil and tickCount()-before>=3000);auto=true;before=tickCount();assert(spCup.operation[5][2]()==nil and tickCount()==before,'Automatic route sampling must not wait past a short loading title');done=true end");
         script(assets,List.of("special"),"data={['线路']=''};local reads=0;function print()end;"+
             "utils={soloStartAt=1,getMapName=function(key)assert(reads==4 and key=='target');data['多人地图']=key;data['线路']='0,21' end};"+
@@ -171,7 +171,7 @@ final class OrchestrationRecoveryChecks {
             "function _soloEventUi()return {scene='unknown',words={}}end",
             "function cmpColorEx(pattern)assert(pattern:find('236|142',1,true));return ready and 1 or 0 end;function cmpColor()return 0 end",
             "function tap(y,x)assert(y==80 and x==1080);taps=taps+1 end",
-            "function test()local before=tickCount();assert(utils.startRace()==1 and taps==2 and tickCount()-before>=2000,'Original color gate starts without button OCR');local started=utils.soloStartAt;assert(utils.startRace()==1 and taps==4 and utils.soloStartAt==started);ready=false;assert(not pcall(utils.startRace) and taps==4,'Unknown without original car colors must never use fixed Start coordinates');done=true end"));
+            "function test()local before=tickCount();assert(utils.startRace()==1 and taps==2 and tickCount()-before>=2000,'Color gate starts without button OCR');local started=utils.soloStartAt;assert(utils.startRace()==1 and taps==4 and utils.soloStartAt==started);ready=false;assert(not pcall(utils.startRace) and taps==4,'Unknown car colors must never use fixed Start coordinates');done=true end"));
         script(assets,List.of("workflows","daily","cup"),String.join("\n",
             "data={['项目']='杯赛',['杯赛']=0};run.data={['次数']='1'};local starts,tips=0,0;local phase='car'",
             "utils={tipsHandle=function()tips=tips+1;if phase=='loading' then phase='race' end end};run.rebootHandle=function()end",
@@ -261,7 +261,7 @@ final class OrchestrationRecoveryChecks {
                 "local operations="+(project.equals("每日战利品")?"dailyCup":"cup")+".operation;run.list={['"+project+"']=operations}",
                 "utils={tipsHandle=function()end,dailyPrize=function()end,taskCars=function()return {1} end,chooseCarCup=function(cars)assert(phase=='cars' and cars[1]==1);selected=selected+1;phase='car' end}",
                 "run.rebootHandle=function()end;run.carDetails={['"+project+"']=function()assert(phase=='car');return 'noTicket' end}",
-                "function _soloEventUi()reads=reads+1;assert(reads<=8,'OCR blocked the original cup color dispatch');return {scene=phase,text='巅峰对决 单人奖励 是佳用时录 比赛',words={}}end",
+                "function _soloEventUi()reads=reads+1;assert(reads<=8,'OCR blocked the cup color dispatch');return {scene=phase,text='巅峰对决 单人奖励 是佳用时录 比赛',words={}}end",
                 "function keepCapture()end;function cmpColorEx(pattern)if phase=='"+scene+"' then return pattern==operations[3][1] and 1 or 0 end;return phase=='cars' and pattern==operations[4][1] and 1 or 0 end",
                 "function tap(y,x)assert(y==24 and x==1200 and phase=='"+scene+"');taps=taps+1;phase='cars' end",
                 "function _sessionLegacyCompleted()error('A garage entry must not consume race quota')end",
@@ -405,7 +405,7 @@ final class OrchestrationRecoveryChecks {
                 MainMenuUi.homeEvidence(frame,"",tabs,"cars",false)!=0)
             throw new AssertionError("Home pixels and tab evidence must use the unobstructed frame");
         pixels[493+416*720]=0xff5678ff; pixels[493+425*720]=0xff5679ff; pixels[506+441*720]=0xff57a1ff;
-        if (!MainMenuUi.returnOverlay(new PixelFrame(720,1280,pixels)).equals("back")) throw new AssertionError("Original blue overlay signature");
+        if (!MainMenuUi.returnOverlay(new PixelFrame(720,1280,pixels)).equals("back")) throw new AssertionError("Expected blue overlay signature");
         return scenarios.size()+2;
     }
     private static void script(Path assets,List<String> modules,String fixture)throws Exception {
