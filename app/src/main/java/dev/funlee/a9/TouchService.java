@@ -88,6 +88,7 @@ public final class TouchService extends AccessibilityService implements RouteEng
     }
     public static volatile String foreground="";
     private volatile int foregroundWindowId=-1;
+    private volatile long lastForegroundLog=0;
     private void toggleTaskControls(){
         if(controlMenu!=null)closeTaskControls();
         else if(SessionState.running)openTaskControls();
@@ -259,32 +260,38 @@ public final class TouchService extends AccessibilityService implements RouteEng
     public boolean gameInForeground() {
         primeForegroundIfUnknown();
         android.view.accessibility.AccessibilityNodeInfo root=getRootInActiveWindow();
-        if(root==null){
-            // Surface-rendered games can expose a focused window without an accessible root.
-            // Require both the current focused window ID and its package event to agree.
-            boolean focusedApplication=false;
-            for(android.view.accessibility.AccessibilityWindowInfo window:getWindows()) {
-                try {
-                    if(!window.isFocused()||window.getType()!=android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION)continue;
-                    focusedApplication=true;
-                    if(window.getId()==foregroundWindowId&&allowedPackage.equals(foreground))return true;
-                    // 事件里的前台可能还停在我们自己的窗口上（游戏本来就在前台、再切回来不会发事件），
-                    // 这时直接读聚焦窗口的根节点包名。
-                    android.view.accessibility.AccessibilityNodeInfo focusedRoot=window.getRoot();
-                    if(focusedRoot!=null){
-                        try{
-                            CharSequence name=focusedRoot.getPackageName();
-                            if(name!=null&&allowedPackage.contentEquals(name))return true;
-                        }finally{focusedRoot.recycle();}
-                    }
-                } finally {window.recycle();}
-            }
-            // 事件里的窗口 id 会过期（服务刚连上、窗口重建），此时只要前台包名还是游戏、
-            // 并且确实有一个聚焦的应用窗口，就按在前台处理，避免白等三分钟超时。
-            return focusedApplication&&allowedPackage.equals(foreground);
+        if(root!=null){
+            try{
+                CharSequence name=root.getPackageName();
+                if(name!=null&&allowedPackage.contentEquals(name))return true;
+            }finally{root.recycle();}
         }
-        try{return allowedPackage.contentEquals(root.getPackageName()==null?"":root.getPackageName());}
-        finally{root.recycle();}
+        // 根节点可能是空（Surface 渲染的游戏）也可能还停在我们自己的窗口上，
+        // 两种情况都继续看聚焦窗口：窗口事件里的 id+包名、聚焦窗口的根节点包名、
+        // 以及事件包名仍是游戏且确实有聚焦的应用窗口，任一成立都算在前台。
+        boolean focusedApplication=false;
+        for(android.view.accessibility.AccessibilityWindowInfo window:getWindows()) {
+            try {
+                if(!window.isFocused()||window.getType()!=android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION)continue;
+                focusedApplication=true;
+                if(window.getId()==foregroundWindowId&&allowedPackage.equals(foreground))return true;
+                android.view.accessibility.AccessibilityNodeInfo focusedRoot=window.getRoot();
+                if(focusedRoot!=null){
+                    try{
+                        CharSequence name=focusedRoot.getPackageName();
+                        if(name!=null&&allowedPackage.contentEquals(name))return true;
+                    }finally{focusedRoot.recycle();}
+                }
+            } finally {window.recycle();}
+        }
+        boolean ok=focusedApplication&&allowedPackage.equals(foreground);
+        long now=android.os.SystemClock.elapsedRealtime();
+        if(!ok&&now-lastForegroundLog>15000){
+            lastForegroundLog=now;
+            android.util.Log.i("A9Local","前台判定未通过：事件 "+foreground+"/"+foregroundWindowId
+                    +"，有聚焦应用窗口 "+focusedApplication);
+        }
+        return ok;
     }
     public void requireGameForeground(){
         if(armed&&!gameInForeground())throw new ForegroundLost();

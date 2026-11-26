@@ -2304,6 +2304,9 @@ function utils.chooseCup(num,wide,configuredOnly)
       end
       return nil
     end
+    -- 卡片下部约 y=610 起是「进入/领取」按钮，点它就直接进赛事：选位必须点图区。
+    -- 横向 y≈500 对应竖向 x=219，落在图区中段，离按钮行还有 100 多像素。
+    local SELECT_X = 219
     local lastDump=''
     -- 界面切换（列表吸附、结算弹窗）会让这一帧读不到卡片，先等列表稳定再逐张点。
     if #readCards()==0 then
@@ -2311,6 +2314,136 @@ function utils.chooseCup(num,wide,configuredOnly)
         sleep(700)
         if awaitCupList() and #readCards()>0 then break end
       end
+    end
+    -- 真机上一定有 _soloEventUi；旧版杯赛页（选中卡带白边、点卡只切换选中）已经从游戏里
+    -- 移除，只有测试 fixture 没有这个函数，所以直接用函数是否存在来分流，不要再拿
+    -- OCR 文字去猜新旧页面——猜错的代价是走回旧路径，一张也选不中。
+    local hasSoloUi = type(_soloEventUi) == 'function'
+    local page = hasSoloUi and _soloEventUi() or nil
+    -- 真机上 OCR 偶尔会超时返回 nil，再等两把；仍然为 nil 就只能当空页面往下走。
+    for attempt = 1, 2 do
+      if page ~= nil or not hasSoloUi then break end
+      sleep(700)
+      page = _soloEventUi()
+    end
+    local pageText = page and tostring(page.text or '') or ''
+    -- 只有「限时充值奖励」这种真正盖住列表的促销层才按返回键（scene 由 native 判成
+    -- limitedSalePromo）。别用 OCR 文本里出现「充值」当判据：列表页右侧常年挂着
+    -- 「精选奖励」之类的角标，OCR 一并读到就会误按返回键，直接退出到主界面，
+    -- 后续的拖动和点击全部落在主界面上（实测点出了「练习」页）。
+    if tostring(page and page.scene or '') == 'limitedSalePromo' then
+      keyPress('back')
+      sleep(1); sleep(900)
+      page = type(_soloEventUi) == 'function' and _soloEventUi() or nil
+      pageText = page and tostring(page.text or '') or ''
+      if pageText:find('战利品', 1, true) == nil and pageText:find('活动规则', 1, true) == nil then
+        return unavailable('关闭促销层后已不在赛事列表页')
+      end
+    end
+    -- 分流只看函数存不存在，不看这一次读到的结果：真机上 _soloEventUi 偶尔读超时返回
+    -- nil，用 page==nil 当“旧的测试 fixture”就会误落进旧路径，一条也选不中。
+    local anchored = not hasSoloUi
+    local pageScene = page and tostring(page.scene or '') or ''
+    if not anchored and pageScene ~= '' and pageScene ~= 'cupList' and pageScene ~= 'wideCupList'
+        and pageScene ~= 'unknown' then
+      -- 不在列表页时拖拽会把页面搅乱，直接交给上层重新进入。
+      return unavailable('当前不在赛事列表页（'..pageScene..'）')
+    end
+    if not anchored then
+      -- 新版「探索赛事」列表：卡片是彩色票券，CupCarousel 只认得出一部分，点卡片
+      -- 只把这张卡选中，要点卡下沿的「进入」才真进赛事。只有慢速拖动（900ms）不会
+      -- 被系统取消，位移约等于拖动距离-19 且不吸附，所以拖 224px 正好一格（卡距 186）。
+      -- 实测拖 224px 实际走 205px（位移 = 拖动-19），比卡距 186 多 19，每步都在偏移。
+      -- 所以拖动距离取 205px，正好一格；剩一口气的误差交给下面的 align 逐步磨平。
+      local X0, DRAG, PITCH = 151, 205, 186
+      local PX = 259              -- 竖向 x：横屏卡片图区 y≈460
+      -- 第 6 个参数让触点在终点停 300ms 再抬起：不带这个停顿，拖动会被游戏当成
+      -- 快速滑动吞掉，列表只挪动了实际距离的三分之一。
+      local function drag(span)   -- span>0 手指左移，列表向末尾滚
+        if span > 0 then swipe(PX, 1150, PX, 1150 - span, 700, 300)
+        else swipe(PX, 200, PX, 200 - span, 700, 300) end
+        sleep(600)
+      end
+      local function seen()
+        local t = {}
+        for _, card in ipairs(readCards()) do t[#t+1] = math.floor(card.center) end
+        return table.concat(t, ',')
+      end
+      -- 逐格拖是开环的，卡宽或惯性一变就会整体偏半格。CupCarousel 常漏掉最左那张，
+      -- 报出来的第一张可能是第 2、3 张，所以只看「中心对卡距取模」的偏移量：不管它是
+      -- 第几张，偏移为 0 就说明整排卡正好落在格子上。
+      local function measure()
+        for attempt = 1, 3 do
+          local cards = readCards()
+          if #cards > 0 then
+            local first = math.huge
+            for _, card in ipairs(cards) do if card.center < first then first = card.center end end
+            return first
+          end
+          sleep(500) -- 惯性滚动中的帧经常一张也认不出
+        end
+      end
+      -- 每拖一格都读卡片会读到惯性中的中间帧，校正方向互相抵消，越校越乱；改成一次
+      -- 拖到位、末尾校正一次，只收尾不足半格的偏差。
+      local function align()
+        local first = measure()
+        if not first then print('杯赛校正：本帧未识别到卡片'); return end
+        local off = (first - X0) % PITCH
+        if off > PITCH / 2 then off = off - PITCH end
+        if math.abs(off) > 40 then
+          drag(off + 19)
+          sleep(1000)
+          local again = measure()
+          local left = '?'
+          if again then
+            local rest = (again - X0) % PITCH
+            if rest > PITCH / 2 then rest = rest - PITCH end
+            left = tostring(math.floor(rest))
+          end
+          print('杯赛位置校正 '..math.floor(off)..' 像素，首卡中心 '..math.floor(first)..'，残留 '..left)
+        else
+          print('杯赛列表首卡中心 '..math.floor(first)..'，已对齐')
+        end
+      end
+      -- 先退回最左端：多余的拖动到边界就回弹，不会反向，也不会误进赛事。
+      for i = 1, 5 do drag(-950) end
+      sleep(800)
+      print('杯赛列表已回到最左端，卡片 '..seen())
+      align()
+      -- 每拖一格都校正一次：单步位移比卡距少十几像素，累到 12 步就差一整格，
+      -- 而整格错位靠模运算看不出来——每步对齐就不会累计。
+      for i = 2, target do drag(DRAG) end
+      sleep(1200)
+      print('杯赛列表已拖到第 '..target..' 位，卡片 '..seen())
+      align()
+      -- 拖动刚结束列表还在惯性滚动，这时点击会被游戏吞掉，先等它停稳。
+      sleep(1500)
+      -- 第一次点击只是把这张卡选中：左侧说明面板换成该赛事，卡下沿浮出「进入」。
+      tap(189, X0)
+      sleep(1800)
+      -- 「进入」按文字坐标点，比写死像素稳；找不到才退回实测的固定位置。
+      local picked = _soloEventUi()
+      local enter
+      for _, word in ipairs((picked and picked.words) or {}) do
+        local label = tostring(word.text or ''):gsub('%s', '')
+        if label == '进入' and word.x and word.x < 300 then enter = word; break end
+      end
+      if enter and enter.y and enter.y < 719 then
+        tap(719 - math.floor(enter.y), math.floor(enter.x))
+        print('杯赛：已点击选中卡上的「进入」')
+      else
+        tap(119, 110)
+        print('杯赛：未识别到「进入」按钮，按固定坐标点击')
+      end
+      sleep(2500)
+      local scene = _soloEventUi()
+      local sc = scene and scene.scene
+      data['信息'] = '杯赛位置 '..target..'：'..tostring(sc)
+      local title = scene and scene.text and string.gsub(tostring(scene.text), '%s+', ' ') or ''
+      -- 截断不能按字节切：中文一个字 3 字节，切在半路上会得到非法 UTF-8，
+      -- 回传给 Java 的 NewStringUTF 时直接把进程打挂（java_vm_ext.cc:616）。
+      print('已按第 '..target..' 个赛事位置点击进入赛事，界面 '..tostring(sc)..' 标题 '..utf8.left(title, 40))
+      return 1
     end
     for step = 2, target do
       local moved = false
@@ -2325,22 +2458,26 @@ function utils.chooseCup(num,wide,configuredOnly)
         else
           local nextCard = nextCardAfter(cards, cur)
           if nextCard then
-            tap(100, nextCard.center)
+            tap(SELECT_X, nextCard.center)
             sleep(300)
+            -- 选中竖条换到别的卡上才算推进：列表吸附后目标卡的中心可能整体平移，
+            -- 拿它和点击时的坐标比会误判，只比较「高亮是否离开了原来那张」。
             local now = currentY(readCards())
-            if now and math.abs(now - nextCard.center) <= 40 then moved = true break end
+            if now and math.abs(now - cur) > 40 then moved = true break end
           else
             -- 下一张还在可视区外：照原版用蓝条推算距离滑一格，滑动后重新读卡再点。
+            -- 滑动同样要落在图区，滑到底部按钮行/标签栏会被当成点击或切页。
             keepCapture()
             local _, _, bar = _findColorTriple(224, 1180, 224, 1278, "5400FF-101010", 0, 1.0)
             releaseCapture()
             local shift = (bar ~= nil and bar ~= -1) and (1208 - bar) or 0
-            utils.mySwipe(22, 1195, 22, 987 + shift)
+            utils.mySwipe(SELECT_X, 1195, SELECT_X, 987 + shift)
             sleep(800)
           end
         end
       end
       if not moved then
+        snapShot('cupFail')
         local scene=_soloEventUi()
         print('杯赛第 '..step..' 步未推进，当前选中 y='..tostring(currentY(readCards()))..' 卡片 '..lastDump
           ..' 界面 '..tostring(scene and scene.scene))
@@ -2358,18 +2495,23 @@ function utils.chooseCup(num,wide,configuredOnly)
   end
   local xy = {100, 150}
   if 0 < num then
-    -- 滑到列表顶端（终点由下面的锚定校验兜住）。拖动点必须落在卡片图上而不是
-    -- 卡片底部的「进入/比赛」按钮上：竖向 50 对应横向 y=669，正好压在按钮上，
-    -- 100ms 的快滑会被当成点击，直接把第一个赛事点进去，列表随即消失。
-    for i = 1, 6 do
-      swipe(199, 200, 199, 1000, 260)
+    -- 列表本来就在顶部就别滑：这块区域的横滑会被页面当成切换赛事页，滑完列表就没了。
+    -- 只有第一张卡明显不在顶部（被卷上去了）时才滑回顶端，终点仍由下面的锚定校验兜住。
+    keepCapture()
+    local firstCard = (_cupCards() or {})[1]
+    releaseCapture()
+    if not firstCard or firstCard.center > 210 then
+      for i = 1, 6 do
+        swipe(199, 200, 199, 1000, 260)
+      end
     end
     -- Host gestures block; yield once so the settling delay starts after they finish.
     sleep(1);sleep(2000)
     if not awaitCupList() then return 'cupListObscured' end
     -- 锚定第 1 张：只有它没被选中时才点，点已选中的卡会直接进入赛事。
-    if not utils.cupSelectedAt(150) then
-      tap(100, 150)
+    -- 读不到卡片清单（新版列表）时不锚定：这里的点击会直接进赛事。
+    if firstCard and not utils.cupSelectedAt(150) then
+      tap(219, 150)
       sleep(1);sleep(1500)
       if not awaitCupList() then return 'cupListObscured' end
       if not utils.waitCupSelected(150) then
@@ -2379,10 +2521,12 @@ function utils.chooseCup(num,wide,configuredOnly)
     -- 逐张点选到配置位置。以前是按固定次数滑动再点固定坐标，滑动被遮罩吃掉
     -- 一部分位移时就整体少走（配置 13 实际停在 11）；首次没有参考图时这种错位
     -- 还会被当成「新杯赛」存成参考图，之后每轮都稳定错。
-    if num > 1 then
+    if num > 1 or not firstCard then
       local center, why = stepToCup(num)
       if not center then return unavailable(why) end
       xy = {100, center}
+      -- 新版列表在 stepToCup 里已经点进赛事，无需再点一次入口。
+      if not firstCard then return 1 end
     end
   else
     -- 负数位置为旧配置兼容路径（新配置仅支持正数）。尽力滑到右端：
