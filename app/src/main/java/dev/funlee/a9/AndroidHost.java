@@ -212,6 +212,14 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         boolean homeButton=screen.containsKey("homeButton");ModalPopup.Panel panel=popupPanel();
         return RecoveryReadiness.ready(text,(String)screen.get("scene"),homeButton&&panel==null);
     }
+    /** The game's own start prompt after a cold launch; false when the frame is something else. */
+    public boolean tapStartPrompt()throws Exception{
+        String text=MapMatcher.normalize((String)rewardUi(false).get("text"));
+        if(!text.contains("适龄提示")&&!text.contains("著作权登记")&&!text.contains("点击开始")&&!text.contains("taptostart"))return false;
+        if(touch==null||SessionState.inputPaused()||!touch.gameInForeground())return false;
+        touch.tap(0,359,640);
+        return true;
+    }
     private Map<String,Object> rewardUi(boolean keepDailyGoals) throws Exception {
         capture();
         Bitmap side=Bitmap.createBitmap(frame.copyPixels(),720,1280,Bitmap.Config.ARGB_8888);

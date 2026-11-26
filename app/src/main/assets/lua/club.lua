@@ -30,27 +30,12 @@ dsCup.operation = {
         tap(96, 1224)
         sleep(200)
       end
-      for i = 1, 50 do
-        local chosen = utils.spChoose()
-        if chosen == 1 then
-          break
-        end
-        if chosen == -1 then
-          -- 车联是线性推进：界面上的任务就是当前可打的任务，找不到入口说明界面变了，直接收尾。
-          data["信息"] = "车联任务列表未找到可进入的危险等级"
-          return -1
-        end
-        if 50 <= i then
-          return -1
-        else
-          local ret, x1, y1 = _findColorTriple(470, 400, 470, 1000, "FEBB29-101010", 0, 1.0)
-          local dy = 560 - y1
-          if y1 == -1 then
-            dy = 0
-          end
-          utils.mySwipe(60, 580 - dy, 60, 90)
-          sleep(1000)
-        end
+      -- 每次选任务都先回到章节横条的最左起点，再从起点逐张章节卡按当前进度选任务。
+      local chosen = utils.spChoose()
+      if chosen ~= 1 then
+        -- 车联是线性推进：从起点翻到底都没有可做的任务，说明界面变了，直接收尾。
+        if chosen == -1 then data["信息"] = "车联任务列表未找到可进入的危险等级" end
+        return -1
       end
       tap(24, 1200)
       sleep(3000)
@@ -85,28 +70,9 @@ dsCup.operation = {
       data["信息"] = "性能分不足"
       keyPress("back")
       sleep(3000)
-      utils.mySwipe(60, 700, 60, 67)
-      sleep(1000)
-      for i = 1, 60 do
-        local chosen = utils.spChoose()
-        if chosen == 1 then
-          break
-        end
-        if chosen == -1 then
-          data["信息"] = "车联任务列表未找到可进入的危险等级"
-          return -1
-        end
-        if 60 <= i then
-          return -1
-        else
-          local ret, x1, y1 = _findColorTriple(470, 400, 470, 1000, "FEBB29-101010", 0, 1.0)
-          local dy = 560 - y1
-          if y1 == -1 then
-            dy = 0
-          end
-          utils.mySwipe(60, 580 - dy, 60, 90)
-          sleep(1000)
-        end
+      if utils.spChoose() ~= 1 then
+        data["信息"] = "车联任务列表未找到可进入的危险等级"
+        return -1
       end
       sleep(2000)
     end
@@ -139,6 +105,8 @@ dsCup.operation = {
           sleep(650)
           -- 车手联会选路固定为左划（选路档位1），不提供其他选路与广告回油
           swipe(288, 840, 288, 440, 50)
+        elseif cup.isSettlement(_soloEventUi().scene) then
+          return dailyCup.settle(data['项目'],_soloEventUi)
         end
         if data["超时状态"] then
           return -1
@@ -154,7 +122,7 @@ dsCup.operation = {
         for j = 1, 200 do
           keepCapture()
           if utils.collectRaceRewards then utils.collectRaceRewards() end
-          if cmpColorEx(config.dsCupInfo, 1) == 1 then
+          if utils.carClubPage(config.dsCupInfo) then
             break
           end
           if dsCup.choosePrize and cmpColorEx(dsCup.choosePrize, 1) == 1 then

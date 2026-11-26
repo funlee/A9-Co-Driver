@@ -123,6 +123,7 @@ public final class AutomationService extends Service {
                 }
                 if(resumeState!=null)host.restoreQueue(resumeState);
                 GameRecovery recovery=new GameRecovery(this,touch,gamePackage,()->stopping,SessionState::inputPaused,host::recoveryReady);
+                recovery.startPrompt(host::tapStartPrompt);
                 recovery.awaitInitialForeground();
                 if(waitForMenuOnStart)recovery.awaitReady();
                 long origin=SystemClock.elapsedRealtime()-SessionState.stats.elapsedMillis(),pauseAt=0,pausedTotal=0;

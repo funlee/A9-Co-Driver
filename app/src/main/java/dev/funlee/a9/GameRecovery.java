@@ -92,6 +92,9 @@ final class GameRecovery {
                     if(foreground.equals("android")&&dialogActions<2&&closeCrashDialog()){
                         dialogActions++;otherSince=-1;until=activeTime()+6000;waitBriefly();continue;
                     }
+                    if(dialogActions<2&&closePermissionDialog(foreground)){
+                        dialogActions++;otherSince=-1;until=activeTime()+6000;waitBriefly();continue;
+                    }
                     if(!foreground.isEmpty()){
                         if(otherSince<0){otherSince=activeTime();SessionState.log("等待退出后的前台窗口稳定："+foreground);}
                         if(activeTime()-otherSince>1800)throw new IllegalStateException("当前前台为 "+foreground+"，不是游戏、桌面或助手；已停止恢复，避免打断其他应用");
@@ -131,6 +134,9 @@ final class GameRecovery {
         int flags=Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP;
         while(!onMain(()->{context.startActivity(launch.addFlags(flags));return true;}))gate();
     }
+    /** Optional: taps the game's own start prompt and reports whether one was on screen. */
+    private Callable<Boolean> startPrompt;
+    void startPrompt(Callable<Boolean> prompt){startPrompt=prompt;}
     void awaitInitialForeground()throws InterruptedException{
         if(touch.gameInForeground())return;
         status("已请求启动游戏，等待游戏窗口就绪");
@@ -156,7 +162,7 @@ final class GameRecovery {
     }
     private void waitForMenu(boolean allowRelaunch)throws Exception{
         long launchedAt=activeTime(),until=launchedAt+STARTUP_TIMEOUT_MS,stable=-1,homeSince=-1;
-        long nextHintAt=0;
+        long nextHintAt=0,nextPromptAt=0,unreadySince=-1;
         boolean loggedOcrTimeout=false;
         while(activeTime()<until){
             gate();
@@ -190,11 +196,31 @@ final class GameRecovery {
                     if(stable<0)stable=activeTime();
                     if(activeTime()-stable>=2000){SessionState.log("已确认游戏画面可操作，继续任务");return;}
                 }else stable=-1;
+                // A cold launch may stop at the game's own start prompt; it never loads by itself.
+                if(!actionable&&startPrompt!=null&&activeTime()-launchedAt>=15_000&&activeTime()>=nextPromptAt){
+                    nextPromptAt=activeTime()+5000;
+                    try{
+                        if(startPrompt.call()){
+                            SessionState.log("识别到游戏开始画面，已点击开始");
+                            launchedAt=activeTime();until=launchedAt+STARTUP_TIMEOUT_MS;stable=-1;unreadySince=-1;nextPromptAt=activeTime()+8000;
+                        }
+                    }catch(InterruptedException interrupted){throw interrupted;}
+                    catch(Exception unreadable){SessionState.log("开始画面识别未完成，稍后重试："+unreadable.getMessage());}
+                }
+                // A menu that never appears (frozen page, unrecoverable result screen) only clears with a cold launch.
+                if(!actionable){
+                    if(unreadySince<0)unreadySince=activeTime();
+                    if(allowRelaunch&&activeTime()-unreadySince>=120_000){
+                        SessionState.log("游戏在前台但画面持续 2 分钟未就绪");
+                        recordAttempt();restartGame("游戏画面持续未就绪，重新启动游戏",false);
+                        launchedAt=activeTime();until=launchedAt+STARTUP_TIMEOUT_MS;unreadySince=-1;
+                    }
+                }else unreadySince=-1;
             }else {
                 if(nextHintAt!=0){touch.updateRecoveryWait(null);nextHintAt=0;}
                 stable=-1;
                 String foreground=touch.foregroundPackage();
-                if(foreground.equals("android"))closeCrashDialog();
+                if(foreground.equals("android"))closeCrashDialog();else closePermissionDialog(foreground);
                 if(launchers.contains(foreground)||context.getPackageName().equals(foreground)){
                     if(homeSince<0)homeSince=activeTime();
                     // The installer and login activity can briefly give focus back to Home.
@@ -323,6 +349,23 @@ final class GameRecovery {
             }finally{root.recycle();}
         });
     }
+    /** A runtime permission prompt raised by the game covers it without being a crash: decline it. */
+    private boolean closePermissionDialog(String foreground)throws Exception{
+        if(!foreground.equals("com.android.permissioncontroller")&&!foreground.equals("com.android.packageinstaller"))return false;
+        return onMain(()->{
+            AccessibilityNodeInfo root=touch.getRootInActiveWindow();if(root==null)return false;
+            try{
+                // Decline rather than allow: granting from the automation could change the game's notification flow.
+                AccessibilityNodeInfo deny=find(root,n->String.valueOf(n.getViewIdResourceName()).matches(".*:id/permission_(deny|dont_allow).*")||denyLabel(n));
+                if(deny==null)return false;
+                try{
+                    if(!click(deny))return false;
+                    SessionState.log("已拒绝游戏弹出的系统权限申请，继续任务");return true;
+                }finally{deny.recycle();}
+            }finally{root.recycle();}
+        });
+    }
+    private static boolean denyLabel(AccessibilityNodeInfo n){String s=normalize(n.getText());return s.equals("dontallow")||s.equals("不允许")||s.equals("拒绝");}
     static boolean waitForSystemUi(AccessibilityNodeInfo root){
         if(root==null||!"android".contentEquals(root.getPackageName()==null?"":root.getPackageName()))return false;
         AccessibilityNodeInfo title=find(root,n->"android:id/alertTitle".equals(n.getViewIdResourceName())&&
@@ -374,7 +417,7 @@ final class GameRecovery {
     }
     private static boolean hasStopText(String s){return s.contains("强行停止")||s.contains("强制停止")||s.contains("结束运行")||s.contains("forcestop");}
     private static boolean stopLabel(AccessibilityNodeInfo n){String s=normalize(n.getText());return s.equals("强行停止")||s.equals("强制停止")||s.equals("结束运行")||s.equals("forcestop");}
-    private static boolean confirmLabel(AccessibilityNodeInfo n){String s=normalize(n.getText());return s.equals("确定")||s.equals("确认")||s.equals("ok")||s.equals("强行停止")||s.equals("强制停止")||s.equals("结束运行");}
+    private static boolean confirmLabel(AccessibilityNodeInfo n){String s=normalize(n.getText());return s.equals("确定")||s.equals("确认")||s.equals("ok")||s.equals("ok!")||s.equals("强行停止")||s.equals("强制停止")||s.equals("结束运行");}
     private static boolean enabled(AccessibilityNodeInfo n){
         if(!n.isEnabled())return false;
         AccessibilityNodeInfo parent=n.getParent();try{return parent==null||parent.isEnabled();}finally{if(parent!=null)parent.recycle();}

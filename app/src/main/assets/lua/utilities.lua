@@ -2505,8 +2505,11 @@ local function specialChapterPage(screen)
   return false
 end
 
-function utils.openSpecialEntry(screen,position)
-  if position<1 or position%1~=0 then error('特殊赛事位置必须为正整数') end
+function utils.openSpecialEntry(screen,position,opts)
+  opts=opts or {}
+  local label=opts.label or '特殊赛事'
+  local entry=label..'入口'
+  if position<1 or position%1~=0 then error(label..'位置必须为正整数') end
   screen=screen or _soloEventUi()
   if not screen.specialSeasonTab then
     utils.openHomeTab(screen,'season')
@@ -2533,18 +2536,18 @@ function utils.openSpecialEntry(screen,position)
     page=specialListPage()
     if page.aligned and sameSpecialPage(page,previous) then
       atOrigin=true
-      print('特殊赛事入口列表已回顶，确认了第 1 张赛事卡')
+      print(entry..'列表已回顶，确认了第 1 张赛事卡')
       break
     end
   end
-  if not atOrigin then error('未确认特殊赛事入口列表起点，已保留当前任务') end
+  if not atOrigin then error('未确认'..entry..'列表起点，已保留当前任务') end
 
   local offset=0
   local drags=0
   while position>offset+#page.cards or
       (position-offset>2 and page.cards[position-offset].complete==false) do
     drags=drags+1
-    if drags>position+3 then error('未确认特殊赛事入口位置 '..position..'，已保留当前任务') end
+    if drags>position+3 then error('未确认'..entry..'位置 '..position..'，已保留当前任务') end
     local previous=page
     -- Advance one slot using the measured separator and hold before releasing.
     local distance=page.scrollDistance
@@ -2560,14 +2563,14 @@ function utils.openSpecialEntry(screen,position)
         local dy=before.top-current.top
         if dy>=8 and sameSpecialCard(before,current) then
           if advanced and (advanced~=i-j or math.abs(dy-travel)>6) then
-            error('特殊赛事入口翻页位置不明确，已保留当前任务')
+            error(entry..'翻页位置不明确，已保留当前任务')
           end
           advanced,travel=i-j,dy
         end
       end
     end
     if not advanced or advanced<0 then
-      error('未确认特殊赛事入口位置 '..position..'，已保留当前任务')
+      error('未确认'..entry..'位置 '..position..'，已保留当前任务')
     end
     offset=offset+advanced
   end
@@ -2585,9 +2588,10 @@ function utils.openSpecialEntry(screen,position)
             or preview.specialEntryButton
         -- Entry selection is positional, not a title-OCR comparison.
         if button then
-          print('已选中特殊赛事入口位置 '..position)
+          print('已选中'..entry..'位置 '..position)
           tapUiWord(button)
-          tapUiWord(button)
+          -- opts.enterOnce：进入后由调用方自行确认落地页面（如车手联会）。
+          if not opts.enterOnce then tapUiWord(button) end
           return
         end
         -- Retry only while the same tile is still under the finger on the entry list.
@@ -2600,13 +2604,14 @@ function utils.openSpecialEntry(screen,position)
             tappedFrame=current.frameId
           end
         end
-      elseif specialChapterPage(preview) or preview.scene=="missionRewards" or utils.specialMissionContinue(preview) then
-        print('特殊赛事入口位置 '..position..' 已直接进入赛事')
+      elseif specialChapterPage(preview) or preview.scene=="missionRewards" or utils.specialMissionContinue(preview)
+          or opts.entered and opts.entered(preview) then
+        print(entry..'位置 '..position..' 已直接进入赛事')
         return preview
       end
     end
   end
-  error('未确认特殊赛事入口位置 '..position..' 的进入按钮或赛事页面，已保留当前任务')
+  error('未确认'..entry..'位置 '..position..' 的进入按钮或赛事页面，已保留当前任务')
 end
 
 function utils.intoSpecial(screen)
@@ -2810,74 +2815,73 @@ function utils.selectSpecialStage(screen)
   end
   error('未能确认进入特殊赛事阶段 '..spStage..'，已保留当前任务')
 end
+--- 车手联会任务页：横条上有「任务」章节卡和带「危险等级」的任务行；以文字为准，不依赖旧配色。
+function utils.carClubTaskPage(screen)
+  if not screen or screen.specialSeasonTab then return false end
+  local text=tostring(screen.text or ''):gsub('[%s|]','')
+  if text:find('危险等级',1,true) or text:find('危險等級',1,true) then return true end
+  return text:find('下一奖励',1,true)~=nil and text:find('任务',1,true)~=nil
+    or text:find('下一獎勵',1,true)~=nil and text:find('任務',1,true)~=nil
+end
+function utils.carClubPage(pattern)
+  keepCapture()
+  if pattern and cmpColorEx(pattern,1)==1 then return true end
+  return utils.carClubTaskPage(_soloEventUi())
+end
+--- 把章节横条拉回最左起点：向右滑到一次滑动后画面不再变化为止，不靠固定次数。
+-- utils.carClubAtOrigin 标记横条在起点：此时 spChoose 不做横向微调；club.lua 向后翻章节时清除。
+function utils.carClubToOrigin()
+  local function signature()
+    -- 每次都重新截屏：色键分发留下的缓存帧不会随滑动更新。
+    keepCapture()
+    local sig={}
+    for _,y in ipairs({250,300,600}) do
+      for x=100,1180,60 do sig[#sig+1]=getPixelColor(719-y,x) end
+    end
+    return sig
+  end
+  local function moved(a,b)
+    local changed=0
+    for k=1,#a do
+      local r1,g1,b1=tonumber(a[k]:sub(1,2),16),tonumber(a[k]:sub(3,4),16),tonumber(a[k]:sub(5,6),16)
+      local r2,g2,b2=tonumber(b[k]:sub(1,2),16),tonumber(b[k]:sub(3,4),16),tonumber(b[k]:sub(5,6),16)
+      if math.abs(r1-r2)>40 or math.abs(g1-g2)>40 or math.abs(b1-b2)>40 then changed=changed+1 end
+    end
+    return changed>#a*0.2
+  end
+  for i=1,20 do
+    local before=signature()
+    -- 必须在横屏 y≈600 这一行上滑：y≈659 贴着卡片下沿，拖不动章节条。
+    swipe(119,300,119,1150,400)
+    -- 到起点后松手会回弹，多等一会再比较，避免把回弹当成还在移动。
+    sleep(1500)
+    if not moved(before,signature()) then
+      print('车手联会章节卡片已回到起点（第 '..i..' 次滑动后不再移动）')
+      utils.carClubAtOrigin=true
+      return
+    end
+  end
+  error('车手联会章节卡片未能回到起点，已保留当前任务')
+end
 function utils.intoSpecial1(screen)
   data["信息"] = "进入车手联会"
-  if screen then utils.openHomeTab(screen,'season') else
-  keepCapture()
-  if cmpColorEx("702|1252|FFFFFF-101010,690|1252|3B2312-101010,670|1270|3B2312-101010", 1) == 1 then
-  else
-    utils.backToMain()
+  local position=tonumber(run.data["车手联会位置"]) or 1
+  local preview=utils.openSpecialEntry(screen,position,{label='车手联会',entered=utils.carClubTaskPage,enterOnce=true})
+  if not utils.carClubTaskPage(preview) then
+    local deadline=tickCount()+15000
+    repeat
+      sleep(400)
+      preview=_soloEventUi()
+    until utils.carClubTaskPage(preview) or tickCount()>=deadline
   end
-  for i = 1, 5 do
-    keepCapture()
-    if cmpColor(88, 300, "FFFFFF-101010", 1) == 0 then
-      tap(88, 300)
-      sleep(1000)
+  if not utils.carClubTaskPage(preview) then
+    if preview.specialSeasonTab then
+      error('已点击赛季赛事第 '..position..' 项的「进入」，但未打开车手联会页面，已保留当前任务')
     end
-    sleep(200)
+    error('赛季赛事第 '..position..' 项进入后不是车手联会页面（当前：'..tostring(preview.scene)..'），请检查「车手联会位置」')
   end
-  end
-  for i = 1, 8 do
-    utils.mySwipe(550, 406, 200, 406)
-  end
-  sleep(1000)
-  local swipes = function(n)
-    local dx = 0
-    for i = 1, n do
-      dx = 0
-      keepCapture()
-      local ret, x, y = _findColorTriple(330, 200, 560, 200, "360A17-090909", 0, 1.0)
-      if x ~= -1 then
-        dx = 425 - x
-        print(dx, x)
-      end
-      utils.mySwipe1(180, 406, 430 + dx, 406, 200)
-      sleep(500)
-    end
-  end
-  local dsPos = tonumber(run.data["车手联会位置"]) or 1
-  if dsPos == 1 then
-    for i = 1, 3 do
-      tap(500, 406)
-      sleep(200)
-    end
-  else
-    swipes(dsPos - 2)
-    keepCapture()
-    local ret, x, y = _findColorTriple(180, 200, 400, 200, "360A17-090909", 0, 1.0)
-    local dx = 320
-    if 260 < x then
-      dx = x - 10
-    end
-    for i = 1, 3 do
-      tap(dx, 406)
-      sleep(200)
-    end
-  end
-  tap(20, 320)
-  tap(20, 320)
-  sleep(3000)
-  keepCapture()
-  if cmpColor(658, 1274, "6412FB-101010", 1) == 1 then
-    tap(658, 1270)
-    sleep(2500)
-  end
-  for i = 1, 15 do
-    swipe(60, 250, 60, 1200, 100)
-    sleep(500)
-  end
-  sleep(1500)
-  releaseCapture()
+  print('已进入车手联会（赛季赛事第 '..position..' 项）')
+  utils.carClubToOrigin()
 end
 -- 界面识别以文字为准，不以配色为准：换肤/改配色后文字仍然可定位。
 -- 返回区域内命中任一关键字的词框（config 坐标），按屏幕从上到下排序。
@@ -2924,111 +2928,154 @@ function utils.startRaceTaps()
   tap(sx, sy)
 end
 
+--- 车手联会章节横条：每张章节卡标题行的大字「任务」（横屏坐标，词框中心），按从左到右排序。
+function utils.carClubCards(screen)
+  local cards = {}
+  for _,word in ipairs(screen.words or {}) do
+    local label=tostring(word.text or ''):gsub('[%s|]',''):gsub('務','务')
+    if label=='任务' and word.y>230 and word.y<330 then
+      local card={x=word.x,y=word.y,name=''}
+      for _,other in ipairs(screen.words or {}) do
+        local text=tostring(other.text or ''):gsub('%s','')
+        if other~=word and math.abs(other.x-word.x)<260 and other.y>=word.y-80 and other.y<=word.y-25 and text:find('%d') then
+          card.name=text
+        end
+      end
+      cards[#cards+1]=card
+    end
+  end
+  table.sort(cards,function(a,b) return a.x<b.x end)
+  return cards
+end
+
+--- 车手联会选任务：先把章节横条拉回最左起点，再从起点向右逐张看章节卡，取当前进度该做的任务。
+-- 章节卡上「a/b」且 a<b 说明主线还在进行；带「特别任务」的卡可以打特别任务。
+-- 主线 = 点开章节卡后面板里带「危险等级」的任务行（按「危险等级」配置选行）；支线 = 面板里的特别任务（「开始任务」）。
+-- 返回 1 已点开始；-1 从起点翻到末尾也没有可做的任务；0 没认出章节卡（界面被遮挡或加载中）。
 function utils.spChoose()
-  local ret, x, y, x1, y1, x2, y2 = -1, -1, -1, -1, -1, -1, -1
   local fz = utils.defultCfg(run.data["分支选择"], "0")
   local wxdj = utils.defultCfg(run.data["危险等级"], "0")
   local ndbz = utils.defultCfg(run.data["难度不足"], "0")
-  keepCapture()
-  ret, x, y = _findColorTriple(368, 10, 370, 500, "3900FF-100410", 0, 1.0)
-  if y ~= -1 and (fz == "0" or fz == "2") then
-    local dx = y - 120
-    utils.mySwipe(64, 200 + dx, 64, 200)
-    sleep(200)
-    print("支线微调", y)
-    tap(300, 150)
-    sleep(1500)
-    tap(145, 790)
-    toast("刷支线")
-    sleep(1000)
-    utils.startRaceTaps()
-    return 1
+  local wantSide = fz == "0" or fz == "2"
+  local wantMain = fz == "1" or fz == "2"
+  if not utils.carClubAtOrigin then utils.carClubToOrigin() end
+  local function clean(w) return tostring(w.text or ''):gsub('[%s|]','') end
+  local function cardWords(screen,card)
+    local found={}
+    for _,w in ipairs(screen.words or {}) do
+      if w.x>=card.x-85 and w.x<=card.x+345 and w.y>=330 and w.y<=620 then found[#found+1]=w end
+    end
+    return found
   end
-  x, y = findMultiColor(324, 58, 379, 502, "FFFFFF-050505", "4|2|FFFFFF-050505|7|3|FFFFFF-050505|11|5|FFFFFF-050505|15|7|FFFFFF-050505|21|9|FFFFFF-050505", 0, 1)
-  x1, y1 = findMultiColor(73, 48, 515, 535, "FFFFFF-050505", "29|-2|FFFFFF-050505|-5|26|FFFFFF-050505|10|75|FFFFFF-050505|27|77|FFFFFF-050505", 0, 1)
-  if y ~= -1 and (fz == "1" or fz == "2") then
-    local dx = y1 - 124
-    utils.mySwipe(64, 200 + dx, 64, 200)
-    sleep(200)
-    print("主线微调", y)
-    tap(340, 160)
-    sleep(1500)
-    x2, y2 = findMultiColor(73, 48, 515, 535, "FFFFFF-050505", "29|-2|FFFFFF-050505|-5|26|FFFFFF-050505|10|75|FFFFFF-050505|27|77|FFFFFF-050505", 0, 1)
-    -- 危险等级行：先用 OCR 文字定位（文字不随配色变化），
-    -- 其次旧界面的蓝色难度条，最后新界面每行右侧的 SP 奖励徽章。
-    local picks = {}
-    local rows = utils.textWordsIn(40, 400, 660, 1050, { "危险等级", "危險等級", "危险等級", "危險等级" })
-    if #rows == 0 then
-      -- 暗底小字时 OCR 可能只稳定认出“等级”，再兜一次。
-      rows = utils.textWordsIn(40, 400, 660, 1050, { "等级", "等級" })
+  local lastKey
+  local skipped = {}
+  for step = 1, 24 do
+    local screen, cards
+    for attempt = 1, 3 do
+      screen = _soloEventUi()
+      cards = utils.carClubCards(screen)
+      if #cards > 0 then break end
+      sleep(600)
     end
-    for _, row in ipairs(rows) do
-      picks[#picks + 1] = { x = row.x, y = row.y }
+    if #cards == 0 then
+      data["信息"] = "车联任务列表未识别到章节卡"
+      print("车联任务列表未识别到章节卡")
+      return 0
     end
-    if #picks == 0 then
-      keepCapture()
-      ret, x, y = _findColorTriple(70, y2 + 587, 460, y2 + 620, "0089FF-100410", 2, 1.0)
-      if x ~= -1 and 360 < x then
-        picks = { { x = x - 10, y = y + 100 }, { x = x - 150, y = y + 100 }, { x = x - 300, y = y + 100 } }
-      end
-    end
-    if #picks == 0 then
-      keepCapture()
-      for i = 1, 3 do
-        local center = 400 - (i - 1) * 150
-        ret, x, y = _findColorTriple(center - 60, 900, center + 60, 1050, "FA073D-121212", 0, 1.0)
-        if x ~= -1 then
-          picks[#picks + 1] = { x = x, y = y }
+    -- 只看整张都在屏幕里的章节卡（标题距左边至少 95 像素），被左边裁掉的留到下一屏再看。
+    local key, mainCard, sideCard = {}, nil, nil
+    for _,card in ipairs(cards) do
+      key[#key+1]=card.name..'@'..math.floor(card.x/40)
+      if card.x>=95 and card.x<=900 then
+        local progress, special = nil, false
+        for _,w in ipairs(cardWords(screen,card)) do
+          local text=clean(w)
+          local a,b=text:match('^(%d+)/(%d+)$')
+          if a then progress=tonumber(b)-tonumber(a) end
+          if text:find('特别任务',1,true) or text:find('特別任務',1,true) or text:find('特殊任务',1,true) then special=true end
         end
+        if progress and progress>0 and not mainCard then mainCard=card end
+        if special and not sideCard then sideCard=card end
       end
     end
-    if #picks == 0 then
-      utils.logTextWords(40, 400, 660, 1050)
-      data["信息"] = "车联任务列表未找到危险等级"
-      toast("车联任务列表未找到危险等级")
-      print("车联任务列表未找到危险等级")
-      return -1
+    local signature=table.concat(key,'|')
+    if lastKey==signature then break end  -- 横条翻到底，不再前进
+    lastKey=signature
+    local card, kind = nil, nil
+    if (wantSide and sideCard) and not (wantMain and mainCard and not sideCard) then
+      card, kind = sideCard, "side"
+    elseif wantMain and mainCard then
+      card, kind = mainCard, "main"
     end
-    if #picks == 1 then
-      -- 界面只提供当前这一条任务（车联按进度线性推进），直接点开它。
-      tap(picks[1].x, picks[1].y)
-      sleep(800)
-    else
-      local want = (tonumber(wxdj) or 0) + 1
-      if want > #picks then
-        if ndbz == "1" then
-          toast("少于三个难度时选最下面的难度")
-          sleep(1500)
-          want = #picks
+    if card and skipped[card.name] then card = nil end
+    if card then
+      tap(719 - (card.y + 100), math.min(card.x + 150, 1200))
+      local side, rows = nil, {}
+      for read = 1, 2 do
+        sleep(read == 1 and 1300 or 1500)
+        local panel = _soloEventUi()
+        side, rows = nil, {}
+        for _, word in ipairs(panel.words or {}) do
+          local label = clean(word)
+          if (label:find("开始任务", 1, true) or label:find("開始任務", 1, true)) and word.x > 800 and word.y > 540 then
+            side = word
+          end
+        end
+        if not side then
+          -- 特别任务面板底部也有「危险等级」字样，所以先判断面板类型再看任务行。
+          for _, word in ipairs(panel.words or {}) do
+            local label = clean(word)
+            if (label:find("危险等级", 1, true) or label:find("危險等級", 1, true)) and word.x > 500 then
+              rows[#rows + 1] = word
+            end
+          end
+        end
+        -- 面板展开有动画：第一次没读到内容时先等一下再读一遍，不急着换下一张卡。
+        if side or #rows > 0 then break end
+      end
+      print("车联第 " .. step .. " 屏：" .. card.name .. "，面板：" .. (side and "特别任务" or "主线任务行 " .. #rows .. " 条"))
+      if side and kind == "side" then
+        toast("刷支线")
+        utils.startRaceTaps()
+        return 1
+      end
+      if not side and #rows > 0 and kind == "main" then
+        table.sort(rows, function(a, b) return a.y < b.y end)
+        local pick
+        if #rows == 1 then
+          pick = rows[1]
         else
-          toast("少于三个难度时选最上面的难度")
-          sleep(1500)
-          want = 1
+          local want = (tonumber(wxdj) or 0) + 1
+          if want > #rows then
+            if ndbz == "1" then
+              toast("少于三个难度时选最下面的难度")
+              want = #rows
+            else
+              toast("少于三个难度时选最上面的难度")
+              want = 1
+            end
+            sleep(1500)
+          end
+          pick = rows[want]
         end
+        tap(719 - pick.y, pick.x)
+        sleep(800)
+        toast("刷主线")
+        utils.startRaceTaps()
+        return 1
       end
-      for i = want, 1, -1 do
-        tap(picks[i].x, picks[i].y)
-        sleep(400)
-      end
+      -- 点开后没有对应任务：这张卡本轮不再看
+      skipped[card.name] = true
     end
-    releaseCapture()
-    toast("刷主线")
-    sleep(2000)
-    utils.startRaceTaps()
-    sleep(1000)
-    return 1
+    -- 这一屏没有要做的任务：按住拖动向后翻一屏（不甩动），避免跳过章节卡
+    utils.carClubAtOrigin = false
+    utils.mySwipe(119, 760, 119, 330)
+    sleep(1300)
   end
-  keepCapture()
-  ret, x, y = _findColorTriple(410, 10, 410, 500, "FFFFFF-090910", 0, 1.0)
-  ret, x2, y2 = _findColorTriple(360, 10, 360, 500, "5400FF-100410", 0, 1.0)
-  if y ~= -1 and y2 ~= -1 and (fz == "1" or fz == "2") then
-    tap(273, 848)
-    toast("刷特殊主线")
-    sleep(2000)
-    utils.startRaceTaps()
-    return 1
-  end
-  return 0
+  data["信息"] = "车联任务列表未找到可进入的危险等级"
+  toast(data["信息"])
+  print(data["信息"])
+  return -1
 end
 function utils.getClearPrize()
   if UIconfig.clearPrize ~= "" and os.date("%H") == 0 and os.date("%M") < 30 then

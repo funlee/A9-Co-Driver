@@ -54,6 +54,7 @@ function run.project()
     if _sessionLegacyPrepare then _sessionLegacyPrepare() end
     data["心跳时间"] = os.time()
     local soloRaceSeen=false
+    local homeStreak=0
     utils.soloStartAt=nil;run.challengeConfirmed=false
     ::observeRace::
     while true do
@@ -71,7 +72,11 @@ function run.project()
       local tutorial=data['项目']=='特殊赛事' and spCup and spCup.tutorialButton and spCup.tutorialButton(screen)
       if scene=='race' then soloRaceSeen=true;utils.soloStartAt=nil end
       local homeHandler=run.homeEntries and run.homeEntries[data['项目']]
+      if screen and screen.scene~='home' then homeStreak=0 end
       if screen and screen.scene=='home' and homeHandler then
+        homeStreak=homeStreak+1
+        -- 入口连续几次没能离开主界面就停任务，不再空转等看门狗。
+        if homeStreak>3 then error('已连续 '..homeStreak..' 次回到游戏主界面仍未进入'..data['项目']..'，已保留当前任务') end
         ret=homeHandler(screen)
         if ret~=nil then goto lbl_129 end
       elseif screen and screen.scene=='exitGame' then
@@ -121,25 +126,33 @@ function run.project()
       elseif soloRaceSeen and screen and cup.isSettlement(screen.scene) then
         ret=dailyCup.settle(data['项目'],_soloEventUi)
         if ret~=nil then goto lbl_129 end
-      else
-        local operations=run.list[data['项目']]
-        for im1 = 1, #operations do
-          keepCapture()
-          -- OCR is supplementary; a missed label must not block the color dispatch.
-          if cmpColorEx(operations[im1][1], 1) == 1 then
-            if operations[im1][1]=='680|50|FFFFFF-101010,660|70|FFFFFF-101010' then
-              soloRaceSeen=true;utils.soloStartAt=nil
+        else
+          local operations=run.list[data['项目']]
+          local matched=false
+          for im1 = 1, #operations do
+            keepCapture()
+            -- OCR is supplementary; a missed label must not block the color dispatch.
+            if cmpColorEx(operations[im1][1], 1) == 1 then
+              matched=true
+              if operations[im1][1]=='680|50|FFFFFF-101010,660|70|FFFFFF-101010' then
+                soloRaceSeen=true;utils.soloStartAt=nil
+              end
+              ret = operations[im1][2]()
+              if type(ret)=="string" then return ret end
+              if ret ~= nil then goto lbl_129 end
+              if daily and im1<=2 then
+                break  -- Re-read the destination before allowing any race actions.
+              end
             end
-            ret = operations[im1][2]()
+            sleep(10)
+          end
+          -- 车手联会的旧配色已不匹配当前页面：没有色键命中时用文字确认任务页再选任务。
+          if not matched and data['项目']=='车联' and utils.carClubTaskPage(_soloEventUi()) then
+            ret=dsCup.operation[2][2]()
             if type(ret)=="string" then return ret end
             if ret ~= nil then goto lbl_129 end
-            if daily and im1<=2 then
-              break  -- Re-read the destination before allowing any race actions.
-            end
           end
-          sleep(10)
         end
-      end
       utils.tipsHandle()
       run.rebootHandle()
       sleep(500)

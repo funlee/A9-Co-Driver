@@ -586,6 +586,10 @@ public final class CoreChecks {
                         "local frame=0;function _soloEventUi()frame=frame+1;if smokeEntered then return {scene='missionRewards',stageLabel='阶段1',words={{text='继续',x=1100,y=650}}} end;return {frameId=frame,scene='home',specialSeasonTab=true,words={{text='MISTRAL',x=120,y=115},{text='MISTRAL',x=600,y=120},{text='赛季赛事',x=340,y=650},{text='开始',x=1100,y=535}}}end;"+
                         "local nativeTap=tap;function tap(y,x)nativeTap(y,x);if x==1100 then smokeEntered=true end end;local artwork={};for i=1,35 do artwork[i]=42 end;"+
                         "function _specialEventList()frame=frame+1;return {frameId=frame,aligned=true,cards={{x=220,y=170,top=73,artwork=artwork}}}end;" :
+                    mode.equals("dsCup") ?
+                        "local frame=0;function _soloEventUi()frame=frame+1;if smokeEntered then return {frameId=frame,scene='unknown',text='速度纪元 1 任务 0/888 危险等级 SP 888'} end;return {frameId=frame,scene='home',specialSeasonTab=true,words={{text='OWL',x=120,y=115},{text='赛季赛事',x=340,y=650},{text='进入',x=1100,y=530}}}end;"+
+                        "local nativeTap=tap;function tap(y,x)nativeTap(y,x);if x==1100 then smokeEntered=true end end;local artwork={};for i=1,35 do artwork[i]=42 end;"+
+                        "function _specialEventList()frame=frame+1;return {frameId=frame,aligned=true,cards={{x=220,y=170,top=73,artwork=artwork}}}end;" :
                         "function _soloEventUi()return {scene='home'}end;";
                 r.load("menu-smoke",ui+
                         "function smoke() localInit();run.data={};"+mode+".operation["+(mode.equals("spCup")?2:1)+"][2]();record('done') end");
