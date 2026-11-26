@@ -8,7 +8,7 @@ import java.util.*;
 import dev.funlee.a9.core.*;
 
 public final class LocalStore {
-    static final int DEFAULT_RACE_TIMEOUT_SECONDS = 900;
+    static final int DEFAULT_RACE_TIMEOUT_SECONDS = 480;
     public static final String[] MODES={"多人上","多人下","杯赛","特殊赛事","车联","每日战利品"};
     private static final String[] RETIRED_GLOBAL_OPTIONS={
         "coinAD","cupTicketAD","spCupTicketAD","dsTicketAD","onceAD","dsCupAD","AdTime","coinADNum",

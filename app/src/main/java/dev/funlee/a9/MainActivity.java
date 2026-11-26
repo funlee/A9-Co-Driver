@@ -76,6 +76,32 @@ public final class MainActivity extends Activity {
         heading.setTypeface(FONT_MEDIUM);
         return heading;
     }
+    private LinearLayout helpHeading(String text,Runnable help){
+        LinearLayout header=row();header.setGravity(Gravity.CENTER_VERTICAL);
+        header.addView(heading(text,BODY));
+        ImageView icon=new ImageView(this);icon.setImageResource(R.drawable.ic_info_outline);icon.setContentDescription(text+"说明");
+        icon.setPadding(dp(SPACE_SMALL),dp(SPACE_SMALL),dp(SPACE_SMALL),dp(SPACE_SMALL));
+        icon.setOnClickListener(v->{try{help.run();}catch(Exception e){message(e.getMessage());}});
+        header.addView(icon,new LinearLayout.LayoutParams(dp(28),dp(28)));
+        return header;
+    }
+    private void showPositionHelp(String title,int imageRes,String caption){
+        LinearLayout content=column();content.setPadding(dp(SPACE_LARGE),dp(SPACE_SMALL),dp(SPACE_LARGE),0);
+        ImageView image=new ImageView(this);image.setImageResource(imageRes);image.setAdjustViewBounds(true);image.setScaleType(ImageView.ScaleType.FIT_CENTER);content.addView(image);
+        content.addView(label(caption,DETAIL));
+        showDialog(new AlertDialog.Builder(this).setTitle(title).setView(scroll(content)).setPositiveButton("知道了",null).create());
+    }
+    private void showSeasonPositionHelp(){
+        showPositionHelp("赛季赛事序号",R.drawable.club_event_position_help,"图中左侧赛事列表的序号即“赛季赛事序号”，从上往下依次递增。");
+    }
+    private void showDailyPositionHelp(){
+        showPositionHelp("每日赛事序号",R.drawable.daily_event_position_help,"图中赛事卡片的序号即“每日赛事序号”，从左往右依次递增。");
+    }
+    private void showDifficultyShortHelp(){
+        LinearLayout content=column();content.setPadding(dp(SPACE_LARGE),dp(SPACE_SMALL),dp(SPACE_LARGE),0);
+        TextView text=label("点开的章节里没有所设的“危险等级”时生效：选“最低难度”取该章节最低的一档，选“最高难度”取最高的一档。",BODY);text.setTextColor(INK);content.addView(text);
+        showDialog(new AlertDialog.Builder(this).setTitle("危险等级不足时").setView(scroll(content)).setPositiveButton("知道了",null).create());
+    }
     private Button button(String text,Runnable action){Button b=new Button(this);b.setText(text);b.setAllCaps(false);typography(b,BODY,true);b.setMinHeight(dp(TOUCH_HEIGHT));b.setMinimumHeight(dp(TOUCH_HEIGHT));b.setMinWidth(0);b.setMinimumWidth(0);b.setPadding(dp(SPACE_LARGE),dp(SPACE_MEDIUM),dp(SPACE_LARGE),dp(SPACE_MEDIUM));b.setElevation(0);b.setStateListAnimator(null);
         boolean primary=text.startsWith("开始")||text.startsWith("保存"),danger=text.equals("停止");
         surface(b,primary?ACCENT:danger?0xfffceeed:SURFACE,primary||danger?0:LINE,10);b.setTextColor(primary?SURFACE:danger?0xffb74d49:INK);
@@ -270,6 +296,7 @@ public final class MainActivity extends Activity {
         if(mode.equals("多人上"))fields.addView(label("优先使用当前段位配置的车辆。该段未配置或配置车全部无油时，逐级尝试较低段位的配置。序号按各段车库从左到右、每列从上到下计算，支持每次用一辆。",DETAIL));
         if(mode.equals("多人下"))fields.addView(label("按配置的车辆序号选车。每列先上后下，再从左往右累计，跨屏时核验车辆位置，支持每次用一辆。",DETAIL));
         if(mode.equals("每日战利品"))fields.addView(label("每天 00:00–00:30 自动跳过此任务",DETAIL));
+        if(mode.equals("车联"))fields.addView(label("低星工具车不建议使用辅助驾驶完成比赛，车联任务只会采用左划跑法完成比赛",DETAIL));
         for(int i=0;i<spec.length();i++){
             JSONObject f=spec.getJSONObject(i);String key=f.getString("key"),type=f.getString("type");JSONArray options=f.getJSONArray("options");
             if(key.equals("称霸位置"))continue; // Rendered alongside the 称霸模式 checkbox.
@@ -297,16 +324,20 @@ public final class MainActivity extends Activity {
                 enabled.setOnCheckedChangeListener((view,checked)->chapterFields.setVisibility(checked?View.VISIBLE:View.GONE));
             }
             else if(type.equals("EditText")){
-                boolean eventPosition=key.equals("杯赛位置");String title=eventPosition?"赛事位置":key;
-                fields.addView(heading(title,BODY));
-                if(eventPosition)fields.addView(label("仅支持正数，从左起计数；3 表示从左起第 3 个赛事。",DETAIL));
+                boolean eventPosition=key.equals("杯赛位置"),seasonPosition=key.equals("车手联会位置")||key.equals("特殊赛事位置");String title=eventPosition?"每日赛事序号":key.equals("项目名称")?"任务名称":key.equals("次数")?"比赛次数":seasonPosition?"赛季赛事序号":key;
+                if(eventPosition)fields.addView(helpHeading(title,this::showDailyPositionHelp));
+                else if(seasonPosition)fields.addView(helpHeading(title,this::showSeasonPositionHelp));
+                else fields.addView(heading(title,BODY));
                 EditText e=edit(data.optString(key));e.setContentDescription(title);if(eventPosition){e.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_SIGNED);e.setOnFocusChangeListener((v,hasFocus)->{if(!hasFocus)sanitizeCupPosition((EditText)v);});}fields.addView(e);views.put(key,e);
             }
             else if(type.equals("CheckBoxGroup")){
-                LinearLayout checks=column();String selected=","+data.optString(key)+",";
-                for(int n=0;n<options.length();n++){CheckBox cb=checkBox(options.getString(n));cb.setTag(n);cb.setChecked(selected.contains(","+n+","));checks.addView(cb);}fields.addView(heading(key,BODY));fields.addView(checks);views.put(key,checks);
+                boolean flat=key.equals("选车筛选");LinearLayout checks=flat?row():column();String selected=","+data.optString(key)+",";
+                for(int n=0;n<options.length();n++){CheckBox cb=checkBox(options.getString(n));cb.setTag(n);cb.setChecked(selected.contains(","+n+","));if(flat){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-2,-2);p.rightMargin=dp(SPACE_SMALL);checks.addView(cb,p);}else checks.addView(cb);}fields.addView(heading(key,BODY));fields.addView(checks);views.put(key,checks);
             }else{
-                fields.addView(heading(key,BODY));Spinner spinner=outlinedSpinner();String[] choices=new String[options.length()];for(int j=0;j<choices.length;j++)choices[j]=options.getString(j);
+                String title=key.equals("分支选择")?"任务类型":key.equals("难度不足")?"危险等级不足时":key;
+                if(key.equals("难度不足"))fields.addView(helpHeading(title,this::showDifficultyShortHelp));
+                else fields.addView(heading(title,BODY));
+                Spinner spinner=outlinedSpinner();String[] choices=new String[options.length()];for(int j=0;j<choices.length;j++)choices[j]=options.getString(j);
                 spinner.setAdapter(spinnerOptions(Arrays.asList(choices)));
                 LinearLayout.LayoutParams spacing=new LinearLayout.LayoutParams(-1,-2);
                 spacing.bottomMargin=dp(ROW_GAP);spinner.setLayoutParams(spacing);
@@ -504,10 +535,10 @@ public final class MainActivity extends Activity {
         for(MapMatcher.Rule rule:store.matcher.rules)if(store.routes.containsKey(rule.internal)){
             tracks.computeIfAbsent(routeTrack(rule),key->new ArrayList<>()).add(rule);
         }
+        int mapCount=0,customCount=0;for(List<MapMatcher.Rule> rules:tracks.values())for(MapMatcher.Rule rule:rules){mapCount++;if(store.isCustomMap(rule.internal))customCount++;}
+        body.addView(label(tracks.size()+" 个赛道 · "+mapCount+" 个地图 · 自定义 "+customCount+" 个\n无路线代码的地图在比赛时会采用左划的形式完成比赛。",DETAIL));
         body.addView(button("新增自定义地图",this::customMapEditor));
         LinearLayout filtersCard=settingsGroup("地图筛选");
-        int mapCount=0,customCount=0;for(List<MapMatcher.Rule> rules:tracks.values())for(MapMatcher.Rule rule:rules){mapCount++;if(store.isCustomMap(rule.internal))customCount++;}
-        TextView explanation=label(tracks.size()+" 个赛道 · "+mapCount+" 个地图 · 自定义 "+customCount+" 个\n无路线代码的地图自动左划。",DETAIL);filtersCard.addView(explanation);
         TextView count=label("",DETAIL);
         LinearLayout filters=row();
         List<String> trackNames=new ArrayList<>();trackNames.add("");trackNames.addAll(tracks.keySet());
@@ -738,18 +769,18 @@ public final class MainActivity extends Activity {
         });
     }
     private void taskPreferences(){
+        body.addView(label("更改用于新开始的任务；续跑沿用原任务设置。",DETAIL));
         LinearLayout preferences=settingsGroup("运行规则");
         gameSelector(preferences);
         settingRow(preferences,"单局时间上限","超过时限后停止当前任务",
                 durationLabel(store.config.optInt("raceTimeout",LocalStore.DEFAULT_RACE_TIMEOUT_SECONDS)),
-                ()->numberSetting("单局时间上限","raceTimeout",60,1800,"秒",LocalStore.DEFAULT_RACE_TIMEOUT_SECONDS));
+                ()->numberSetting("单局时间上限","raceTimeout",240,1200,"秒",LocalStore.DEFAULT_RACE_TIMEOUT_SECONDS));
         body.addView(preferences);
         LinearLayout rewards=settingsGroup("奖励领取");
         rewards.addView(label("每轮任务编排开始前检查一次。\n所有启用的任务执行一遍后，下轮再检查。",DETAIL));
         rewardSwitch(rewards,"freePkg","领取免费包");
         rewardSwitch(rewards,"autoToken","领取每日目标奖励");
         body.addView(rewards);
-        body.addView(label("更改用于新开始的任务；续跑沿用原任务设置。",DETAIL));
     }
     private LinearLayout dialogFields(){if(preferenceToast!=null)preferenceToast.cancel();LinearLayout fields=column();fields.setPadding(dp(DIALOG_GUTTER),dp(ROW_GAP),dp(DIALOG_GUTTER),dp(ROW_GAP));fields.setFocusableInTouchMode(true);fields.requestFocus();return fields;}
     private void saveSetting(String key,Object value)throws JSONException{

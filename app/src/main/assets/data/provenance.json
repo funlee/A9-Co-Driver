@@ -1,8 +1,8 @@
 {
   "runtime_validation": "partial: cumulative 78 multiplayer races on MuMu (world 40, master 38), interrupted by updates; latest empty-fuel task skip covered offline only; not a continuous 200-race acceptance; 2026-11-26 emulator: maintenance notice stop verified on device, no-ticket dialog skip pending live retest",
   "assets": {
-    "data/default-projects.json": "0d4403d2e9853f4bfddb08d2329b3cc6c14a8e0dbf440cedbf5297aff7242194",
-    "data/forms.json": "4838560707c9885de0a474ca551f66b6f55773f3daf7d0b332008811c5be5fa1",
+    "data/default-projects.json": "334fb2895986e09c9f7fc7fc6d8a3f117741ebdaf8f946610403bd8305512079",
+    "data/forms.json": "83a37dec65318cc93f37f81eeebe45dd0ac93f3a5546e419584d8599283b56ef",
     "data/map-rules.tsv": "3851380011f0d1fc8a234092109a6414e7277e73efa6a40b4c2543de8eea03d5",
     "data/progress.lib": "1a15ef4e6e5bda467aec8b453e448b5e95a166b29529d7a186fbde4192e2c2d1",
     "data/routes.txt": "6a7de3243dad59728ad2dbc466bf932c506ffae4fba09e0f305c22a0b4545714",

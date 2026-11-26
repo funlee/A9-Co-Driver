@@ -75,8 +75,8 @@ final class TaskEditingDeviceCheck {
             clickTask("狼崽");
             check(node("选择项目类型")==null&&node("4. 每日战利品")!=null&&node("保存")!=null,"Existing task did not open its details directly");
             check(node("每日只执行一次")==null&&node("完成本任务后，当天后续循环自动跳过")==null,"Retired daily-once control is visible");
-            input("次数","9");click("取消");check(tasks().getJSONObject(DAILY).toString().equals(originalTask),"Cancelling edit changed task");
-            clickTask("狼崽");input("次数","4");input("项目名称","test战利品");click("保存");reload();bind();
+            input("比赛次数","9");click("取消");check(tasks().getJSONObject(DAILY).toString().equals(originalTask),"Cancelling edit changed task");
+            clickTask("狼崽");input("比赛次数","4");input("任务名称","test战利品");click("保存");reload();bind();
             test.runOnMainSync(()->{
                 View root=activity.getWindow().getDecorView(),title=findText(root,"test战利品");
                 check(title!=null&&findText(root,"test战利品 · 每日战利品")==null,"Custom title still includes task type");
@@ -91,9 +91,9 @@ final class TaskEditingDeviceCheck {
             clickMain("新增任务");check(node("选择项目类型")!=null,"New task must choose type first");click("取消");
             clickMain("新增任务");click("取消");check(tasks().length()==7,"Cancelling type picker added a task");
             clickMain("新增任务");click("杯赛");click("取消");check(tasks().length()==7,"Cancelling form added a task");
-            clickMain("新增任务");click("杯赛");input("项目名称","新增杯赛测试");input("次数","0");click("保存");
+            clickMain("新增任务");click("杯赛");input("任务名称","新增杯赛测试");input("比赛次数","0");click("保存");
             check(tasks().length()==7&&node("执行次数需为 1–10000")!=null,"Invalid task was saved");click("确定");
-            input("次数","3");click("保存");
+            input("比赛次数","3");click("保存");
             check(tasks().length()==8,"UI add failed");
             JSONObject added=tasks().getJSONObject(7);String addedId=added.getString("taskId");
             check(added.getJSONObject("data").getString("次数").equals("3")&&!added.getBoolean("enabled"),"New task fields/flag incorrect");

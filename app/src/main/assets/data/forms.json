@@ -142,15 +142,15 @@
       "options": []
     },
     {
-      "key": "次数",
-      "type": "EditText",
-      "value": "1",
-      "options": []
-    },
-    {
       "key": "杯赛位置",
       "type": "EditText",
       "value": "4",
+      "options": []
+    },
+    {
+      "key": "次数",
+      "type": "EditText",
+      "value": "1",
       "options": []
     },
     {
@@ -206,13 +206,13 @@
       "options": []
     },
     {
-      "key": "次数",
+      "key": "特殊赛事位置",
       "type": "EditText",
       "value": "1",
       "options": []
     },
     {
-      "key": "特殊赛事位置",
+      "key": "次数",
       "type": "EditText",
       "value": "1",
       "options": []
@@ -290,15 +290,15 @@
       "options": []
     },
     {
-      "key": "次数",
-      "type": "EditText",
-      "value": "1",
-      "options": []
-    },
-    {
       "key": "车手联会位置",
       "type": "EditText",
       "value": "",
+      "options": []
+    },
+    {
+      "key": "次数",
+      "type": "EditText",
+      "value": "1",
       "options": []
     },
     {
@@ -329,12 +329,6 @@
         "最低难度",
         "最高难度"
       ]
-    },
-    {
-      "key": "车手联会用车",
-      "type": "EditText",
-      "value": "1",
-      "options": []
     }
   ],
   "每日战利品": [

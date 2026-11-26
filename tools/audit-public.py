@@ -17,12 +17,17 @@ BRAND_IMAGES = {
     'assets/brand/a9-app-icon.png', 'assets/brand/a9-logo.png',
     'assets/brand/a9-mark.png', 'assets/brand/brand-preview.png',
 }
+# In-game screenshots used as in-app help illustrations; reviewed, no account data.
+HELP_IMAGES = {
+    'app/src/main/res/drawable-nodpi/club_event_position_help.jpg',
+    'app/src/main/res/drawable-nodpi/daily_event_position_help.jpg',
+}
 FORBIDDEN={'private','analysis','game-builds','downloads','device-tests','dist','vendor','.gradle','.tooling','build','build-private','bin'}
 BAD_SUFFIX={'.apk','.aab','.jks','.keystore','.log','.png','.jpg','.jpeg','.lib','.aar','.pom'}
 SECRET=re.compile(rb'(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{30,}|-----BEGIN (?:RSA |OPENSSH |EC )?PRIVATE KEY-----)')
 def forbidden(name):
     p=pathlib.PurePosixPath(name)
-    return bool(set(p.parts)&FORBIDDEN or (p.suffix.lower() in BAD_SUFFIX and name!=TEXT_DICTIONARY and name not in BRAND_IMAGES))
+    return bool(set(p.parts)&FORBIDDEN or (p.suffix.lower() in BAD_SUFFIX and name!=TEXT_DICTIONARY and name not in BRAND_IMAGES and name not in HELP_IMAGES))
 def run(*args):return subprocess.check_output(['git',*args],cwd=ROOT)
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--apk',type=pathlib.Path);args=parser.parse_args()
