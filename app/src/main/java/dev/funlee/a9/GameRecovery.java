@@ -137,6 +137,9 @@ final class GameRecovery {
     /** Optional: taps the game's own start prompt and reports whether one was on screen. */
     private Callable<Boolean> startPrompt;
     void startPrompt(Callable<Boolean> prompt){startPrompt=prompt;}
+    /** Optional: sends one Back press for a readable page the menu rules do not recognize. */
+    private Callable<Boolean> backStep;
+    void backStep(Callable<Boolean> step){backStep=step;}
     void awaitInitialForeground()throws InterruptedException{
         if(touch.gameInForeground())return;
         status("已请求启动游戏，等待游戏窗口就绪");
@@ -162,7 +165,8 @@ final class GameRecovery {
     }
     private void waitForMenu(boolean allowRelaunch)throws Exception{
         long launchedAt=activeTime(),until=launchedAt+STARTUP_TIMEOUT_MS,stable=-1,homeSince=-1;
-        long nextHintAt=0,nextPromptAt=0,unreadySince=-1;
+        long nextHintAt=0,nextPromptAt=0,unreadySince=-1,nextBackAt=0;
+        int backs=0;
         boolean loggedOcrTimeout=false;
         while(activeTime()<until){
             gate();
@@ -207,13 +211,21 @@ final class GameRecovery {
                     }catch(InterruptedException interrupted){throw interrupted;}
                     catch(Exception unreadable){SessionState.log("开始画面识别未完成，稍后重试："+unreadable.getMessage());}
                 }
-                // A menu that never appears (frozen page, unrecoverable result screen) only clears with a cold launch.
+                // An unnamed subpage never shows a menu rule, so Back is the only way out.
                 if(!actionable){
                     if(unreadySince<0)unreadySince=activeTime();
-                    if(allowRelaunch&&activeTime()-unreadySince>=120_000){
-                        SessionState.log("游戏在前台但画面持续 2 分钟未就绪");
+                    if(backStep!=null&&backs<8&&activeTime()>=nextBackAt&&activeTime()-unreadySince>=12_000){
+                        boolean pressed=false;
+                        try{pressed=Boolean.TRUE.equals(backStep.call());}
+                        catch(InterruptedException interrupted){throw interrupted;}
+                        catch(Exception unreadable){SessionState.log("返回键恢复未能读取画面："+unreadable.getMessage());}
+                        nextBackAt=activeTime()+2500;
+                        if(pressed){backs++;SessionState.log("画面持续无法识别，已按返回键恢复（"+backs+"/8）");}
+                    }
+                    if(allowRelaunch&&activeTime()-unreadySince>=60_000){
+                        SessionState.log("游戏在前台但画面持续 1 分钟未就绪");
                         recordAttempt();restartGame("游戏画面持续未就绪，重新启动游戏",false);
-                        launchedAt=activeTime();until=launchedAt+STARTUP_TIMEOUT_MS;unreadySince=-1;
+                        launchedAt=activeTime();until=launchedAt+STARTUP_TIMEOUT_MS;unreadySince=-1;nextBackAt=0;backs=0;
                     }
                 }else unreadySince=-1;
             }else {

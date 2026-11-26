@@ -42,11 +42,7 @@ final class GaragePageDeviceCheck {
                 }finally{enlarged.recycle();}
             }
             if(mode.equals("wideFame")){
-                var amounts=RewardOcr.read(recognizer,upright,read,false,true);
-                if(amounts.coins!=3200||amounts.fame!=105)throw new AssertionError("Wide reward replay: "+amounts.coins+"/"+amounts.fame);
-                RewardScreenshotCheck.checkMaximum(recognizer,upright,true,false);
-                RewardScreenshotCheck.checkMaximum(recognizer,upright,true,true);
-                report.putString("result","PASS: actual 3200/+105 and boundary 99,999/+999 for wide multiplayer and solo");return;
+                report.putString("result","SKIP: earnings OCR removed from settlement; wide reward fixtures no longer replayed");return;
             }
             if(reward){
                 report.putString("text",read.getText());
@@ -55,9 +51,6 @@ final class GaragePageDeviceCheck {
                     Rect b=line.getBoundingBox();if(b!=null&&b.centerY()>590)footer.add(Map.of("text",line.getText(),"bounds",b.toString(),"label",dev.funlee.a9.core.RaceRewards.exitLabel(line.getText(),b.centerX(),b.centerY()),"color",Integer.toHexString(frame.pixel(719-b.centerY()+25,b.centerX()))));
                 }
                 report.putString("footer",footer.toString());report.putBoolean("page",RaceRewards.page(read.getText()));
-                var amounts=RewardOcr.read(recognizer,upright,read,false,true);
-                report.putString("amounts",amounts.coins+"/"+amounts.fame);
-                if(amounts.coins!=1200||amounts.fame!=80)throw new AssertionError("Wide reward crop includes a currency icon or clips the fame digits");
                 var exit=RewardOcr.exitButton(read,frame);report.putString("exit",exit.toString());
                 if(!RaceRewards.page(read.getText())||!"错失机会".equals(exit.get("label")))throw new AssertionError("Observed traditional skip label was not recognized");
                 report.putString("result","PASS: observed reward skip button recognized without selecting the ad");return;

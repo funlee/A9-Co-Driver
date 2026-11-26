@@ -339,6 +339,12 @@
   ],
   "每日战利品": [
     {
+      "key": "是否领取俱乐部奖励",
+      "type": "CheckBox",
+      "value": "",
+      "options": []
+    },
+    {
       "key": "项目名称",
       "type": "EditText",
       "value": "每日战利品",

@@ -95,6 +95,11 @@ function run.project()
         sleep(1);sleep(2000)
         local fresh=_soloEventUi()
         if fresh.scene=='dailyRewardOnly' and fresh.frameId~=screen.frameId then return 'dailyExpired' end
+      elseif scene=='noTicket' and data['项目']=='车联' then
+        -- 车联按危险值收费：文字认出「空危险槽」即跳过，不依赖 panel 配色探针。
+        utils.soloStartAt=nil
+        ret=run.list[data['项目']][6][2]()
+        if ret~=nil then goto lbl_129 end
       elseif utils.soloStartAt and scene=='noTicket' then
         utils.soloStartAt=nil
         ret=run.list[data['项目']][6][2]()
@@ -126,6 +131,8 @@ function run.project()
       elseif soloRaceSeen and screen and cup.isSettlement(screen.scene) then
         ret=dailyCup.settle(data['项目'],_soloEventUi)
         if ret~=nil then goto lbl_129 end
+      elseif utils.proceedTipPage and utils.proceedTipPage(screen) then
+        -- 说明页已点击继续，下一轮重新识别画面
         else
           local operations=run.list[data['项目']]
           local matched=false

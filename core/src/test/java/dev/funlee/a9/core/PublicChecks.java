@@ -47,7 +47,7 @@ public final class PublicChecks {
         stats.begin("Synthetic Map",false);stats.result();stats.result(2);stats.result(2);stats.returned();stats.returned();
         check(stats.finished()==1&&stats.returnedCount()==1&&stats.topThreeCount()==1,"Results and ranks count once");
         stats.begin("Synthetic Map",true);stats.result(6);stats.returned();stats.begin("",true);stats.result();stats.returned();
-        check(stats.panel("").contains("50.0%（1/2）")&&stats.panel("").contains("名次待确认 1"),"Unknown rank excluded with visible denominator");
+        check(stats.panel("").contains("50.0%（1/2）")&&!stats.panel("").contains("名次待确认"),"Unknown rank excluded with visible denominator");
         stats.project("多人下");stats.cycle(2);stats.begin("",false);stats.result(1);stats.result(6);stats.result(1);stats.returned();
         check(stats.rankedCount()==2&&stats.topThreeCount()==1&&stats.count("多人上")==3&&stats.count("多人下")==1,"Counters survive cycles; conflicting rank invalidated");
         stats.project("杯赛");stats.legacyCompleted();check(stats.count("杯赛")==1&&stats.rankedCount()==2,"Non-multiplayer excluded from rate");

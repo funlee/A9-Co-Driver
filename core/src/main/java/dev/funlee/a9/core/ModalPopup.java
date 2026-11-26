@@ -196,12 +196,16 @@ public final class ModalPopup {
 
     /** 车联赛事页由 club.lua 自己驱动，这里只负责识别并交还控制权。 */
     private static boolean clubPage(String textOnScreen, List<?> words) {
-        if (CLUB_PAGE.matcher(textOnScreen).find()) return true;
+        if (clubPage(textOnScreen)) return true;
         int taskLabels = 0;
         for (Object value : words) {
             if (normalize(((Map<?, ?>) value).get("text").toString()).equals("任务")) taskLabels++;
         }
         return taskLabels >= 3;
+    }
+    /** The club event pages carry their own chapter list, so only their text identifies them. */
+    public static boolean clubPage(String textOnScreen) {
+        return CLUB_PAGE.matcher(textOnScreen).find();
     }
     private static boolean unobstructedPackStore(PixelFrame frame, Panel panel, List<?> words) {
         if (panel.left < 280 || panel.right > 970) return false;

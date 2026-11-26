@@ -18,6 +18,16 @@ public final class MultiplayerUi {
         return (t.contains("传奇促销")||t.contains("赛道制霸"))
                 &&(t.contains("限时发售")||t.contains("一举成名"));
     }
+    /**
+     * Credit and reward-store banners ("限时充值奖励", "精选奖励") layered over the lobby. They
+     * hide every menu control, so they never count as a usable screen; Back closes them.
+     */
+    public static boolean creditPromo(String text) {
+        String t=MapMatcher.normalize(text).replace('賽','赛').replace('獎','奖').replace('勵','励')
+                .replace('禮','礼').replace('購','购').replace('買','买').replace('儲','储');
+        if(t.contains("充值")||t.contains("储值"))return t.contains("奖励")||t.contains("礼包")||t.contains("赛事");
+        return t.contains("精选奖励")&&(t.contains("限时")||t.contains("购买")||t.contains("补充"));
+    }
     public static boolean leagueDemotionLayout(PixelFrame frame) {
         // The dialog's centered white action sits on a dark blue panel. Sample
         // away from the two Chinese glyphs and verify the button's outside edges.
@@ -72,7 +82,7 @@ public final class MultiplayerUi {
         if((t.contains("礼包")&&t.contains("立即购买"))||t.contains("新手狂欢礼")||
                 (t.contains("车库")&&t.contains("立即领取"))||
                 (t.contains("限时特惠")&&(t.contains("专属特效")||t.contains("立即购买")))||
-                (t.contains("限时抢购")&&t.contains("立即入手"))||limitedSalePromo(text))return "promo";
+                (t.contains("限时抢购")&&t.contains("立即入手"))||limitedSalePromo(text)||creditPromo(text))return "promo";
         if((t.contains("倾斜转弯")||t.contains("键盘操作")||t.contains("智能操作"))&&(t.contains("继续")||t.contains("确定"))&&!t.contains("升级"))return "tutorial";
         if((t.contains("车辆选择")||t.contains("车輛选择")||t.contains("车辅选择"))&&t.contains("选择参与"))return "cars";
         if(VehicleUnlockGuard.lockedDetail(text))return "lockedCar";

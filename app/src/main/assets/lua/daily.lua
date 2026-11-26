@@ -157,7 +157,7 @@ function dailyCup.settle(label,readScreen)
   if _racePanel then _racePanel(false) end
   data["信息"]=label.."结算中"
   local special=label=='特殊赛事'
-  local started=tickCount();local rewardSince=nil;local readySince=nil;local rewardDone=false;local seen=false;local eventFrames=0;local eventSince=nil;local lastEvent=nil
+  local started=tickCount();local rewardSince=nil;local seen=false;local eventFrames=0;local eventSince=nil;local lastEvent=nil
   local returnedScene,returnedFrame
   local pressedFrame=nil;local pressedScene=nil;local pressTries=0
   local skipFrame,skipAt
@@ -202,9 +202,8 @@ function dailyCup.settle(label,readScreen)
       seen=true;advance(screen,"继续")
     elseif scene=="rewards" then
       seen=true;rewardSince=rewardSince or tickCount()
-      if screen.rewardCanContinue then readySince=readySince or tickCount() end
-      if screen.rewardCanContinue and (rewardDone or screen.rewardReady or tickCount()-(readySince or tickCount())>=8000) then
-        if not rewardDone then _sessionLegacyRewards(screen.rewardCoins or -1,screen.rewardFame or -1);rewardDone=true end
+      -- 本局收益不再 OCR：结算按钮可用即点击，缩短奖励页停留。
+      if screen.rewardCanContinue then
         if not advance(screen,"错失机会") then advance(screen,"继续") end
       elseif tickCount()-rewardSince>=60000 then error(label.."收益结算超时") end
     elseif scene=="cards" or scene=="missionRewards" then
@@ -290,7 +289,11 @@ dailyCup.operation = {
     config.cupInfo,
     function()
       data["信息"] = "即将进入车库"
-      utils.dailyPrize()
+      if tostring(run.data["是否领取俱乐部奖励"] or '')=='0' then
+        utils.dailyPrize()
+      elseif _taskNotice then
+        _taskNotice('未开启领取俱乐部奖励，跳过奖励检测',2500)
+      end
       tap(24, 1200)
       sleep(3000)
       for cc = 1, 30 do

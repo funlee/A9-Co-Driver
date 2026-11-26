@@ -43,6 +43,12 @@ public final class CoreChecks {
     public static void main(String[] args) throws Exception {
         RunIssueChecks.run();
         viewportChecks();
+        check(MaintenanceUi.notice("游戏未开服 亲爱的赛车手，《狂野飙车9：竞速传奇》将于11月26日15:30-17:00进行维护，如果在预计时间内无法完成维护，开服时间将继续顺延。维护中无法登录游戏，敬请谅解。 我知道了"),"Shutdown notice with schedule recognized");
+        check(MaintenanceUi.notice("遊戲未開服"),"Traditional shutdown title recognized");
+        check(MaintenanceUi.notice("服务器维护公告"),"Maintenance announcement recognized");
+        check(!MaintenanceUi.notice("比赛奖励 你的用时"),"Race rewards are not a shutdown notice");
+        check(!MaintenanceUi.notice("车辆维护"),"A lone maintenance word is not a shutdown notice");
+        check(!MaintenanceUi.notice(null)&&!MaintenanceUi.notice(""),"Missing text is not a shutdown notice");
         Path assets=Paths.get(args[0]);
         for(int rank=1;rank<=8;rank++)check(ResultRank.parse("比赛奖励 你的用时", "第 "+rank)==rank,"Personal rank "+rank);
         check(ResultRank.parse("获胜者! 你的用时 排行榜","第1")==0,"Winner animation is not personal rank evidence");
@@ -56,9 +62,9 @@ public final class CoreChecks {
         check(rankStats.finished()==1&&rankStats.rankedCount()==1&&rankStats.topThreeCount()==1,"Late reward rank upgrades an unranked result exactly once");
         rankStats.begin("",true);rankStats.result(6);rankStats.returned();
         rankStats.begin("",true);rankStats.result();rankStats.returned();
-        check(rankStats.panel("").contains("50.0%（1/2）")&&rankStats.panel("").contains("名次待确认 1"),"Unknown ranks excluded with visible coverage");
+        check(rankStats.panel("").contains("50.0%（1/2）")&&!rankStats.panel("").contains("名次待确认"),"Unknown ranks excluded with visible coverage");
         rankStats.project("多人下");rankStats.projectTarget(20);rankStats.begin("",false);rankStats.result(1);rankStats.result(6);rankStats.result(1);rankStats.returned();
-        check(rankStats.rankedCount()==2&&rankStats.topThreeCount()==1&&rankStats.panel("").contains("名次待确认 2"),"Conflicting ranks invalidate result, never inflate top-three rate");
+        check(rankStats.rankedCount()==2&&rankStats.topThreeCount()==1&&!rankStats.panel("").contains("名次待确认"),"Conflicting ranks invalidate result, never inflate top-three rate");
         rankStats.cycle(2);check(rankStats.count("多人上")==3&&rankStats.count("多人下")==1,"Counters survive project and cycle transitions");
         rankStats.project("杯赛");rankStats.legacyCompleted();rankStats.project("特殊赛事");rankStats.legacyCompleted();
         check(rankStats.count("杯赛")==1&&rankStats.count("特殊赛事")==1&&rankStats.rankedCount()==2,"Other workflows do not enter multiplayer denominator");
@@ -156,7 +162,7 @@ public final class CoreChecks {
         check(stats.finished()==1&&stats.returnedCount()==0&&stats.totalActions()==12,"Results count once even while a reward popup blocks returning");
         stats.returned();stats.returned();stats.begin("",true);stats.elapsed(65000);
         check(stats.returnedCount()==1&&stats.fallbackCount()==1&&stats.panel("跑图中").contains("完赛 1/5")&&stats.panel("跑图中").contains("00:01:05"),"Task dashboard preserves totals across races");
-        check(new TaskStats().finished()==0&&matcher.displayName("喜马拉雅山冰封路径").equals("神山垭口冰封路径"),"New task clears counters and route key displays CN map name");
+        check(new TaskStats().finished()==0&&matcher.displayName("喜马拉雅山冰封路径").equals("神山垭口-冰封路径"),"New task clears counters and route key displays CN map name");
         check(matcher.rules.size()==251,"Current CN catalog has 251 tracks after the confirmed duplicate removal");
         List<String[]> monsoon=List.of(new String[]{"幽林飞瀑","印度低语瀑布道"},new String[]{"香辛环道","印度香料环道"},
             new String[]{"茶乡竞速","印度极速茶道"},new String[]{"乡野狂欢","印度乡村庆典赛"},new String[]{"瀑布飞驰","印度飞跃瀑布"},
@@ -169,7 +175,7 @@ public final class CoreChecks {
         for(String[] entry:monsoon) {
             String key=entry[1],display="季风秘境"+entry[0];
             MapMatcher.Match cn=matcher.match(display),legacy=matcher.match(key);
-            check(matcher.displayName(key).equals(display)&&cn.unique()&&cn.candidates.get(0).internal.equals(key)
+            check(matcher.displayName(key).equals("季风秘境-"+entry[0])&&cn.unique()&&cn.candidates.get(0).internal.equals(key)
                 &&legacy.unique()&&legacy.candidates.get(0).internal.equals(key),"Monsoon CN name selects its own route key: "+entry[0]);
             check(matcher.match("地图 "+entry[0]+" 1圈").unique(),"Loading title without region is recognized: "+entry[0]);
             Route monsoonRoute=bundledRoutes.get(key);check(monsoonRoute!=null,"Every Monsoon map has an explicit route entry: "+entry[0]);
@@ -435,7 +441,7 @@ public final class CoreChecks {
             check(done[0]&&stats.finished()==names.size()&&stats.returnedCount()==names.size(),"Fallback maps and next smart route complete: "+mode);
             check(left[0]==fallbackMaps&&nitro[0]>=fallbackMaps&&stats.fallbackCount()==fallbackMaps,"Each missing/invalid map runs left+nitro and counts fallback once: "+mode);
             check(validated.equals(keys.subList(keys.size()-2,keys.size())),"Only Islet Race and the next ordinary map reach validation with their configured routes");
-            for(String name:names.subList(0,fallbackMaps))check(hud.stream().anyMatch(h->h.contains(name)&&h.contains("左划")),"Fallback retains recognized CN map in status: "+name);
+            for(String name:names.subList(0,fallbackMaps)){String split=matcher.displayName(matcher.match(name+" 1圈").candidates.get(0).internal);check(hud.stream().anyMatch(h->h.contains(split)&&h.contains("左划")),"Fallback retains recognized CN map in status: "+split);}
         }
     }
     private static void sharedDriverFallback(Path assets)throws Exception{

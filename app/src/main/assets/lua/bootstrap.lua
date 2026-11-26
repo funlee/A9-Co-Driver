@@ -65,6 +65,11 @@ local handlingLegacy,handlingModal=false,false
 local function samePopup(first,second)
   return first and second and first.rule==second.rule and second.frameId>first.frameId
 end
+-- 关闭弹窗时在屏幕底部给玩家一个可见提示，告知程序正在代为关闭。
+local function closePopupNotice(message)
+  print(message)
+  if _taskNotice then _taskNotice(message,2500) end
+end
 local function monitorLegacyPopup()
   if not _legacyPopupProbe or queueRecovering or handlingLegacy or handlingModal then
     previousHudPopup=nil
@@ -74,6 +79,7 @@ local function monitorLegacyPopup()
   local current=_legacyPopupProbe(true)
   if samePopup(previousHudPopup,current) then
     _legacyPopupDismiss(current.rule)
+    closePopupNotice('关闭游戏弹窗：'..tostring(current.rule))
     nextHudProbe=tickCount()+(current.rule=='AD_BACK' and 3000 or 1000)
     previousHudPopup=nil
   else previousHudPopup=current end
@@ -88,6 +94,7 @@ function _handleLegacyTips()
   sleep(250)
   local second=_legacyPopupProbe(false)
   local closed=samePopup(first,second) and _legacyPopupDismiss(first.rule)
+  if closed then closePopupNotice('关闭游戏提示弹窗：'..tostring(first.rule)) end
   if closed and first.rule=='TIP_SEQUENCE' then
     -- The prompt advances up to 15 times. Stop the instant it changes.
     for i=1,15 do
@@ -113,7 +120,7 @@ local function recoverModal(screen,read,...)
     if action and before and screen.frameId and previous.frameId and screen.frameId>previous.frameId
         and action.label==before.label and math.abs(action.x-before.x)<=5 and math.abs(action.y-before.y)<=5 then
       if clicks>=5 then break end
-      print('关闭游戏弹窗：'..action.label)
+      closePopupNotice('关闭游戏弹窗：'..action.label)
       tap(719-action.y,action.x)
       clicks=clicks+1;previous=nil
       local reward=action.label=='红币兑换确定' or action.label=='新手狂欢礼领取' or action.label=='万能图纸福利领取'
@@ -227,19 +234,6 @@ function localInit()
     end
     _driverEnd();data['路程']=0;data['多人地图']='';return settlement and 'settlement' or 1
   end
-  utils.collectRaceRewards=function()
-    if not _legacyRewardSample then return end
-    local sample=_legacyRewardSample()
-    if not sample.rewardPage then return end
-    local started=tickCount()
-    repeat
-      if sample.rewardCanContinue and (sample.rewardReady or tickCount()-started>=8000) then
-        _sessionLegacyRewards(sample.rewardCoins or -1,sample.rewardFame or -1);return
-      end
-      if tickCount()-started>=20000 then error('比赛奖励结算超时，请检查画面') end
-      data['信息']='等待结算完成并识别本局收益';sleep(400);sample=_legacyRewardSample()
-    until not sample.rewardPage
-  end
   run.list={['多人上']=multiple1.operation,['多人下']=multiple2.operation,['杯赛']=cup.operation,
     ['特殊赛事']=spCup.operation,['车联']=dsCup.operation,['每日战利品']=dailyCup.operation}
   run.carDetails={['杯赛']=function()return cup.operation[5][2]()end,['特殊赛事']=function()return spCup.operation[5][2]()end,
@@ -289,6 +283,7 @@ local skipReasons={
   vehicleUnavailable='没有可用车辆',
   garageEmpty='没有可用车辆',
   noTicket='赛事门票不足',
+  clubNoTicket='车联危险值不足，已跳过车联，继续下一个任务',
   [-1]='未完成配置场次'
 }
 

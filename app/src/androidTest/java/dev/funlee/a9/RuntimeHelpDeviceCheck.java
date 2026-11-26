@@ -24,7 +24,7 @@ public final class RuntimeHelpDeviceCheck extends Instrumentation {
                 require(findButton("任务编排")!=null&&findButton("任务偏好")!=null&&findButton("地图配置")!=null&&findButton("偏好设置")!=null,"Missing primary navigation");
                 require(!contains("运行记录"),"Raw logs appear in run center");
                 click("偏好设置");
-                require(contains("运行权限")&&contains("自动操作")&&contains("悬浮控制")&&contains("通知控制"),"Permissions are missing");
+                require(contains("运行权限")&&contains("自动操作")&&contains("比赛统计悬浮窗")&&!contains("通知控制"),"Permissions are missing or notification control remains");
                 require(!contains("高级与帮助")&&!contains("开发者工具")&&!contains("识别与操作参数")&&!contains("第三方运行库许可"),"Advanced/help entries remain visible");
                 click("任务编排");
                 SessionState.running=true;

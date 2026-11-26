@@ -24,6 +24,15 @@ public final class RaceHud {
         return !backWedge(frame)&&(widePause(frame,wide)||ColorPattern.matches(frame,pattern,similarity));
     }
 
+    /**
+     * Race HUD evidence that does not depend on the Back wedge: the pause dots or the HUD
+     * colour pattern. A bright wedge alone also appears on shop banners and club emblems,
+     * so recovery must not treat the wedge as proof of a live race.
+     */
+    public static boolean raceEvidence(PixelFrame frame,boolean wide){
+        return widePause(frame,wide)||ColorPattern.matches(frame,PATTERN,1);
+    }
+
     public static Map<String,Integer> homeButton(PixelFrame frame,boolean wide){
         if(!backWedge(frame))return Map.of();
         int sumX=0,sumY=0,count=0;

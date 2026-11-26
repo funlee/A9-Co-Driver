@@ -16,12 +16,33 @@ final class RecoveryChecks {
         String club="里程碑 俱乐部排行榜 成员 俱乐部经验 在线成员 俱乐部赛事 领取";
         check(RecoveryReadiness.ready(club,"unknown",true)&&!RecoveryReadiness.ready(club,"unknown",false),
                 "Club subpage needs navigation evidence, not a home-menu OCR match");
+        String clubEvent="铬蛇竞速 任务 0/7888 特别任务 0/60 危险等级 3 下一奖励";
+        check(RecoveryReadiness.ready(clubEvent,"unknown",false)&&RecoveryReadiness.navigable(clubEvent,"unknown"),
+                "The club event pages are driven by the workflow instead of waiting for a menu");
+        check(!RecoveryReadiness.ready("加载中 "+clubEvent,"unknown",false),
+                "A loading club page is not ready");
         check(!RecoveryReadiness.ready("加载中 "+club,"unknown",true)&&
                 !RecoveryReadiness.ready("VS 正在搜索其他玩家和地点","matching",true),
                 "Background navigation cannot release loading or matchmaking");
         String sale="限时发售 开启赛道制霸征程 把握 传奇促销 入手 PORSCHE 718 CAYMAN 一举成名";
         check(MultiplayerUi.classify(sale).equals("promo")&&RecoveryReadiness.ready(sale),"Limited sale is a recognized recovery overlay");
         check(!MultiplayerUi.limitedSalePromo("PORSCHE 718 CAYMAN 传奇促销"),"Vehicle text alone cannot authorize a promotion close");
+        String credit="限时充值奖励 充值赛事 赛事期间进行购买，领取稀有奖励 精选奖励 补充 进入 05分02秒 6/10";
+        check(MultiplayerUi.classify(credit).equals("promo")&&MultiplayerUi.creditPromo(credit),"Credit banner is classified as a promotion overlay");
+        check(!RecoveryReadiness.ready(credit,"promo",true)&&!DailyEventUi.classifySolo(credit).equals("loading"),
+                "A credit banner hides the menu, so recovery must not wait on it as a loading screen");
+        check(RecoveryReadiness.navigable(credit,"promo"),"Back closes the credit banner on the way back to the home menu");
+        String carDetail="AELLA-60 最大速度 加速 操控性 氮气 升级 TOUCHDRIVE";
+        check(RecoveryReadiness.navigable(carDetail,"unknown"),"An unnamed car detail page is left with Back");
+        check(!RecoveryReadiness.navigable("单人模式 多人游戏 每日赛事 俱乐部","home"),
+                "A recognized menu never gets Back");
+        check(!RecoveryReadiness.navigable("加载中 单人模式 多人游戏 每日赛事 俱乐部","unknown")&&
+                !RecoveryReadiness.navigable("狂野飙车 竞速传奇 登录中 1s 切换游戏号","unknown"),
+                "Loading and login pages must not receive Back");
+        check(!RecoveryReadiness.navigable("VS 正在搜索其他玩家和地点","matching")&&
+                !RecoveryReadiness.navigable("请选择奖励 确定退出游戏","unknown"),
+                "Matchmaking, reward choice and exit dialogs must not receive Back");
+        check(!RecoveryReadiness.navigable(carDetail,"race"),"An in-race frame is never navigated");
         int[] pixels=new int[720*1280];
         pixels[1251*720+689]=0xff303e54;pixels[1251*720+678]=0xffd5d5da;
         pixels[1252*720+701]=0xffffffff;pixels[1262*720+690]=0xfff4f4f4;

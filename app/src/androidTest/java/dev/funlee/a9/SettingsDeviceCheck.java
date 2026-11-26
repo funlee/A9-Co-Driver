@@ -69,12 +69,11 @@ public final class SettingsDeviceCheck extends Instrumentation {
             require(!node("领取免费包").isChecked()&&node("领取每日目标奖励").isChecked(),
                     "Reward switches did not retain saved state after recreation");
             mainClick("偏好设置");recreateActivity();
-            require(node("运行权限")!=null&&node("高级与帮助")==null&&node("识别与操作参数")==null&&node("开发者工具")==null&&node("第三方运行库许可")==null,"Settings scope changed incorrectly");
+            require(node("运行权限")!=null&&node("通知控制")==null&&node("高级与帮助")==null&&node("识别与操作参数")==null&&node("开发者工具")==null&&node("第三方运行库许可")==null,"Settings scope changed incorrectly");
             permissionLink("自动操作",android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS);
-            permissionLink("悬浮控制",android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION);
-            permissionLink("通知控制",android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+            permissionLink("比赛统计悬浮窗",android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION);
             screenshot("settings-permissions-only.png");
-            result.putString("result","PASS: four primary modules; task preferences isolated and restored; app name; installed game dropdown filters/deduplicates, saves and reloads, dismissed selection unchanged; permission links; numeric validation; save/cancel persistence; inline reward switches persist independently; retired options migrated; advanced/help removed; permission page survives recreation. Original preferences restored.");code=-1;
+            result.putString("result","PASS: four primary modules; task preferences isolated and restored; app name; installed game dropdown filters/deduplicates, saves and reloads, dismissed selection unchanged; permission links; notification control removed; numeric validation; save/cancel persistence; inline reward switches persist independently; retired options migrated; advanced/help removed; permission page survives recreation. Original preferences restored.");code=-1;
         }catch(Throwable e){result.putString("error",e.toString());}
         finally{
             if(touched){SharedPreferences.Editor editor=prefs.edit();if(original==null)editor.remove("config");else editor.putString("config",original);if(!editor.commit()){result.putString("restore","FAILED");code=0;}}

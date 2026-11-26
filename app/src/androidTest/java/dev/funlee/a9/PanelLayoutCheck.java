@@ -17,9 +17,9 @@ final class PanelLayoutCheck {
             try {
                 Context context=new ContextThemeWrapper(test.getTargetContext(),R.style.AppTheme);
                 TaskStats stats=new TaskStats();stats.project("多人下");stats.cycle(1);stats.projectTarget(20);
-                stats.begin("季风秘境幽林飞瀑",false);stats.result(2);stats.rewards(4800,189);stats.returned();
+                stats.begin("季风秘境幽林飞瀑",false);stats.result(2);stats.returned();
                 for(String mode:new String[]{"杯赛","每日战利品","特殊赛事"}) {
-                    stats.project(mode);stats.begin("示例地图",false);stats.legacyCompleted(3200,105);
+                    stats.project(mode);stats.begin("示例地图",false);stats.legacyCompleted();
                 }
                 stats.project("多人下");stats.begin("季风秘境幽林飞瀑",false);stats.progress(58,18,39);stats.operation("N · 氮气");stats.elapsed(17*60000L);
                 TextView heading=new TextView(context);Button pause=new Button(context),stop=new Button(context);
@@ -47,16 +47,14 @@ final class PanelLayoutCheck {
                 int raceWidth=scale*panel.panelWidth()/1280,raceHeight=scale*panel.panelHeight()/1280;
                 panel.measure(View.MeasureSpec.makeMeasureSpec(raceWidth,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(raceHeight,View.MeasureSpec.EXACTLY));
                 panel.layout(0,0,raceWidth,raceHeight);checkTextFits(panel);
-                java.util.ArrayList<View> earnings=new java.util.ArrayList<>();panel.findViewsWithText(earnings,"金币：14400 · 经验值：504",View.FIND_VIEWS_WITH_TEXT);
-                if(earnings.size()!=1||!visible(earnings.get(0)))throw new AssertionError("Race earnings row missing");
-                TextView earningsRow=(TextView)earnings.get(0);
-                if(earningsRow.getLayout().getEllipsisCount(0)>0)throw new AssertionError("Race earnings row truncated");
+                java.util.ArrayList<View> earnings=new java.util.ArrayList<>();panel.findViewsWithText(earnings,"金币",View.FIND_VIEWS_WITH_TEXT);
+                if(!earnings.isEmpty())throw new AssertionError("Race panel must not show earnings rows");
                 Bitmap race=Bitmap.createBitmap(raceWidth,raceHeight,Bitmap.Config.ARGB_8888);panel.draw(new Canvas(race));
                 try(FileOutputStream out=new FileOutputStream(new File(context.getFilesDir(),"panel-race-earnings.png"))){race.compress(Bitmap.CompressFormat.PNG,100,out);}finally{race.recycle();}
             } catch(Throwable e){error[0]=e;}
         });
         if(error[0]!=null)throw new AssertionError("Panel render failed",error[0]);
-        report.putString("result","PASS: full/compact panels rendered across startup/rewards/recovery/selection/matching/race/pause/result; pause/stop callbacks available; unclipped coin/experience row in the production race panel; no game input");
+        report.putString("result","PASS: full/compact panels rendered across startup/rewards/recovery/selection/matching/race/pause/result; pause/stop callbacks available; race panel omits earnings; no game input");
     }
     private static Button button(View view,String label){
         if(view instanceof Button&&label.contentEquals(((Button)view).getText()))return (Button)view;

@@ -90,6 +90,8 @@ public final class DailyEventUi {
         if((t.contains("车辆选择")||t.contains("车辅选择"))&&
                 t.contains("选择参与此赛事的车辆"))return "cars";
         if((t.contains("门票不足")||t.contains("门票已用完")||t.contains("没有足够的门票")))return "noTicket";
+        // The club mode gate asks to clear occupied hazard slots when its value is short.
+        if((t.contains("空危险槽")||t.contains("空危險槽")||t.contains("清空所有槽位")||t.contains("清空全部槽位")))return "noTicket";
         if((t.matches(".*阶段[0-9]+.*")||t.contains("顶尖排名")&&t.contains("前30%"))&&t.contains("排行榜")&&
                 t.contains("开始"))return "specialRanking";
         // Credit cups and car hunts can have only a solo rewards tab.
@@ -107,7 +109,7 @@ public final class DailyEventUi {
             if(t.contains("比赛")&&(t.contains("最佳用时")||t.contains("阶段")||t.contains("赛事")))return "event";
         }
         if(t.contains("限时")&&t.contains("赛事")&&!t.contains("单人奖励")&&!t.contains("继续")&&
-                !t.contains("探索赛事")&&!t.contains("挑战限时"))return "loading";
+                !t.contains("探索赛事")&&!t.contains("挑战限时")&&!MultiplayerUi.creditPromo(text))return "loading";
         return "unknown";
     }
 

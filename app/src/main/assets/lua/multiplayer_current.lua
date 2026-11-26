@@ -20,6 +20,8 @@ local function press(screen,label,minY)
 end
 local function status(message)
   data['信息']=message;_hud(message);print(message)
+  -- 关闭弹窗的操作同步弹屏幕提示，告知玩家程序正在代为关闭。
+  if message:find('^关闭') and _taskNotice then _taskNotice(message,2500) end
 end
 local function showLeague(league)
   local label=league=='白金' and '铂金' or league or '无段位'
@@ -335,7 +337,7 @@ function currentMultiplayer.run(resumingTutorial)
   while total<count do
     local route=nil;local routeAvailable=true;local candidate=nil;local candidateFrames=0;local lastMapText=''
     local raceMode=mode;local fallback=false;local fallbackReason=''
-    local raced=false;local resultSeen=false;local eventSince=nil;local rewardsSince=nil;local rewardsDone=false;local rewardExitAt=nil
+    local raced=false;local resultSeen=false;local eventSince=nil;local rewardsSince=nil;local rewardExitAt=nil
     local lastScene='';local changed=tickCount();local started=resumingTutorial==true;local seriesSelected=started
     resumingTutorial=false
     local seriesEntry,seriesFrame,seriesPressedAt
@@ -588,17 +590,15 @@ function currentMultiplayer.run(resumingTutorial)
           elseif tickCount()-scoreSince>=750 then scoreAfter=scoreSample end
         end
         local scoreReady=not readSeriesScore or not scoreBefore or scoreAfter or tickCount()-rewardsSince>=5000
-        if scoreReady and screen.rewardCanContinue and (rewardsDone or screen.rewardReady or tickCount()-rewardsSince>=8000) then
-          if not rewardsDone then
-            _sessionRaceRewards(screen.rewardCoins or -1,screen.rewardFame or -1);rewardsDone=true
-          end
+        -- 本局金币/经验值收益不再 OCR：结算按钮可用即点击，缩短奖励页停留。
+        if scoreReady and screen.rewardCanContinue then
           local _,pressed=postPress(screen,screen.rewardExit=='错失机会' and '错失机会' or '继续',590,'raceRewards')
           if pressed then changed=tickCount() end
-        else data['信息']='等待结算完成并识别本局收益';sleep(400) end
+        else data['信息']='等待比赛结算完成';sleep(400) end
         if tickCount()-(rewardExitAt or rewardsSince)>=60000 then
           error('比赛奖励页面未完成结算或继续按钮不可用，已保留完赛进度')
         end
-      elseif raced and not rewardsDone and
+      elseif raced and
           (has(screen.text,'总金币') or has(screen.text,'总全币')) and
           (has(screen.text,'比赛奖励') or has(screen.text,'比赛赛奖励')) then
         rewardsSince=rewardsSince or tickCount()

@@ -26,8 +26,7 @@ final class DailyEventChecks {
             {"比賽奖励 你的用时00:32:881 总全币 G4,200 +165 继续","rewards"},
             {"你的用时 继续","unknown"},{"限时赛事 购买优惠 立即购买","unknown"}};
         for(String[] c:scenes)if(!DailyEventUi.classify(c[0]).equals(c[1]))throw new AssertionError(c[0]);
-        if(!RaceRewards.totalCoinsLabel("总全币")||RaceRewards.totalCoinsLabel("总全币 4,200")||
-                RaceRewards.page("总全币 4,200 继续"))
+        if(RaceRewards.page("总全币 4,200 继续")||!RaceRewards.page("比賽奖励 你的用时00:32:881 总全币 G4,200 +165 继续"))
             throw new AssertionError("Accept the observed OCR error in the total label without weakening its boundaries");
         String camaro="CAMARO LT 30/30 加速 操控性 氮气 提升车辆星級来解锁更多升级阶段 性能分 556/1,238 升呈!";
         if(!VehicleUnlockGuard.pendingDetail(camaro)||!DailyEventUi.classifySolo(camaro).equals("car")||
@@ -79,9 +78,9 @@ final class DailyEventChecks {
             "screens={{scene='vehicleUnlock',unlockLater={x=438,y=645},words={{text='升星',x=841,y=645}}},{scene='event'}};tap=function(x,y)assert(x==74 and y==438,'Wrong star-up action');taps=taps+1 end;assert(dailyCup.settle()==0 and taps==1)",
             "UIconfig={cupTicketAD=''};utils.defultCfg=function(v,d)return v or d end;function keyPress()end;function toast()end;assert(dailyCup.operation[6][2]()=='noTicket')",
             "screens={{scene='results',"+continueButton+"},{scene='cards',"+continueButton+"},{scene='conversion',words={{text='确定',x=1100,y=650}}},{scene='event'},{scene='event'}};assert(dailyCup.operation[8][2]()==0);assert(taps==3 and rewards==0)",
-            "screens={{scene='rewards',rewardCanContinue=true,rewardReady=true,rewardCoins=3200,rewardFame=100,"+continueButton+"},{scene='rewards',rewardCanContinue=true,"+continueButton+"},{scene='event'},{scene='event'}};assert(dailyCup.settle()==0);assert(rewards==1 and coins==3200 and fame==100)",
-            "screens={{scene='rewards',rewardCanContinue=true,rewardReady=true,rewardCoins=3200,rewardFame=105,words={{text='观看广告',x=1100,y=650},{text='错失机会',x=1050,y=660}}},{scene='event'},{scene='event'}};tap=function(x,y)assert(y==1050,'ad clicked');taps=taps+1 end;assert(dailyCup.settle()==0);assert(taps==1 and rewards==1 and coins==3200)",
-            "screens={};for i=1,12 do screens[#screens+1]={scene='rewards',rewardCanContinue=false,rewardReady=false} end;for i=1,3 do screens[#screens+1]={scene='rewards',rewardCanContinue=true,rewardReady=false,words={}} end;screens[#screens+1]={scene='rewards',rewardCanContinue=true,rewardReady=true,rewardCoins=4173,rewardFame=128,"+continueButton+"};screens[#screens+1]={scene='event'};screens[#screens+1]={scene='event'};assert(dailyCup.settle()==0);assert(taps==1 and rewards==1 and coins==4173 and fame==128)",
+            "screens={{scene='rewards',rewardCanContinue=true,"+continueButton+"},{scene='event'},{scene='event'}};assert(dailyCup.settle()==0);assert(rewards==0 and taps==1)",
+            "screens={{scene='rewards',rewardCanContinue=true,words={{text='观看广告',x=1100,y=650},{text='错失机会',x=1050,y=660}}},{scene='event'},{scene='event'}};tap=function(x,y)assert(y==1050,'ad clicked');taps=taps+1 end;assert(dailyCup.settle()==0);assert(taps==1 and rewards==0)",
+            "screens={};for i=1,12 do screens[#screens+1]={scene='rewards',rewardCanContinue=false} end;for i=1,3 do screens[#screens+1]={scene='rewards',rewardCanContinue=true,words={}} end;screens[#screens+1]={scene='rewards',rewardCanContinue=true,"+continueButton+"};screens[#screens+1]={scene='event'};screens[#screens+1]={scene='event'};assert(dailyCup.settle()==0);assert(taps==1 and rewards==0)",
             "screens={{scene='cards',"+continueButton+"},{scene='event'},{scene='unknown'},{scene='event'},{scene='event'}};assert(dailyCup.settle()==0);assert(taps==1)",
             "for _,hint in ipairs({'点击任意区域可跳过','点击 任意位置 跳过'}) do "+
                 "local opening={scene='cards',frameId=1000,words={{text=hint,x=640,y=665}}};"+

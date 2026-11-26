@@ -81,14 +81,13 @@ final class QueueRetryChecks {
         checkpoint.enter(1, 1, 3);
         checkpoint.recordResult(stats, 0);
         checkpoint.recordResult(stats, 0);
-        stats.rewards(2880, 207);
         checkpoint.failure("赛后返回被弹窗打断");
         stats = TaskStats.restore(stats.snapshot());
         checkpoint = fromDisk(checkpoint.resume());
         checkpoint.homeConfirmed();
         checkpoint.enter(1, 1, 3);
-        check(stats.finished() == 1 && stats.returnedCount() == 0 && stats.coins() == 2880,
-                "An interruption after solo results preserves the settlement and its observed rewards");
+        check(stats.finished() == 1 && stats.returnedCount() == 0,
+                "An interruption after solo results preserves the settlement");
         check(checkpoint.completed() == 1, "Seeing both results and rewards consumes a single race from the quota");
     }
 

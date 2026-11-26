@@ -22,12 +22,35 @@ public final class RecoveryReadiness {
         String normalized=MapMatcher.normalize(text);
         if(normalized.contains("登录中")||normalized.contains("登录历史")||normalized.contains("加载中")
                 ||normalized.contains("检查游戏更新")||normalized.contains("健康游戏忠告")||normalized.contains("适龄提示"))return false;
+        // A credit banner hides the lobby controls; recovery must Back out of it to the menu.
+        if(MultiplayerUi.creditPromo(text))return false;
         String multiplayer=MultiplayerUi.classify(text);
         String solo=DailyEventUi.classifySolo(text);
 
         // An unnamed in-game subpage can still expose verified Back and Home controls.
         // Do not use navigation behind a login, reward choice or matchmaking overlay.
         if(WAIT_OR_PROMPT.contains(scene)||WAIT_OR_PROMPT.contains(multiplayer)||WAIT_OR_PROMPT.contains(solo))return false;
-        return hasHomeButton||MENUS.contains(scene)||MENUS.contains(multiplayer)||MENUS.contains(solo);
+        // The club event pages have no menu rule of their own but the workflow drives them.
+        return hasHomeButton||MENUS.contains(scene)||MENUS.contains(multiplayer)||MENUS.contains(solo)||
+                ModalPopup.clubPage(normalized);
+    }
+    /**
+     * A readable page no menu rule recognizes, where Back is the safe way out instead of
+     * waiting for the menu. Login, loading, matchmaking and reward-choice pages stay untouched.
+     */
+    public static boolean navigable(String text,String scene){
+        if(scene==null||scene.isEmpty()||scene.equals("race"))return false;
+        // The credit banner is an overlay: Back closes it even though its timer and event
+        // wording read like a loading screen to the solo rules.
+        if(MultiplayerUi.creditPromo(text))return true;
+        String multiplayer=MultiplayerUi.classify(text);
+        String solo=DailyEventUi.classifySolo(text);
+        if(MENUS.contains(scene)||WAIT_OR_PROMPT.contains(scene)||MENUS.contains(multiplayer)||
+                WAIT_OR_PROMPT.contains(multiplayer)||MENUS.contains(solo)||WAIT_OR_PROMPT.contains(solo))return false;
+        String normalized=MapMatcher.normalize(text);
+        return !normalized.contains("登录中")&&!normalized.contains("登录历史")&&!normalized.contains("加载中")
+                &&!normalized.contains("检查游戏更新")&&!normalized.contains("健康游戏忠告")
+                &&!normalized.contains("适龄提示")&&!normalized.contains("正在搜索")
+                &&!normalized.contains("确定退出游戏");
     }
 }

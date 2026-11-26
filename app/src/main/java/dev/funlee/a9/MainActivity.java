@@ -269,11 +269,16 @@ public final class MainActivity extends Activity {
         if(mode.equals("多人上"))fields.addView(label("比赛时自动识别地图并执行“地图配置”中的跑法；识别失败或缺少有效跑法时左划兜底。",DETAIL));
         if(mode.equals("多人上"))fields.addView(label("优先使用当前段位配置的车辆。该段未配置或配置车全部无油时，逐级尝试较低段位的配置。序号按各段车库从左到右、每列从上到下计算，支持每次用一辆。",DETAIL));
         if(mode.equals("多人下"))fields.addView(label("按配置的车辆序号选车。每列先上后下，再从左往右累计，跨屏时核验车辆位置，支持每次用一辆。",DETAIL));
-        if(mode.equals("每日战利品"))fields.addView(label("每天 00:00–00:30 自动跳过（设备本地时间，00:30 恢复）。其余时间按配置次数参与每轮任务循环。",DETAIL));
+        if(mode.equals("每日战利品"))fields.addView(label("每天 00:00–00:30 自动跳过此任务",DETAIL));
         for(int i=0;i<spec.length();i++){
             JSONObject f=spec.getJSONObject(i);String key=f.getString("key"),type=f.getString("type");JSONArray options=f.getJSONArray("options");
             if(key.equals("称霸位置"))continue; // Rendered alongside the 称霸模式 checkbox.
-            if(type.equals("TaskRoute")){taskRouteFields(fields,views,data,mode);}
+            if(type.equals("CheckBox")){
+                CheckBox box=checkBox(key);
+                box.setChecked("0".equals(data.optString(key)));
+                fields.addView(box);views.put(key,box);
+            }
+            else if(type.equals("TaskRoute")){taskRouteFields(fields,views,data,mode);}
             else if(key.equals("称霸模式")){
                 CheckBox enabled=checkBox("称霸模式");
                 enabled.setChecked("0".equals(data.optString(key)));
@@ -688,7 +693,6 @@ public final class MainActivity extends Activity {
         LinearLayout permissions=settingsGroup("运行权限");
         permissionStatusRow(permissions,"自动操作","必需 · 允许助手点击和滑动",this::touchPermissionStatus,()->startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
         permissionRow(permissions,"比赛统计悬浮窗","在游戏中显示比赛数据",()->Settings.canDrawOverlays(this),()->startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName()))));
-        permissionRow(permissions,"通知控制","也可从通知栏控制任务",()->getSystemService(NotificationManager.class).areNotificationsEnabled(),()->startActivity(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE,getPackageName())));
         body.addView(permissions);
         LinearLayout diagnostics=settingsGroup("问题排查");
         settingRow(diagnostics,"最近一次异常","查看版本、发生时间、原因和现场截图","",this::showFailureScreenshot);
@@ -830,7 +834,7 @@ public final class MainActivity extends Activity {
         SessionState.inspecting=inspect;
         try{CaptureSession.requireSupportedDisplay(this);}
         catch(CaptureSession.Unavailable e){confirmDisplayRisk(e,()->requestStart(route,inspect,resume));return;}
-        if(inspect&&!Settings.canDrawOverlays(this)&&!getSystemService(NotificationManager.class).areNotificationsEnabled()){showRunIssue("请先开启悬浮窗或通知，以便在游戏中点击取样");return;}
+        if(inspect&&!Settings.canDrawOverlays(this)){showRunIssue("请先开启悬浮窗，以便在游戏中点击取样");return;}
         if(!inspect&&TouchService.instance==null){showRunIssue(TouchService.unavailableReason(this));return;}
         try{
             if(!inspect&&route.isEmpty()&&!resume){

@@ -23,10 +23,12 @@ public final class TaskCheckpoint {
         rewardWork=true;
     }
     public void completed(int newlyFinished){completed=Math.min(target,completed+Math.max(0,newlyFinished));}
-    public void recordResult(TaskStats stats,int position){
+    /** @return true when the recorded rank conflicted with the previous read (race excluded from stats). */
+    public boolean recordResult(TaskStats stats,int position){
         int before=stats.finished();
-        stats.result(position);
+        boolean conflict=stats.result(position);
         completed(stats.finished()-before);
+        return conflict;
     }
     public int completed(){return completed;}
     public void projectDone(){projectDone=true;clearFailures();}

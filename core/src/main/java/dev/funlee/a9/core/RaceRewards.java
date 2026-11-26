@@ -3,7 +3,7 @@ package dev.funlee.a9.core;
 import java.text.Normalizer;
 import java.util.regex.Pattern;
 
-/** Strict numeric reads from two scoped reward crops. -1 means unknown, never zero. */
+/** Strict numeric reads and reward-page controls. -1 means unknown, never zero. */
 public final class RaceRewards {
     private static final Pattern RACE_TIME=Pattern.compile("你的用时\\s*[0-9]{1,2}[:：][0-9]{2}[:：.．][0-9]{3}");
     private static String normalizeTotalCoins(String text) {
@@ -14,9 +14,6 @@ public final class RaceRewards {
         String normalized=normalizeTotalCoins(text).replace('樂','乐').replace('經','经').replace('驗','验');
         return normalized.contains("总金币")||normalized.contains("俱乐部经验")||
                 normalized.contains("具乐部经验")||RACE_TIME.matcher(text).find();
-    }
-    public static boolean totalCoinsLabel(String text) {
-        return normalizeTotalCoins(text).equals("总金币");
     }
     public static String exitLabel(String text,int x,int y) {
         if(x<=850||y<=590)return "";
@@ -35,8 +32,7 @@ public final class RaceRewards {
         }
         return white>=4||lime>=4;
     }
-    public final long coins,fame;
-    public RaceRewards(long coins,long fame){this.coins=coins;this.fame=fame;}
+    /** Strict numeric read, also used for the world-series score crop. */
     public static long amount(String text,boolean increment){
         String normalized=Normalizer.normalize(text==null?"":text,Normalizer.Form.NFKC).trim();
         if(normalized.split("[\\r\\n]+",-1).length>1&&!normalized.matches("\\+\\s*[0-9,]+"))return -1;
@@ -44,26 +40,5 @@ public final class RaceRewards {
         if(increment){if(!s.startsWith("+"))return -1;s=s.substring(1);}
         if(!s.matches("(?:0|[1-9][0-9]{0,7}|[1-9][0-9]{0,2}(?:,[0-9]{3}){1,2})"))return -1;
         try{long n=Long.parseLong(s.replace(",",""));return n<=99_999_999?n:-1;}catch(NumberFormatException e){return -1;}
-    }
-    public static long settlementAmount(String text,boolean experience){
-        long value=amount(text,experience);
-        return value>(experience?999:99_999)?-1:value;
-    }
-    /** Independent fields survive a missing crop; samples must be fresh and stable over time. */
-    public static final class Stable {
-        private long started=-1,lastFrame=-1,coinSince=-1,fameSince=-1,coin=-1,fame=-1,sampleAt=-1;
-        private int coinSamples,fameSamples;
-        public void reset(){started=lastFrame=coinSince=fameSince=coin=fame=sampleAt=-1;coinSamples=fameSamples=0;}
-        public RaceRewards observe(RaceRewards r,long frame,long now){
-            if(started<0)started=now;
-            if(frame>lastFrame){
-                sampleAt=now;
-                if(r.coins>=0){if(coin!=r.coins){coin=r.coins;coinSince=now;coinSamples=0;}coinSamples++;}else{coin=-1;coinSince=-1;coinSamples=0;}
-                if(r.fame>=0){if(fame!=r.fame){fame=r.fame;fameSince=now;fameSamples=0;}fameSamples++;}else{fame=-1;fameSince=-1;fameSamples=0;}
-                lastFrame=frame;
-            }
-            boolean ready=sampleAt-started>=1800;
-            return new RaceRewards(ready&&coinSamples>=2&&sampleAt-coinSince>=1000?coin:-1,ready&&fameSamples>=2&&sampleAt-fameSince>=1000?fame:-1);
-        }
     }
 }

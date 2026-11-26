@@ -36,6 +36,12 @@ final class CupSelectionChecks {
             widePixels[edge*720+x]=edge<240?0xffe0dde2:0xff00335d;
         PixelFrame wideFrame=new PixelFrame(720,1280,widePixels);
         if(RaceHud.visible(wideFrame)||!RaceHud.backWedge(wideFrame))throw new AssertionError("Wide Back wedge looks like a race");
+        if(!RaceHud.raceEvidence(wideFrame,false))throw new AssertionError("Pause dots still prove a live race under the Back wedge");
+        int[] banner=new int[720*1280];
+        for(int x=29;x<=53;x++)for(int y=43;y<=76;y++)banner[x*720+719-y]=0xffffffff;
+        PixelFrame bannerFrame=new PixelFrame(720,1280,banner);
+        if(!RaceHud.backWedge(bannerFrame)||RaceHud.raceEvidence(bannerFrame,false))
+            throw new AssertionError("A white banner arrow alone is not a running race");
         for(int center:new int[]{1206,1224}){
             int[] homePixels=widePixels.clone();
             for(int[] point:new int[][]{{0,-13},{-13,2},{11,2},{-12,19},{10,19}})

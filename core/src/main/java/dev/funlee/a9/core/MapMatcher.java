@@ -21,6 +21,14 @@ public final class MapMatcher {
             loadingName=aliases.isEmpty()?"":normalizeLoading(aliases.get(0));
             loadingRegion=loadingName.isEmpty()||!full.endsWith(loadingName)?"":full.substring(0,full.length()-loadingName.length());
         }
+        /** Panel format: 赛道名-地图名, split by the first alias suffix; unsplit names stay whole. */
+        String splitDisplay() {
+            if(aliases.isEmpty())return display;
+            String name=aliases.get(0);
+            if(!name.isEmpty()&&display.endsWith(name)&&display.length()>name.length())
+                return display.substring(0,display.length()-name.length())+"-"+name;
+            return display;
+        }
         boolean matches(String text) {
             for(List<String> g:groups) { boolean yes=true; for(String w:g) yes &= text.contains(w); if(yes) return true; }
             return false;
@@ -125,7 +133,7 @@ public final class MapMatcher {
         Map<String,Rule> out=new LinkedHashMap<>(); for(Rule r:input) out.putIfAbsent(r.internal,r); return new ArrayList<>(out.values());
     }
     public String displayName(String internal) {
-        for(Rule r:rules) if(r.internal.equals(internal)) return r.display;
-        for(Rule r:rules) if(r.aliases.contains(internal)) return r.display; return internal;
+        for(Rule r:rules) if(r.internal.equals(internal)) return r.splitDisplay();
+        for(Rule r:rules) if(r.aliases.contains(internal)) return r.splitDisplay(); return internal;
     }
 }

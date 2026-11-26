@@ -136,7 +136,6 @@ cup.operation = {
   {
     config.noTicket,
     function()
-      if _soloEventUi().scene~='noTicket' then return end
       data["信息"] = "杯赛门票检查"
       keyPress("back")
       toast("没票")

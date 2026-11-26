@@ -116,20 +116,7 @@ function utils.rebootGame()
       sleep(3000)
     end
     if cmpColorEx(_ue7bbb4e68aa4e4b8ad, 1) == 1 then
-      for t = 1, 30 do
-        for k = 1, 60 do
-          sleep(1000)
-          toast("游戏更新维护中")
-        end
-        keepCapture()
-        if cmpColorEx(_ue7bbb4e68aa4e4b8ad, 1) == 0 then
-          break
-        end
-      end
-      tap(170, 640)
-      for t = 1, 10 do
-        sleep(1000)
-      end
+      (requirePlayerAction or error)('游戏维护中，任务暂停')
     end
     if cmpColorEx("689|1251|543E30-050505,678|1251|DAD5D5-050505,701|1252|FFFFFF-050505,690|1262|F4F4F4-101010", 1) == 1 then
       utils.stopGame()
@@ -290,6 +277,7 @@ end
 function utils.dismissExitDialog(screen)
   local stay=findUiWord(screen,{['再玩一会']=true,['再玩一会儿']=true},300,710,370,640)
   if not stay then error('未确认退出提示上的「再玩一会」，请手动关闭后续跑') end
+  if _taskNotice then _taskNotice('关闭退出提示：再玩一会',2500) end
   tapUiWord(stay)
   sleep(1);sleep(1000)
 end
@@ -385,8 +373,9 @@ function utils.backToMain(strict,acceptCupList)
   local rewardTapAt=-10000
   local rewardTaps=0
   local rewardFrame=nil
+  local backs=0
   local deadline=tickCount()+90000
-  while (strict or attempts<25) and tickCount()<deadline do
+  while (strict or attempts<25 or backs<10) and tickCount()<deadline do
     local screen
     if strict then screen=_recoveryUi() else screen=_soloEventUi() end
     if screen.restartScreen then _requestGameRestart('returnScreen') end
@@ -450,6 +439,7 @@ function utils.backToMain(strict,acceptCupList)
         if action and popupClicks<5 then
           if previousPopup and action.label==previousPopup.label and math.abs(action.x-previousPopup.x)<=5
               and math.abs(action.y-previousPopup.y)<=5 then
+            if _taskNotice then _taskNotice('关闭游戏弹窗：'..action.label,2500) end
             tapUiWord(action);popupClicks=popupClicks+1;previousPopup=nil
             navigationDeadline=tickCount()+1200
           else previousPopup=action end
@@ -534,6 +524,7 @@ function utils.backToMain(strict,acceptCupList)
         sleep(400)
       elseif tickCount()-lastBack>=4000 then
         keyPress("back")
+        backs=backs+1
         lastBack=tickCount()
         sleep(1)
         navigationDeadline=tickCount()+(strict and 4000 or 2000)
@@ -544,6 +535,28 @@ function utils.backToMain(strict,acceptCupList)
     if not strict and data["超时状态"] then break end
   end
   error('未能确认游戏主菜单，请打开游戏主菜单后续跑')
+end
+-- 说明类整页覆盖（如“新游戏机制”）：底部有「不再提示」且右下角有开始/继续时，点它继续。
+function utils.proceedTipPage(screen)
+  if not screen or screen.scene~='unknown' or screen.closeX then return false end
+  local text=(screen.text or ''):gsub('%s','')
+  if not (text:find('新游戏机制',1,true) or text:find('新玩法机制',1,true)
+      or text:find('不再提示',1,true) or text:find('不再顯示',1,true)) then return false end
+  local button
+  for _,word in ipairs(screen.words or {}) do
+    local label=word.text:gsub('%s','')
+    if word.x>950 and word.y>590 and (label=='开始' or label=='继续' or label=='确定' or label=='確定') then
+      button=word
+      break
+    end
+  end
+  if not button then return false end
+  if utils.tipPageFrame==screen.frameId then return false end
+  utils.tipPageFrame=screen.frameId
+  data['信息']='继续游戏说明页'
+  tapUiWord(button)
+  sleep(1200)
+  return true
 end
 function utils.mySwipe(x1, y1, x2, y2)
   swipe(x1, y1, x2, y2, 300)
@@ -1575,6 +1588,8 @@ function utils.startRace()
           return 1
         end
       end
+    elseif utils.proceedTipPage(screen) then
+      -- 说明页挡在开始与比赛之间，点继续后重新读画面
     elseif driveTutorialPages<2 and dismissDriveTutorial(screen) then
       driveTutorialPages=driveTutorialPages+1
     end
@@ -2915,8 +2930,10 @@ function utils.logTextWords(x1, y1, x2, y2)
 end
 
 -- 开始/继续按钮：先用文字定位，找不到再退回原来的固定坐标。
-function utils.startRaceTaps()
-  local rows = utils.textWordsIn(60, 700, 640, 1279, { "开始任务", "開始任務", "继续", "繼續" })
+-- allowSide 为真才允许点「开始任务」：主线分支点到它就是配了主线却跑支线。
+function utils.startRaceTaps(allowSide)
+  local patterns = allowSide and { "开始任务", "開始任務", "继续", "繼續" } or { "继续", "繼續" }
+  local rows = utils.textWordsIn(60, 700, 640, 1279, patterns)
   local sx, sy = 116, 1100
   if #rows > 0 then
     sx, sy = rows[1].x, rows[1].y
@@ -2948,14 +2965,25 @@ function utils.carClubCards(screen)
   return cards
 end
 
---- 车手联会选任务：先把章节横条拉回最左起点，再从起点向右逐张看章节卡，取当前进度该做的任务。
+-- 开赛页上「这辆车的性能分进不了当前难度」的提示。车联按危险等级卡性能分，点开始会一直没反应。
+function utils.carScoreShort(screen)
+  local text = tostring(screen and screen.text or '')
+  if text == '' then return false end
+  return text:find('性能分不足', 1, true) ~= nil or text:find('性能分不够', 1, true) ~= nil
+      or text:find('性能分未达标', 1, true) ~= nil or text:find('性能分达不到', 1, true) ~= nil
+end
+
+-- 车手联会选任务：先把章节横条拉回最左起点，再从起点向右逐张看章节卡，取当前进度该做的任务。
 -- 章节卡上「a/b」且 a<b 说明主线还在进行；带「特别任务」的卡可以打特别任务。
 -- 主线 = 点开章节卡后面板里带「危险等级」的任务行（按「危险等级」配置选行）；支线 = 面板里的特别任务（「开始任务」）。
--- 返回 1 已点开始；-1 从起点翻到末尾也没有可做的任务；0 没认出章节卡（界面被遮挡或加载中）。
-function utils.spChoose()
+-- 返回 1 已点开始；-1 从起点翻到末尾也没有可做的任务；0 没认出章节卡（界面被遮挡或加载中）；
+-- 'noTicket' 危险值（车联门票）不足的弹窗盖住了章节条，本项目这轮做不了。
+-- maxLevel：本辆车能打的最高危险等级（性能分不足降档后传入），不传就按配置来。
+function utils.spChoose(maxLevel)
   local fz = utils.defultCfg(run.data["分支选择"], "0")
   local wxdj = utils.defultCfg(run.data["危险等级"], "0")
   local ndbz = utils.defultCfg(run.data["难度不足"], "0")
+  local cap = tonumber(maxLevel)
   local wantSide = fz == "0" or fz == "2"
   local wantMain = fz == "1" or fz == "2"
   if not utils.carClubAtOrigin then utils.carClubToOrigin() end
@@ -2967,12 +2995,81 @@ function utils.spChoose()
     end
     return found
   end
+  -- 卡片上有两条 a/b：主线进度在「特别任务」标签上方，标签下方那条是特别任务自己的进度，
+  -- 主线已经 a==b 做完时不能被它顶成「主线还有剩余」。
+  local function cardProgress(words)
+    local specialY
+    for _,w in ipairs(words) do
+      local text=clean(w)
+      if text:find('特别任务',1,true) or text:find('特別任務',1,true) or text:find('特殊任务',1,true) then specialY=w.y end
+    end
+    local left
+    for _,w in ipairs(words) do
+      local a,b=clean(w):match('^(%d+)/(%d+)$')
+      if a and (not specialY or w.y<specialY) then left=tonumber(b)-tonumber(a) end
+    end
+    return left, specialY~=nil
+  end
+  -- 面板类型按文字语义判定（等价于原版用固定色块区分主线/支线，但不依赖配色）：
+  -- 支线面板一定有「开始任务」按钮或「赢取额外车联包」标题，主线面板只有难度任务行。
+  local function panelShape(words)
+    local side, rows = nil, {}
+    for _,word in ipairs(words) do
+      local label=clean(word)
+      if label:find("开始任务",1,true) or label:find("開始任務",1,true)
+          or label:find("赢取额外车联包",1,true) or label:find("贏取額外車聯包",1,true) then side=word end
+    end
+    if not side then
+      -- 支线面板底部也印着「危险等级」，但它贴在底部条（y>640），只有列表区的才是任务行。
+      for _,word in ipairs(words) do
+        local label=clean(word)
+        if (label:find("危险等级",1,true) or label:find("危險等級",1,true)) and word.x>500 and word.y<640 then
+          rows[#rows+1]=word
+        end
+      end
+    end
+    return side, rows
+  end
+  -- 选完支线/主线把结果弹到屏幕底部（和任务提示条同一位置），不只是写日志。
+  local function announce(message)
+    data['信息']=message
+    if _taskNotice then _taskNotice(message,2500) end
+    toast(message)
+  end
+  -- 任务行自己的危险等级：行词里带的数字优先，其次同一行右侧 250 像素内的一位数字（等级 1-3，避开 SP 分数）。
+  local function levelOf(row, words)
+    local digit = clean(row):match('(%d+)')
+    if digit and tonumber(digit) <= 3 then return tonumber(digit) end
+    local best
+    for _,w in ipairs(words or {}) do
+      if w ~= row and math.abs(w.y - row.y) <= 30 and w.x > row.x and w.x <= row.x + 250 then
+        local t = clean(w)
+        if t:match('^%d$') and (not best or math.abs(w.x - row.x) < math.abs(best.x - row.x)) then best = w end
+      end
+    end
+    return best and tonumber((clean(best))) or nil
+  end
+  -- 危险值（车联门票）不足的弹窗会盖住整条章节横条：文字里出现「空危险槽/清空所有槽位」就直接报门票不足，
+  -- 不要落到「未识别到章节卡」再去回主重试白跑一轮。
+  local function hazardDialog(screen)
+    if screen.scene == 'noTicket' then return true end
+    for _,w in ipairs(screen.words or {}) do
+      local t=clean(w)
+      if t:find('空危险槽',1,true) or t:find('空危險槽',1,true)
+          or t:find('清空所有槽位',1,true) or t:find('清空全部槽位',1,true) then return true end
+    end
+    return false
+  end
   local lastKey
   local skipped = {}
   for step = 1, 24 do
     local screen, cards
     for attempt = 1, 3 do
       screen = _soloEventUi()
+      if hazardDialog(screen) then
+        print("车联第 " .. step .. " 屏：危险值不足")
+        return 'noTicket'
+      end
       cards = utils.carClubCards(screen)
       if #cards > 0 then break end
       sleep(600)
@@ -2987,13 +3084,7 @@ function utils.spChoose()
     for _,card in ipairs(cards) do
       key[#key+1]=card.name..'@'..math.floor(card.x/40)
       if card.x>=95 and card.x<=900 then
-        local progress, special = nil, false
-        for _,w in ipairs(cardWords(screen,card)) do
-          local text=clean(w)
-          local a,b=text:match('^(%d+)/(%d+)$')
-          if a then progress=tonumber(b)-tonumber(a) end
-          if text:find('特别任务',1,true) or text:find('特別任務',1,true) or text:find('特殊任务',1,true) then special=true end
-        end
+        local progress, special = cardProgress(cardWords(screen,card))
         if progress and progress>0 and not mainCard then mainCard=card end
         if special and not sideCard then sideCard=card end
       end
@@ -3010,58 +3101,71 @@ function utils.spChoose()
     if card and skipped[card.name] then card = nil end
     if card then
       tap(719 - (card.y + 100), math.min(card.x + 150, 1200))
-      local side, rows = nil, {}
+      local side, rows, panelWords = nil, {}, {}
       for read = 1, 2 do
         sleep(read == 1 and 1300 or 1500)
         local panel = _soloEventUi()
-        side, rows = nil, {}
-        for _, word in ipairs(panel.words or {}) do
-          local label = clean(word)
-          if (label:find("开始任务", 1, true) or label:find("開始任務", 1, true)) and word.x > 800 and word.y > 540 then
-            side = word
-          end
+        if hazardDialog(panel) then
+          print("车联第 " .. step .. " 屏：" .. card.name .. "，面板：危险值不足")
+          return 'noTicket'
         end
-        if not side then
-          -- 特别任务面板底部也有「危险等级」字样，所以先判断面板类型再看任务行。
-          for _, word in ipairs(panel.words or {}) do
-            local label = clean(word)
-            if (label:find("危险等级", 1, true) or label:find("危險等級", 1, true)) and word.x > 500 then
-              rows[#rows + 1] = word
-            end
-          end
-        end
+        panelWords = panel.words or {}
+        side, rows = panelShape(panelWords)
         -- 面板展开有动画：第一次没读到内容时先等一下再读一遍，不急着换下一张卡。
         if side or #rows > 0 then break end
       end
-      print("车联第 " .. step .. " 屏：" .. card.name .. "，面板：" .. (side and "特别任务" or "主线任务行 " .. #rows .. " 条"))
+      -- 每行自己的危险等级数字：行词里带的数字，或同一行右侧最近的一位数字词。
+      local levels = {}
+      for _,row in ipairs(rows) do
+        row.level = levelOf(row, panelWords)
+        if row.level then levels[#levels+1] = row.level end
+      end
+      print("车联第 " .. step .. " 屏：" .. card.name .. "，面板：" ..
+        (side and "特别任务" or (#rows > 0 and "主线任务行 " .. #rows .. " 条" ..
+          (#levels > 0 and "（等级 " .. table.concat(levels, "、") .. "）" or "") or "未识别（跳过）")))
       if side and kind == "side" then
-        toast("刷支线")
-        utils.startRaceTaps()
+        announce("刷支线")
+        utils.startRaceTaps(true)
         return 1
       end
       if not side and #rows > 0 and kind == "main" then
         table.sort(rows, function(a, b) return a.y < b.y end)
-        local pick
-        if #rows == 1 then
-          pick = rows[1]
-        else
-          local want = (tonumber(wxdj) or 0) + 1
-          if want > #rows then
-            if ndbz == "1" then
-              toast("少于三个难度时选最下面的难度")
-              want = #rows
-            else
-              toast("少于三个难度时选最上面的难度")
-              want = 1
-            end
-            sleep(1500)
+        local want = (tonumber(wxdj) or 0) + 1
+        -- 降档后不能超过这辆车能打的等级（否则点进去还是「性能分不足」）。
+        if cap and cap >= 1 and want > cap then want = cap end
+        local pick, note
+        -- 配置「难度N」按行上的等级数字找，不按行序：只有两档的章节会把难度3错位成最上面那行。
+        for _,row in ipairs(rows) do
+          if row.level == want then pick = row; note = "刷主线（难度" .. want .. "）" break end
+        end
+        if pick then
+          -- 已按等级命中
+        elseif #rows == 1 then
+          pick, note = rows[1], "刷主线（本章节只有 1 档）"
+        elseif #levels > 0 then
+          table.sort(levels)
+          local target
+          if cap and cap >= 1 then
+            for i = #levels, 1, -1 do if levels[i] <= cap then target = levels[i] break end end
           end
+          target = target or (ndbz == "1" and levels[#levels] or levels[1])
+          for _,row in ipairs(rows) do if row.level == target then pick = row break end end
+          pick = pick or (ndbz == "1" and rows[#rows] or rows[1])
+          note = "本章节只有 " .. table.concat(levels, "、") .. " 档，已选难度" .. target
+          sleep(1500)
+        else
+          -- 等级数字一个都没读到：退回行序，仍按「难度不足」取最低/最高那行。
+          if want > #rows then want = ndbz == "1" and #rows or 1; sleep(1500) end
           pick = rows[want]
+          note = (want == 1 and #rows > 1) and "少于三个难度时选最上面的难度" or "刷主线"
         end
         tap(719 - pick.y, pick.x)
         sleep(800)
-        toast("刷主线")
-        utils.startRaceTaps()
+        -- 记住这次选的等级：开赛失败（性能分不足）时从这里往下降一档。
+        data['车联等级'] = pick.level or want
+        announce(note)
+        -- 主线分支只能点难度行/固定开始点，永远不点「开始任务」。
+        utils.startRaceTaps(false)
         return 1
       end
       -- 点开后没有对应任务：这张卡本轮不再看
@@ -3208,6 +3312,7 @@ function utils.initCar()
 end
 function utils.dailyPrize()
   data["信息"] = "每日战利品奖励检测"
+  if _taskNotice then _taskNotice('正在检测俱乐部奖励',2500) end
   local tempCar = utils.defultCfg(run.data["杯赛用车"], {
     1,
     2,
@@ -3221,15 +3326,45 @@ function utils.dailyPrize()
   sleep(1000)
   tap(530, 810)
   sleep(1000)
-  if cmpColorEx("165|360|00D8FF,161|445|00D8FF", 1) == 1 then
-    toast("领奖励")
-    tap(165, 360)
-    tap(165, 360)
+  -- The single fixed color probe missed the claim button after layout shifts.
+  -- Read the page first and click the observed 领取 button, keeping the probe as fallback.
+  local claimed=false
+  local scans=0
+  while not claimed and scans<4 do
+    scans=scans+1
+    local screen=_soloEventUi()
+    local scene=screen.scene
+    local strict=scene~="event" and scene~="clubRewards" and scene~="missionRewards"
+    for _,w in ipairs(screen.words or {}) do
+      local label=string.gsub(string.gsub(w.text,"%s",""),"領","领")
+      -- On an unrecognized page only accept the legacy probe region, so a shop
+      -- dialog elsewhere can never be claimed by mistake.
+      if label=="领取" and (not strict or (w.x>=200 and w.x<=610 and w.y>=420 and w.y<=625)) then
+        toast("领奖励")
+        print("每日战利品：OCR 识别到领取按钮，已点击")
+        tap(719-math.floor(w.y),math.floor(w.x))
+        claimed=true
+        break
+      end
+    end
+    if not claimed and cmpColorEx("165|360|00D8FF,161|445|00D8FF", 1) == 1 then
+      toast("领奖励")
+      print("每日战利品：色点兜底命中领取按钮，已点击")
+      tap(165, 360)
+      tap(165, 360)
+      claimed=true
+    end
+    if not claimed then sleep(500) end
+  end
+  if claimed then
+    if _taskNotice then _taskNotice('已领取俱乐部奖励',2500) end
     sleep(2000)
     for i = 1, 20 do
       tap(60, 1242)
       sleep(200)
     end
+  elseif _taskNotice then
+    _taskNotice('未检测到可领取的俱乐部奖励',2500)
   end
   dailyCup.carList = mission
   if dailyCup.returnToSolo then dailyCup.returnToSolo(_soloEventUi()) end

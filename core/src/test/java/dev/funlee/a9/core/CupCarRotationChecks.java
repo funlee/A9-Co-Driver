@@ -6,12 +6,16 @@ import java.util.*;
 final class CupCarRotationChecks {
     static int run(Path assets)throws Exception {
         String setup="data={['用车次数']={}};run={data={['选车方式']='1',['用车模式']='1'}};"+
-            "calls={};selected=0;empty={};ads=0;local frame=0;"+
-            "function print()end;function _soloEventUi()frame=frame+1;return {scene='car',frameId=frame,fuel=empty[selected] and 0 or 2}end;function tap()end;function keepCapture()end;function swipe()end;function toast()end;"+
-            "function cmpColorEx()return 1 end;function cmpColor(x,y)if x==75 then return empty[selected] and 1 or 0 end;return 1 end;"+
+            "calls={};selected=0;empty={};ads=0;prizeWords={};prizeScene='car';probe=0;taps={};toasts=0;local frame=0;"+
+            "function print()end;function _soloEventUi()frame=frame+1;return {scene=prizeScene,frameId=frame,words=prizeWords,fuel=empty[selected] and 0 or 2}end;function tap(y,x)taps[#taps+1]=x..','..y end;function keepCapture()end;function swipe()end;function toast()toasts=toasts+1 end;"+
+            "function cmpColorEx(pattern)if pattern:find('165|360',1,true)then return probe end;return 1 end;function cmpColor(x,y)if x==75 then return empty[selected] and 1 or 0 end;return 1 end;"+
             "utils.clickChoose=function(car)selected=car;calls[#calls+1]=car end;utils.carAd=function()ads=ads+1;return 1 end;";
         List<String> cases=List.of(
             "dailyCup={};run.data['杯赛用车']={1,1,1,2,3,4,5};utils.mycolor=function()return 1 end;utils.dailyPrize();assert(table.concat(dailyCup.carList,',')=='1,1,1,2,3,4,5');for i=1,8 do assert(utils.chooseCarCup(dailyCup.carList))end;assert(table.concat(calls,',')=='1,1,1,2,3,4,5,1');assert(#run.data['杯赛用车']==7)",
+            "dailyCup={};run.data['杯赛用车']={1,2};probe=0;prizeScene='event';prizeWords={{text='领取',x=410,y=530}};taps={};utils.dailyPrize();assert(#taps>=23 and taps[3]=='410,189' and toasts>0,'OCR claim button must be tapped even when the legacy color probe misses');assert(table.concat(dailyCup.carList,',')=='1,2')",
+            "dailyCup={};run.data['杯赛用车']={1};probe=0;prizeScene='unknown';prizeWords={{text='领取',x=410,y=530},{text='领取',x=900,y=600}};taps={};utils.dailyPrize();assert(taps[3]=='410,189','Unknown pages only claim inside the legacy region')",
+            "dailyCup={};run.data['杯赛用车']={1};probe=0;prizeScene='unknown';prizeWords={{text='购买',x=410,y=530}};taps={};utils.dailyPrize();assert(#taps==2 and toasts==0,'No claim when the button is absent')",
+            "dailyCup={};run.data['杯赛用车']={1};probe=1;prizeScene='unknown';prizeWords={};taps={};utils.dailyPrize();assert(taps[3]=='360,165' and #taps>=23,'Color fallback still claims when OCR finds no button')",
             "local cars={1,1,2};for i=1,4 do assert(utils.chooseCarCup(cars))end;assert(table.concat(calls,',')=='1,1,2,1')",
             "local cars={1,2,3};empty[1]=true;assert(utils.chooseCarCup(cars));assert(utils.chooseCarCup(cars));assert(table.concat(calls,',')=='1,2,1,3')",
             "for _,mode in ipairs({'每日战利品','杯赛','特殊赛事','车联'}) do data['项目']=mode;data['用车次数']={};calls={};local frame=0;_soloEventUi=function()frame=frame+1;return {scene=selected==1 and 'lockedCar' or 'car',fuel=2,frameId=frame}end;assert(utils.chooseCarCup({1,2})==true and table.concat(calls,',')=='1,2') end",

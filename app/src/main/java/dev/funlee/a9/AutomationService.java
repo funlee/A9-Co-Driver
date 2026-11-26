@@ -77,15 +77,10 @@ public final class AutomationService extends Service {
         }catch(Exception e){failRun("启动失败："+e.getMessage());}
         return START_NOT_STICKY;
     }
-    private PendingIntent action(String value,int id) {
-        return PendingIntent.getService(this,id,new Intent(this,AutomationService.class).setAction(value),PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-    }
     private Notification notification() {
         PendingIntent open=PendingIntent.getActivity(this,0,new Intent(this,MainActivity.class),PendingIntent.FLAG_IMMUTABLE|PendingIntent.FLAG_UPDATE_CURRENT);
         return new Notification.Builder(this,CHANNEL).setSmallIcon(android.R.drawable.ic_media_play).setContentTitle(getString(R.string.app_name))
-                .setContentText("截屏与任务运行中，可随时暂停或停止").setContentIntent(open).setOngoing(true)
-                .addAction(new Notification.Action.Builder(null,inspecting?"取样":"暂停 / 继续",action(inspecting?SAMPLE:PAUSE,1)).build())
-                .addAction(new Notification.Action.Builder(null,"停止",action(STOP,2)).build()).build();
+                .setContentText("截屏与任务运行中").setContentIntent(open).setOngoing(true).build();
     }
     private void execute(boolean inspect) {
         try {
@@ -124,6 +119,7 @@ public final class AutomationService extends Service {
                 if(resumeState!=null)host.restoreQueue(resumeState);
                 GameRecovery recovery=new GameRecovery(this,touch,gamePackage,()->stopping,SessionState::inputPaused,host::recoveryReady);
                 recovery.startPrompt(host::tapStartPrompt);
+                recovery.backStep(host::recoveryBack);
                 recovery.awaitInitialForeground();
                 if(waitForMenuOnStart)recovery.awaitReady();
                 long origin=SystemClock.elapsedRealtime()-SessionState.stats.elapsedMillis(),pauseAt=0,pausedTotal=0;
@@ -288,7 +284,7 @@ public final class AutomationService extends Service {
     }
     private final Runnable overlayTick=new Runnable(){@Override public void run(){if(overlay==null)return;updateOverlay();main.postDelayed(this,500);}};
     private void addOverlay() {
-        if(!Settings.canDrawOverlays(this)){SessionState.log("悬浮窗未开启，可从主界面停止；允许通知后也可使用通知控制");return;}
+        if(!Settings.canDrawOverlays(this)){SessionState.log("悬浮窗未开启，可从主界面停止");return;}
         windows=(WindowManager)getSystemService(WINDOW_SERVICE);
         overlayLabel=new DragLabel(this);
         pauseButton=new Button(this);pauseButton.setText(inspecting?"取样":"暂停");pauseButton.setOnClickListener(v->onStartCommand(new Intent().setAction(inspecting?SAMPLE:PAUSE),0,0));

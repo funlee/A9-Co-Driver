@@ -11,6 +11,8 @@ final class OrchestrationRecoveryChecks {
         if(!DailyEventUi.classifySolo("AUDI R8 阶段1 俱乐部奖励 单人奖励 S+级 完成比赛 跳过30 继续").equals("missionRewards"))throw new AssertionError("Special reward is not a lobby");
         if(!DailyEventUi.classifySolo("阶段1 俱乐部奖励 单人奖励 完成比赛 比赛").equals("event"))throw new AssertionError("Special lobby");
         if(!DailyEventUi.classifySolo("门票不足 获取更多门票").equals("noTicket"))throw new AssertionError("Semantic ticket guard");
+        if(!DailyEventUi.classifySolo("降低您的危险等级 任务需要一定数量的空危险槽 您要立刻清空所有槽位吗 清空所有槽位 300 观看广告 15/15").equals("noTicket"))throw new AssertionError("Club hazard dialog reads as noTicket");
+        if(DailyEventUi.classifySolo("铬蛇竞速2 任务 1983/7888 特别任务 0/60 危险等级 2 危险等级 3").equals("noTicket"))throw new AssertionError("A club task panel is not the hazard dialog");
         if(!DailyEventUi.classifySolo("极速回溯 LAMBORGHINI TERZO MILLENNIO 单人奖励 排名奖励 前30% 顶尖排名 100% 比賽").equals("event"))throw new AssertionError("Ranked cup reward tab is a returned lobby");
         if(DailyEventUi.classifySolo("单人奖励 排名奖励 前30% 顶尖排名 100%").equals("event"))throw new AssertionError("Reward preview without Race is not a lobby");
         if(!DailyEventUi.classifySolo("金币争夺战：沙漠高速 单人奖励 40,000 金币 1/1 使用最低性能分为2700的车辆打破01:38秒的纪录 最佳用时纪录 01:37.846 比赛").equals("event"))throw new AssertionError("Credit cup lobby has no club or ranking tab");
@@ -70,8 +72,9 @@ final class OrchestrationRecoveryChecks {
         script(assets,List.of("daily","cup","special"),"data={['项目']='特殊赛事'};local reads=0;local taps=0;function print()end;function tap(x,y)assert(x==69 and y==1100,'Only Continue may be tapped');taps=taps+1 end;"+
             "function _soloEventUi()reads=reads+1;local scene=reads<5 and 'missionRewards' or 'event';return {scene=scene,frameId=1000+reads*1000,words={{text='继续',x=1100,y=650},{text='跳过30',x=900,y=550}}} end;"+
             "function test()assert(spCup.operation[8][2]()==0);assert(taps==1,'Stale reward frames must not repeat taps');done=true end");
-        script(assets,List.of("cup","special"),"data={};local taps=0;function tap()taps=taps+1 end;function _soloEventUi()return {scene='unknown'} end;"+
-            "function test()assert(cup.operation[6][2]()==nil and spCup.operation[6][2]()==nil);assert(taps==0);done=true end");
+        script(assets,List.of("cup","special"),"data={};local backs=0;function tap()error('A no-ticket dialog must not be tapped')end;"+
+            "function keyPress(k)assert(k=='back');backs=backs+1 end;function toast()end;function sleep()end;function _soloEventUi()return {scene='unknown'} end;"+
+            "function test()assert(cup.operation[6][2]()=='noTicket' and spCup.operation[6][2]()=='noTicket');assert(backs==2,'A colour-verified no-ticket dialog must Back out even when OCR reads no keyword');done=true end");
         script(assets,List.of("daily","special"),"data={['项目']='特殊赛事'};local reads=0;local taps=0;function print()end;function tap()taps=taps+1 end;"+
             "function _soloEventUi()reads=reads+1;return {scene=reads==1 and 'missionRewards' or 'car',frameId=reads*2000,words={{text=reads==1 and '继续' or '跳过',x=1100,y=650}}}end;"+
             "function test()assert(spCup.operation[8][2]()==0 and taps==1,'Finalize on returned car without pressing Start/Skip');done=true end");
@@ -185,6 +188,154 @@ final class OrchestrationRecoveryChecks {
             "return {scene=reads==2 and 'unknown' or 'car',text='',fuel=-1,zeroTicketStart=reads~=4,frameId=reads,words={start}} end",
             "function tap(x,y)assert(reads==5 and y==1100);taps=taps+1 end",
             "function test()assert(utils.startRace()==1 and taps==2,'A single missed trial frame must not skip the event');done=true end"));
+        script(assets,List.of("utilities"),String.join("\n",
+            "data={};local taps=0;function print()end;function sleep()end",
+            "function tap(x,y)taps=taps+1;atX,atY=x,y end",
+            "function test()",
+            "local tip={scene='unknown',frameId=7,text='新游戏机制 冲破障碍 不再提示',words={{text='开始',x=1180,y=640}}}",
+            "assert(utils.proceedTipPage(tip) and taps==1 and atX==719-640 and atY==1180,'A mechanic tip page continues through its bottom-right Start button')",
+            "assert(not utils.proceedTipPage(tip),'The same projection frame is never tapped twice')",
+            "tip={scene='car',frameId=8,text='新游戏机制'};assert(not utils.proceedTipPage(tip),'A recognized car page is left alone')",
+            "tip={scene='unknown',frameId=9,text='新游戏机制 不再提示',words={{text='开始',x=200,y=100}}};assert(not utils.proceedTipPage(tip),'Start outside the bottom-right control never gets a tap')",
+            "tip={scene='unknown',frameId=10,text='加载中'};assert(not utils.proceedTipPage(tip),'Loading frames are not tips')",
+            "done=true end"));
+        script(assets,List.of("utilities"),String.join("\n",
+            "data={};run={data={['分支选择']='1',['危险等级']='0',['难度不足']='0'}};utils.carClubAtOrigin=true",
+            "function print()end;function sleep()end;function toast()end;function keepCapture()end",
+            "local taps,reads=0,0",
+            "function tap()taps=taps+1 end;function swipe()end;function touchDown()end;function touchMove()end;function touchUp()end",
+            "local cards={scene='unknown',words={{text='铬蛇竞速1',x=200,y=240},{text='任务',x=200,y=280},",
+            "{text='7888/7888',x=200,y=350},{text='特别任务',x=200,y=420},{text='0/60',x=200,y=470}}}",
+            "function _soloEventUi()reads=reads+1;return cards end",
+            "function test()assert(utils.spChoose()==-1,'A finished main line is not reopened by the special progress');",
+            "assert(taps==0 and reads==2,'A card holding only the special task is skipped without a tap');done=true end"));
+        script(assets,List.of("utilities"),String.join("\n",
+            "data={};run={data={['分支选择']='0',['危险等级']='0',['难度不足']='0'}};utils.carClubAtOrigin=true",
+            "function print()end;function sleep()end;function toast()end;function keepCapture()end",
+            "local taps,tx,ty,reads=0,0,0,0",
+            "function tap(x,y)taps=taps+1;tx,ty=x,y end;function swipe()end;function touchDown()end;function touchMove()end;function touchUp()end",
+            "local cards={scene='unknown',words={{text='速度纪元3',x=200,y=240},{text='任务',x=200,y=280},",
+            "{text='1983/7888',x=200,y=350},{text='特别任务',x=200,y=420},{text='0/60',x=200,y=470}}}",
+            "local panel={scene='unknown',words={{text='赢取额外车联包',x=800,y=150},",
+            "{text='危险等级',x=520,y=654},{text='开始任务',x=1043,y=604}}}",
+            "function _soloEventUi()reads=reads+1;if reads==1 then return cards end;return panel end",
+            "function _textWords()return {{text='开始任务',x=1043,y=604}}end",
+            "function test()assert(utils.spChoose()==1,'The single special branch starts the special task');",
+            "assert(taps==4 and tx==1043 and ty==604,'Card tap then the special Start button');done=true end"));
+        script(assets,List.of("utilities"),String.join("\n",
+            "data={};run={data={['分支选择']='1',['危险等级']='0',['难度不足']='0'}};utils.carClubAtOrigin=true",
+            "function print()end;function sleep()end;function toast()end;function keepCapture()end",
+            "local taps={};local reads=0",
+            "function tap(x,y)taps[#taps+1]={x,y} end;function swipe()end;function touchDown()end;function touchMove()end;function touchUp()end",
+            "local cards={scene='unknown',words={{text='铬蛇竞速2',x=200,y=240},{text='任务',x=200,y=280},",
+            "{text='1983/7888',x=200,y=350},{text='特别任务',x=200,y=420},{text='0/60',x=200,y=470}}}",
+            "local panel={scene='unknown',words={{text='危险等级',x=575,y=393},{text='危险等级',x=575,y=571}}}",
+            "function _soloEventUi()reads=reads+1;if reads==1 then return cards end;return panel end",
+            "function _textWords()return {{text='开始任务',x=1043,y=604}}end",
+            "function test()assert(utils.spChoose()==1,'An unfinished main line starts');",
+            "assert(#taps==5 and taps[2][1]==719-393 and taps[2][2]==575,'The top difficulty row is picked');",
+            "for i=3,5 do assert(taps[i][1]==116 and taps[i][2]==1100,'The main branch never presses the special task label') end;done=true end"));
+        script(assets,List.of("utilities"),String.join("\n",
+            "data={};run={data={['分支选择']='1',['危险等级']='2',['难度不足']='0'}};utils.carClubAtOrigin=true",
+            "function print()end;function sleep()end;function toast()end;function keepCapture()end",
+            "local taps={};local reads=0",
+            "function tap(x,y)taps[#taps+1]={x,y} end;function swipe()end;function touchDown()end;function touchMove()end;function touchUp()end",
+            "local cards={scene='unknown',words={{text='铬蛇竞速2',x=200,y=240},{text='任务',x=200,y=280},",
+            "{text='1983/7888',x=200,y=350},{text='特别任务',x=200,y=420},{text='0/60',x=200,y=470}}}",
+            "local panel={scene='unknown',words={{text='危险等级',x=575,y=393},{text='2',x=690,y=393},",
+            "{text='危险等级',x=575,y=571},{text='3',x=690,y=571}}}",
+            "function _soloEventUi()reads=reads+1;if reads==1 then return cards end;return panel end",
+            "function test()assert(utils.spChoose()==1,'Two rows can still start the configured third level');",
+            "assert(taps[2][1]==719-571 and taps[2][2]==575,'The row labelled with the configured level wins over row order');done=true end"));
+        script(assets,List.of("utilities"),String.join("\n",
+            "data={};run={data={['分支选择']='1',['危险等级']='2',['难度不足']='1'}};utils.carClubAtOrigin=true",
+            "function print()end;function sleep()end;function toast()end;function keepCapture()end",
+            "local taps={};local reads=0",
+            "function tap(x,y)taps[#taps+1]={x,y} end;function swipe()end;function touchDown()end;function touchMove()end;function touchUp()end",
+            "local cards={scene='unknown',words={{text='速度纪元3',x=200,y=240},{text='任务',x=200,y=280},",
+            "{text='1983/7888',x=200,y=350},{text='特别任务',x=200,y=420},{text='0/60',x=200,y=470}}}",
+            "local panel={scene='unknown',words={{text='危险等级',x=575,y=393},{text='1',x=690,y=393},",
+            "{text='危险等级',x=575,y=571},{text='2',x=690,y=571}}}",
+            "function _soloEventUi()reads=reads+1;if reads==1 then return cards end;return panel end",
+            "function test()assert(utils.spChoose()==1,'A short chapter still starts');",
+            "assert(taps[2][1]==719-571,'Without the configured level the highest available one is used');done=true end"));
+        script(assets,List.of("utilities"),String.join("\n",
+            "data={};run={data={['分支选择']='1',['危险等级']='2',['难度不足']='0'}};utils.carClubAtOrigin=true",
+            "function print()end;function sleep()end;function toast()end;function keepCapture()end",
+            "local taps={};local reads=0",
+            "function tap(x,y)taps[#taps+1]={x,y} end;function swipe()end;function touchDown()end;function touchMove()end;function touchUp()end",
+            "local cards={scene='unknown',words={{text='铬蛇竞速2',x=200,y=240},{text='任务',x=200,y=280},",
+            "{text='1983/7888',x=200,y=350},{text='特别任务',x=200,y=420},{text='0/60',x=200,y=470}}}",
+            "local panel={scene='unknown',words={{text='危险等级',x=575,y=393},{text='2',x=690,y=393},",
+            "{text='危险等级',x=575,y=571},{text='3',x=690,y=571}}}",
+            "function _soloEventUi()reads=reads+1;if reads==1 then return cards end;return panel end",
+            "function test()assert(utils.spChoose(2)==1,'A capped run still starts a race');",
+            "assert(taps[2][1]==719-393 and taps[2][2]==575,'The cap keeps the run on the lower level');",
+            "assert(data['车联等级']==2,'The level actually chosen is remembered for the next drop');done=true end"));
+        script(assets,List.of("utilities"),String.join("\n",
+            "data={};run={data={}}",
+            "function test()",
+            "assert(utils.carScoreShort({text='AELLA-60 性能分不足，无法参加当前赛事'}),'A car below the race requirement is recognized');",
+            "assert(not utils.carScoreShort({text='性能分 2,233/2,233 开始'}),'A healthy car page is not a score problem');",
+            "assert(not utils.carScoreShort(nil),'A missing frame is not a score problem');",
+            "done=true end"));
+        script(assets,List.of("club"),String.join("\n",
+            "data={['车联等级']='3'};local backs,cap,looks=0,0,0",
+            "utils={carScoreShort=function()return false end,spChoose=function(c)cap=c;return 1 end,",
+            "carClubCards=function()looks=looks+1;if looks>1 then return {{name='铬蛇竞速2',x=200,y=280}} end;return {} end,",
+            "startConfiguredRace=function()error('未确认车辆开始按钮，保留当前任务') end}",
+            "function _soloEventUi()return {text=''} end",
+            "function keyPress()backs=backs+1 end;function toast()end;function sleep()end;function tap()end;function print()end",
+            "function test()local ret=dsCup.operation[4][2]()",
+            "assert(ret==nil and cap==2,'A car that cannot enter the configured level drops one level and retries');",
+            "assert(backs==1,'Back stops as soon as the chapter panel is visible instead of leaving the club');",
+            "assert(data['信息']=='车辆性能分不足，降到难度2','The drop is reported on the bottom banner');",
+            "done=true end"));
+        script(assets,List.of("utilities"),String.join("\n",
+            "data={};run={data={['分支选择']='1',['危险等级']='0',['难度不足']='0'}};utils.carClubAtOrigin=true",
+            "function print()end;function sleep()end;function toast()end;function keepCapture()end",
+            "local taps,reads=0,0",
+            "function tap()taps=taps+1 end;function swipe()end;function touchDown()end;function touchMove()end;function touchUp()end",
+            "local cards={scene='unknown',words={{text='速度纪元4',x=200,y=240},{text='任务',x=200,y=280},",
+            "{text='1983/7888',x=200,y=350},{text='特别任务',x=200,y=420},{text='0/60',x=200,y=470}}}",
+            "local panel={scene='unknown',words={{text='危险等级',x=520,y=654},{text='车联包',x=900,y=560}}}",
+            "function _soloEventUi()reads=reads+1;if reads==2 then return panel end;return cards end",
+            "function test()assert(utils.spChoose()==-1,'A panel whose Start button was missed is not a main panel');",
+            "assert(taps==1,'Only the card is tapped, never the bottom bar');done=true end"));
+        script(assets,List.of("utilities"),String.join("\n",
+            "data={};run={data={['分支选择']='1',['危险等级']='0',['难度不足']='0'}};utils.carClubAtOrigin=true",
+            "function print()end;function sleep()end;function toast()end;function keepCapture()end",
+            "local taps,reads=0,0",
+            "function tap()taps=taps+1 end;function swipe()end;function touchDown()end;function touchMove()end;function touchUp()end",
+            "local cards={scene='unknown',words={{text='铬蛇竞速2',x=200,y=240},{text='任务',x=200,y=280},",
+            "{text='1983/7888',x=200,y=350},{text='特别任务',x=200,y=420},{text='0/60',x=200,y=470}}}",
+            "local hazard={scene='noTicket',words={{text='降低您的危险等级',x=400,y=300},",
+            "{text='任务需要一定数量的空危险槽',x=400,y=360},{text='您要立刻清空所有槽位吗',x=400,y=420}}}",
+            "function _soloEventUi()reads=reads+1;if reads==1 then return cards end;return hazard end",
+            "function test()assert(utils.spChoose()=='noTicket','A hazard dialog found while reading the panel is a ticket problem');",
+            "assert(taps==1,'The ticket problem is reported without pressing Start');done=true end"));
+        script(assets,List.of("utilities"),String.join("\n",
+            "data={};run={data={['分支选择']='1',['危险等级']='0',['难度不足']='0'}};utils.carClubAtOrigin=true",
+            "function print()end;function sleep()end;function toast()end;function keepCapture()end",
+            "function tap()end;function swipe()end;function touchDown()end;function touchMove()end;function touchUp()end",
+            "function _soloEventUi()return {scene='unknown',words={{text='空危险槽',x=300,y=400}}} end",
+            "function test()assert(utils.spChoose()=='noTicket','A hazard dialog hiding the chapter strip is a ticket problem, not a lost list');done=true end"));
+        script(assets,List.of("club"),String.join("\n",
+            "data={};utils={spChoose=function()return 'noTicket' end}",
+            "local backs=0",
+            "function keyPress()backs=backs+1 end;function toast()end;function sleep()end;function tap()end;function print()end",
+            "function test()local ret=dsCup.operation[2][2]()",
+            "assert(ret=='clubNoTicket','A hazard dialog found while choosing a task skips the club project')",
+            "assert(backs==1 and data['信息']=='车联危险值不足，已跳过','The dialog is closed and the run keeps going')",
+            "done=true end"));
+        script(assets,List.of("club"),String.join("\n",
+            "data={}",
+            "local backs=0",
+            "function keyPress()backs=backs+1 end;function toast()end;function sleep()end;function tap()end;function print()end",
+            "function test()local ret=dsCup.operation[6][2]()",
+            "assert(ret=='clubNoTicket','A short hazard value skips the club project instead of retrying it')",
+            "assert(backs==1 and data['信息']=='车联危险值不足，已跳过','The dialog is closed and the run keeps going')",
+            "done=true end"));
         script(assets,List.of("daily"),"data={};local reads,taps=0,0;function print()end;"+
             "function tap(x,y)assert(x==109 and y==450);taps=taps+1 end;"+
             "function _soloEventUi()reads=reads+1;if reads==1 then return {scene='results'} end;"+
@@ -281,10 +432,10 @@ final class OrchestrationRecoveryChecks {
                 "local scenario='"+scenario+"';local series='"+series+"';local count=scenario=='rotate' and 2 or 1;"+
                 "data={['项目']='"+project+"',['多人']=0};run={data={['次数']=count,['用车模式']=(scenario=='rotate' or scenario=='detailOcr') and '1' or '0',['青铜用车']={1,2},['多人下用车']={1,2}}};"+
                 "utils={defultCfg=function(v,d)return v or d end};local phase='series';local frame=0;local selected=0;local choices={};local notices=0;local finished=0;local rewardSince=nil;local exitAt=nil;local rewardTaps=0;local bonusAt=nil;local bonusTaps=0;"+
-                "function print()end;function _hud()end;function swipe()end;function cmpColor()return 1 end;function _sessionProject()return 0 end;function _sessionRaceBegin()end;function _sessionRaceResult()end;function _sessionRaceRewards()end;function _fallbackBegin()end;function _fallbackStep()return 99 end;function _sessionOperation()end;"+
+                "function print()end;function _hud()end;function swipe()end;function cmpColor()return 1 end;function _sessionProject()return 0 end;function _sessionRaceBegin()end;function _sessionRaceResult()end;function _fallbackBegin()end;function _fallbackStep()return 99 end;function _sessionOperation()end;"+
                 "function _sessionRaceReturned()finished=finished+1;phase='series' end;"+
                 "function tap(y,x)y=719-y;if x==350 and y==450 then phase='event' elseif x==1100 and y==650 then if phase=='event' then phase='cars' elseif phase=='car' then phase='race' elseif phase=='result' then phase=(scenario=='lateRewards' or scenario=='blockedRewards' or scenario=='longRewards') and 'reward' or 'returned' elseif phase=='reward' then phase='rewardLeaving';exitAt=tickCount();rewardTaps=rewardTaps+1 elseif phase=='bonus' then bonusTaps=bonusTaps+1;bonusAt=tickCount();if bonusTaps==3 then phase='returned' end end elseif x==410 and (y==305 or y==542)then selected=y==305 and 1 or 2;choices[#choices+1]=selected;phase='car' elseif x==38 and y==29 then phase='cars' end end;"+
-                "function _taskNotice(msg,duration)assert(phase=='event' and msg==(series=='世界系列赛' and '青铜' or scenario=='rotate' and '铂金' or '无段位') and duration>0);notices=notices+1 end;"+
+                "function _taskNotice(msg,duration)local league=(series=='世界系列赛' and '青铜' or scenario=='rotate' and '铂金' or '无段位');if msg==league then assert(phase=='event' and duration>0);notices=notices+1 else assert(tostring(msg):find('^关闭') and duration>0,'unexpected notice: '..tostring(msg)) end end;"+
                 "function _multiplayerUi()frame=frame+2000;local s={scene=phase,text=series,frameId=frame,words={},worldLeague='青铜',masterLeague=scenario=='rotate' and '白金' or nil};"+
                 "if phase=='series' then s.text='世界系列赛 大师系列赛';s.words={{text=series,x=350,y=450}} " +
                 "elseif phase=='event' or phase=='car' then s.words={{text='开始',x=1100,y=650}};s.carDetail={name='LANCER',performance=((scenario=='detailOcr' and #choices==1) or scenario=='wrongCar') and '1/9' or '1/2'};s.fuel=scenario=='detailEmpty' and selected==1 and 0 or 3;s.starUpPending=scenario=='starDetail' and selected==1;if phase=='car' and selected==1 and scenario=='lockedDetail' then s.scene='lockedCar' end " +

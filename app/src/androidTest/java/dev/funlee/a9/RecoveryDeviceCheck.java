@@ -55,7 +55,6 @@ public final class RecoveryDeviceCheck extends Instrumentation {
             else if(mode.equals("garage-page"))GaragePageDeviceCheck.run(this,report);
             else if(mode.equals("garage-detail"))GarageDetailDeviceCheck.run(this,report);
             else if(mode.equals("garage-filter"))new GarageFilterDeviceCheck(this).run(report);
-            else if(mode.equals("rewards"))RewardScreenshotCheck.run(this,report);
             else if(mode.equals("cup-selection"))new CupSelectionDeviceCheck(this).run(cupPosition,cupTitle,report);
             else if(mode.equals("systemui-anr")){
                 UiAutomation ui=getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES);

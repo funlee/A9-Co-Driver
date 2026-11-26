@@ -151,7 +151,7 @@ final class StabilityChecks {
                         screen.put("scene","race");screen.put("text","");
                     }else if(mapped&&n<8){
                         screen.putAll(Map.of("scene","result","text","比赛奖励 系列赛分数 总计 继续","finalRank",2,
-                                "rewardPage",true,"rewardReady",true,"rewardCanContinue",true));
+                                "rewardPage",true,"rewardCanContinue",true));
                         if(!mode.equals("noAfter"))screen.put("seriesScore",31754);
                     }else{
                         onPopup[0]=true;
@@ -165,7 +165,7 @@ final class StabilityChecks {
                 if(name.equals("tap")&&onPopup[0])rewardTaps.add(l.toInteger(1)+","+l.toInteger(2));
                 return 0;
             },List.of("_multiplayerUi","_sessionProject","_sessionRaceBegin","_fallbackBegin","_fallbackStep","_sessionOperation",
-                    "_sessionRaceResult","_sessionRaceRewards","swipe","_hud","print","tap"))){
+                    "_sessionRaceResult","swipe","_hud","print","tap"))){
                 Map<String,Object> config=new HashMap<>(Map.of("次数",1));
                 if(!mode.equals("manual"))config.put("自选奖励","0");
                 if(mapped)config.put("worldRewardRules",mode.equals("laterMilestone")?List.of(Map.of("score",32700,"position",1)):
