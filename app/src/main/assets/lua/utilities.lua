@@ -2384,13 +2384,18 @@ function utils.chooseCup(num,wide,configuredOnly)
         end
       end
       -- 每拖一格都读卡片会读到惯性中的中间帧，校正方向互相抵消，越校越乱；改成一次
-      -- 拖到位、末尾校正一次，只收尾不足半格的偏差。
+      -- 拖到位、末尾校正。识别噪声在 ±12 像素，单轮校正常常停在二三十像素的残差上，
+      -- 所以最多校两轮，收敛不了就按当前对齐走——半格以内不影响点中目标卡。
       local function align()
-        local first = measure()
-        if not first then print('杯赛校正：本帧未识别到卡片'); return end
-        local off = (first - X0) % PITCH
-        if off > PITCH / 2 then off = off - PITCH end
-        if math.abs(off) > 40 then
+        for round = 1, 2 do
+          local first = measure()
+          if not first then print('杯赛校正：本帧未识别到卡片'); return end
+          local off = (first - X0) % PITCH
+          if off > PITCH / 2 then off = off - PITCH end
+          if math.abs(off) <= 25 then
+            print('杯赛列表首卡中心 '..math.floor(first)..'，已对齐')
+            return
+          end
           drag(off + 19)
           sleep(1000)
           local again = measure()
@@ -2400,9 +2405,8 @@ function utils.chooseCup(num,wide,configuredOnly)
             if rest > PITCH / 2 then rest = rest - PITCH end
             left = tostring(math.floor(rest))
           end
-          print('杯赛位置校正 '..math.floor(off)..' 像素，首卡中心 '..math.floor(first)..'，残留 '..left)
-        else
-          print('杯赛列表首卡中心 '..math.floor(first)..'，已对齐')
+          print('杯赛位置校正 '..math.floor(off)..' 像素（第 '..round..' 轮），首卡中心 '
+            ..math.floor(first)..'，残留 '..left)
         end
       end
       -- 先退回最左端：多余的拖动到边界就回弹，不会反向，也不会误进赛事。
@@ -2410,8 +2414,7 @@ function utils.chooseCup(num,wide,configuredOnly)
       sleep(800)
       print('杯赛列表已回到最左端，卡片 '..seen())
       align()
-      -- 每拖一格都校正一次：单步位移比卡距少十几像素，累到 12 步就差一整格，
-      -- 而整格错位靠模运算看不出来——每步对齐就不会累计。
+      -- 中间不做逐格校正：单步位移 186 像素与卡距等长，不会累计偏差，只在收尾统一对齐。
       for i = 2, target do drag(DRAG) end
       sleep(1200)
       print('杯赛列表已拖到第 '..target..' 位，卡片 '..seen())
@@ -2438,8 +2441,10 @@ function utils.chooseCup(num,wide,configuredOnly)
       sleep(2500)
       local scene = _soloEventUi()
       local sc = scene and scene.scene
-      data['信息'] = '杯赛位置 '..target..'：'..tostring(sc)
       local title = scene and scene.text and string.gsub(tostring(scene.text), '%s+', ' ') or ''
+      -- 把进入的赛事标题一起记进任务信息：赛事列表按时间轮换，配置位置对不上时能直接看出来。
+      data['信息'] = '杯赛位置 '..target..'：'..tostring(sc)
+        ..(title ~= '' and ('，'..utf8.left(title, 16)) or '')
       -- 截断不能按字节切：中文一个字 3 字节，切在半路上会得到非法 UTF-8，
       -- 回传给 Java 的 NewStringUTF 时直接把进程打挂（java_vm_ext.cc:616）。
       print('已按第 '..target..' 个赛事位置点击进入赛事，界面 '..tostring(sc)..' 标题 '..utf8.left(title, 40))
