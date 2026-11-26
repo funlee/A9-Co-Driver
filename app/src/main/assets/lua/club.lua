@@ -12,18 +12,24 @@ local function backToPanel()
   end
   return false
 end
--- 降一档重选：先回章节面板，再按上限重新选任务。
+-- 降一档重选：先离开开赛页；如果回到的就是任务面板，spChoose 会就地改选低一档，不必回起点重扫。
 local function dropLevel()
   local level = tonumber(data['车联等级'])
   if not level or level <= 1 then return false end
   maxLevel = level - 1
+  -- 这里只记原因，不弹提示：紧接着 spChoose 会带着「性能分不足，刷主线（难度N）」一起提示，
+  -- 两条 toast 连着弹会互相打断。
   data['信息'] = '车辆性能分不足，降到难度' .. maxLevel
-  toast(data['信息'])
-  if not backToPanel() then
-    data['信息'] = '性能分不足后没回到车联任务面板'
-    return false
+  keyPress('back')
+  sleep(1500)
+  local chosen = utils.spChoose(maxLevel)
+  if chosen == 1 then return true end
+  -- 退过头（既不是任务面板也不是章节横条）时再退回横条重试一次。
+  if chosen == 0 then
+    if not backToPanel() then return false end
+    return utils.spChoose(maxLevel) == 1
   end
-  return utils.spChoose(maxLevel) == 1
+  return false
 end
 local config = {
   main = "690|1240|FFFFFF-101010,690|1252|3B2312-101010,670|1270|3B2312-101010",
@@ -60,6 +66,13 @@ dsCup.operation = {
       local chosen = utils.spChoose(maxLevel)
       -- 危险值不足：关掉弹窗并按确定条件跳过本项目，不让它变成「回主重试」。
       if chosen == 'noTicket' then return dsCup.operation[6][2]() end
+      -- 性能分不够：按「难度不足」配置降一档重选，不要回主重试后再撞同一个难度。
+      if chosen == 'noScore' then
+        if dropLevel() then return nil end
+        data["信息"] = "车辆性能分不足以进入任何难度，跳过车联"
+        toast(data["信息"])
+        return -1
+      end
       if chosen ~= 1 then
         -- 车联是线性推进：从起点翻到底都没有可做的任务，说明界面变了，直接收尾。
         if chosen == -1 then data["信息"] = "车联任务列表未找到可进入的危险等级" end
@@ -110,10 +123,18 @@ dsCup.operation = {
     config.noCar,
     function()
       data["信息"] = "性能分不足"
+      toast("车辆性能分不足，按难度不足配置降档")
+      -- 降一档重选（每降一次都回到章节横条按新上限重新选任务）。
+      if dropLevel() then return nil end
       keyPress("back")
       sleep(3000)
       local chosen = utils.spChoose(maxLevel)
       if chosen == 'noTicket' then return dsCup.operation[6][2]() end
+      if chosen == 'noScore' then
+        data["信息"] = "车辆性能分不足以进入任何难度，跳过车联"
+        toast(data["信息"])
+        return -1
+      end
       if chosen ~= 1 then
         data["信息"] = "车联任务列表未找到可进入的危险等级"
         return -1

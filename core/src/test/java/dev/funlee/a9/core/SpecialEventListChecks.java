@@ -96,7 +96,7 @@ final class SpecialEventListChecks {
         try (var input = SpecialEventListChecks.class.getResourceAsStream("/special-stages.lua")) {
             fixture = new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
         }
-        for (String scenario : List.of("first", "third", "focused", "noisy-first", "stuck", "wrong-stage", "saved-fifth", "reselect-fifth")) {
+        for (String scenario : List.of("first", "third", "focused", "noisy-first", "stuck", "wrong-stage", "saved-fifth", "reselect-fifth", "chapter-two")) {
             try (LuaRuntime lua = new LuaRuntime((name, state) -> 0, List.of())) {
                 lua.set("scenario", scenario);
                 lua.load("utilities", utilities);

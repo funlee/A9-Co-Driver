@@ -108,8 +108,13 @@ final class CupSelectionChecks {
             "function tap(x,y)assert(x>=0 and x<720 and y>=0 and y<1280,'tap out of bounds');taps[#taps+1]={x,y};selected=math.floor((y-120)/180+1.5) end;"+
             "function snapShot(...)assert(frameSelected==selected,'stale frame cached');snapshots[#snapshots+1]=frameSelected;cached=true end;"+
             "os.remove=function(...)removed=removed+1;cached=false;stale=false;return true end;"+
-            "utils.fileExist=function(...)return cached end;utils.mycolor=function(x,y,color)return selected==math.floor((y-120)/180+1.5) and color=='12FBC3-101010' and 1 or 0 end;"+
-            "utils.mySwipe=function(...)end;_findColorTriple=function(...)return -1,-1,-1 end;"+
+            "utils.fileExist=function(...)return cached end;"+
+            "function _cupCards()local cards={};for i=1,8 do cards[i]={center=120+180*(i-1),selected=i==selected} end;return cards end;"+
+            "utils.mycolor=function(x,y,color)if color~='12FBC3-101010' then return 0 end;"+
+            "for _,c in ipairs(_cupCards())do if math.abs(c.center-y)<=5 then return c.selected and 1 or 0 end end;return 0 end;"+
+            "utils.mySwipe=function(...)end;"+
+            "function _findColorTriple(x,y,x2,y2,color)if color=='12FBC3-101010' then "+
+            "for _,c in ipairs(_cupCards())do if c.selected then return 0,16,c.center end end end return -1,-1,-1 end;"+
             "utils.findCup=function(...)finds=finds+1;keepCapture();if cached and (not stale or selected==2) then return {16,120+180*(selected-1),350,212} end;return {-1,-1,-1,-1} end;";
         List<String> cases=List.of(
             "assert(utils.chooseCup('3')==1);assert(selected==3,'stale identity overrides configured third cup');assert(removed==1 and #snapshots==1 and snapshots[1]==3);assert(finds==0,'new task searched old cache')",
@@ -134,7 +139,8 @@ final class CupSelectionChecks {
             "selected=1;utils.mycolor=function(x,y,color)return color=='12FBC3-101010' and 1 or 0 end;utils.chooseCup('1');assert(#taps==1 and #snapshots==1,'already selected first event entered twice')",
             "_findColorTriple=function(x,y,x2,y2,color)if color=='12FBC3-101010' then return 0,16,435 end;return -1,-1,-1 end;_findPicTriple=function(...)return 0,350,212 end;local r=realFindCup('cache');assert(r[1]==16 and r[2]==435 and r[3]==350,'lime cached event not recognized')",
             "_findPicTriple=function(...)return 0,350,212 end;local r=realFindCup('cache');assert(r[3]==-1,'matched image without selected card would click invalid coordinates')",
-            "utils.mycolor=function(...)return 0 end;assert(utils.chooseCup('3')=='cupPositionUnavailable' and #snapshots==0 and #taps==1,'unconfirmed selection entered an event')",
+            "function _cupCards()return {{center=120},{center=300},{center=480}}end;utils.mycolor=function(...)return 0 end;"+
+                "assert(utils.chooseCup('3')=='cupPositionUnavailable' and #snapshots==0 and #taps==1,'unconfirmed selection entered an event')",
             "selected=1;function _cupCards() return {{center=159,selected=selected==1},{center=317,selected=false},{center=467,selected=selected==3}} end;"+
                 "function tap(x,y)assert(y==467);selected=3;taps[#taps+1]=y end;assert(utils.chooseCup('3',true)==1 and #taps==2)",
             "function _cupCards()return {{center=159,selected=true},{center=467}}end;"+
@@ -154,7 +160,18 @@ final class CupSelectionChecks {
                 "cards[#cards+1]={center=470,selected=selected==3};return cards end;"+
                 "function tap(x,y)assert(y==320,'must wait for the missing second card');"+
                 "if selected==2 then entered=entered+1 else selected=2 end end;"+
-                "assert(utils.chooseCup('-2',true)==1 and entered==1,'transient missing card prevented a verified selection')"
+                "assert(utils.chooseCup('-2',true)==1 and entered==1,'transient missing card prevented a verified selection')",
+            // 复现「配置 13 实际停在 11」：滑动力度只有半张卡时，逐张校验仍须走到第 13 张。
+            "offset=0;selected=1;entered=0;"+
+                "function visible()local cards={};for id=1,20 do local c=(id-0.5)*185-offset;"+
+                "if c>=92 and c<=908 then cards[#cards+1]={center=math.floor(c+0.5),selected=id==selected} end end;return cards end;"+
+                "function _cupCards()return visible() end;"+
+                "function swipe(x,y,x2,y2)if y2>y then offset=0 else offset=math.min(800,offset+120) end end;"+
+                "utils.mySwipe=function(x,y,x2,y2)offset=math.min(3400,offset+120) end;"+
+                "function tap(x,y)for _,c in ipairs(visible())do if math.abs(c.center-y)<3 then "+
+                "local id=math.floor((c.center+offset)/185+0.5);if id==selected then entered=entered+1 else selected=id end;return end end;"+
+                "error('tap outside real cards')end;"+
+                "assert(utils.chooseCup('13')==1 and selected==13 and entered==1,'short swipes shifted the configured thirteenth event')"
         );
         int checked=14;
         for(String script:cases){
@@ -183,6 +200,30 @@ final class CupSelectionChecks {
                         "assert(ok,result);assert(result==1 and selected=="+(21+position)+" and entered==1,'wrong negative event');assert(#snapshots==1 and snapshots[1]==selected,'wrong identity cached')")+" end");
                 lua.start("test");boolean alive=true;for(int n=0;n<500&&alive;n++)alive=lua.step(n*1000L);
                 if(alive)throw new AssertionError("Negative cup selector did not terminate");
+            }
+            checked++;
+        }
+        // 正数位置 1..15 全量回归：第 1 张中心 150、间距 180、每次滑动只推进一张卡，
+        // 覆盖「配置 13 实际停在 11」这类滑动距离不足的情况。
+        for(int position=1;position<=15;position++){
+            cleanCupCache();
+            try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
+                lua.load("utilities",Files.readString(assets.resolve("lua/utilities.lua")));lua.load("cup-fixture",fixture);
+                lua.load("positive-carousel","offset=0;selected=1;entered=0;"+
+                        "function visible()local cards={};for id=1,20 do local c=150+(id-1)*180-offset;"+
+                        "if c>=95 and c<=1260 then cards[#cards+1]={center=math.floor(c+0.5),selected=id==selected} end end;return cards end;"+
+                        "function _cupCards()return visible() end;"+
+                        "function swipe(x,y,x2,y2)if y2>y then offset=0 else offset=math.min(3000,offset+120) end end;"+
+                        "utils.mySwipe=function(...)offset=math.min(3000,offset+180) end;"+
+                        "function tap(x,y)for _,c in ipairs(visible())do if math.abs(c.center-y)<3 then "+
+                        "local id=math.floor((c.center+offset-150)/180+1.5);if id==selected then entered=entered+1 else selected=id end;return end end;"+
+                        "error('tap outside cards at '..tostring(y))end;"+
+                        "function test()local ok,res=pcall(utils.chooseCup,'"+position+"',false,true);"+
+                        "assert(ok,res);assert(res==1,'position "+position+" returned '..tostring(res));"+
+                        "assert(selected=="+position+",'position "+position+" selected '..tostring(selected));"+
+                        "assert(entered==1,'position "+position+" entered '..tostring(entered)..' times')end");
+                lua.start("test");boolean alive=true;for(int n=0;n<800&&alive;n++)alive=lua.step(n*1000L);
+                if(alive)throw new AssertionError("Positive cup selector hung at position "+position);
             }
             checked++;
         }

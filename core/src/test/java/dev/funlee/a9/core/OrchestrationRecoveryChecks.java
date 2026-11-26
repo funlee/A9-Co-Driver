@@ -91,9 +91,27 @@ final class OrchestrationRecoveryChecks {
         script(assets,List.of("multiplayer_current"),"data={['项目']='多人上'};run={data={['次数']='1'}};utils={defultCfg=function(v,d)return v or d end};local reads=0;local taps=0;function _sessionProject()return 0 end;function _hud()end;function print()end;"+
             "function _multiplayerUi()reads=reads+1;if reads>1 then done=true;sleep(999999)end;return {scene='options',text='',words={}} end;"+
             "function tap(x,y)assert(x==690 and y==38,'Options must use Back, never Exit');taps=taps+1;assert(taps==1) end;function test()currentMultiplayer.run()end");
-        script(assets,List.of("multiplayer_current"),"data={['项目']='多人上'};run={data={['次数']='1'}};utils={defultCfg=function(v,d)return v or d end};local reads=0;local taps=0;function _sessionProject()return 0 end;function _hud()end;function print()end;"+
-            "function _multiplayerUi()reads=reads+1;if reads>4 then assert(taps==1,'Stale car frame repeated Home into Settings');done=true;sleep(999999)end;return {scene='car',text='',words={}} end;"+
-            "function tap(x,y)assert(x==689 and y==1250);taps=taps+1 end;function test()currentMultiplayer.run()end");
+        script(assets,List.of("multiplayer_current"),"data={['项目']='多人上'};run={data={['次数']='1'}};utils={defultCfg=function(v,d)return v or d end};local reads,backs,taps=0,0,0;function _sessionProject()return 0 end;function _hud()end;function print()end;"+
+            "function _multiplayerUi()reads=reads+1;if reads>5 then assert(backs==3 and taps==1,'Stale car frame must step back then fall back to Home once');done=true;sleep(999999)end;return {scene='car',text='',words={}} end;"+
+            "function tap(x,y)if x==690 and y==38 then backs=backs+1;assert(backs<=3,'Step back is bounded');return end;assert(x==689 and y==1250 and backs==3,'Car page must step back to the series list before Home');taps=taps+1 end;function test()currentMultiplayer.run()end");
+        // The game restores the last multiplayer sub-page. Landing on the other series'
+        // event page must step back to the series list instead of bouncing home forever.
+        script(assets,List.of("multiplayer_current"),"data={['项目']='多人下'};run={data={['次数']='1'}};utils={defultCfg=function(v,d)return v or d end};local reads,backs=0,0;function _sessionProject()return 0 end;function _hud()end;function print()end;"+
+            "function _multiplayerUi()reads=reads+1;if reads>1 then assert(backs==1,'Wrong series event must step back once');done=true;sleep(999999)end;"+
+            "return {scene='event',text='幽灵滑流赛 世界系列赛 开始 排行榜 里程碑',words={{text='世界系列赛',x=300,y=400},{text='开始',x=1100,y=650}}} end;"+
+            "function tap(x,y)assert(x==690 and y==38,'Wrong series event must use the in-page back arrow');backs=backs+1 end;function test()currentMultiplayer.run()end");
+        // A pending season settlement blocks the series entry and must be claimed first.
+        script(assets,List.of("multiplayer_current"),"data={['项目']='多人下'};run={data={['次数']='1'}};utils={defultCfg=function(v,d)return v or d end};local reads,claims=0,0;function _sessionProject()return 0 end;function _hud()end;function print()end;"+
+            "function _multiplayerUi()reads=reads+1;if reads>1 then assert(claims==1,'Settlement reward must be claimed before entering the series');done=true;sleep(999999)end;"+
+            "return {scene='series',text='幽灵滑流赛 世界系列赛 赛季结算 菜鸟 奖励已就绪 大师系列赛',words={{text='世界系列赛',x=300,y=400},{text='赛季结算',x=590,y=430},{text='奖励已就绪',x=590,y=470},{text='领取',x=590,y=526},{text='大师系列赛',x=590,y=300}}} end;"+
+            "function tap(x,y)assert(x==193 and y==590,'Only the settlement claim may be tapped');claims=claims+1 end;function test()currentMultiplayer.run()end");
+        // Settlement detail page: claim bottom-right, then dismiss the reward display.
+        script(assets,List.of("multiplayer_current"),"data={['项目']='多人下'};run={data={['次数']='1'}};utils={defultCfg=function(v,d)return v or d end};local reads,claims,skips=0,0,0;function _sessionProject()return 0 end;function _hud()end;function print()end;"+
+            "function _multiplayerUi()reads=reads+1;"+
+            "if reads==1 then return {scene='unknown',text='联赛奖励 菜鸟联赛 联赛最终排名的奖励 88,688',words={{text='领取',x=1100,y=650}}} end;"+
+            "if reads==2 then return {scene='unknown',text='恭喜 你获得了这些奖励 点击任意位置跳过',words={}} end;"+
+            "assert(claims==1 and skips==1,'Settlement page must claim then dismiss');done=true;sleep(999999)end;"+
+            "function tap(x,y)if x==69 and y==1100 then claims=claims+1;return end;assert(x==169 and y==640,'Dismiss by tapping the page');skips=skips+1 end;function test()currentMultiplayer.run()end");
         script(assets,List.of("bootstrap","special","multiplayer_current"),String.join("\n",
             "data={};run={};local reads,taps=0,0;function localInit()end;function monitor()end;function _hud()end;function print()end",
             "UIconfig={routeOnly='',ActiveProj={true},projects={{['项目']='多人上',data={['次数']='1'}}}}",
@@ -198,6 +216,9 @@ final class OrchestrationRecoveryChecks {
             "tip={scene='car',frameId=8,text='新游戏机制'};assert(not utils.proceedTipPage(tip),'A recognized car page is left alone')",
             "tip={scene='unknown',frameId=9,text='新游戏机制 不再提示',words={{text='开始',x=200,y=100}}};assert(not utils.proceedTipPage(tip),'Start outside the bottom-right control never gets a tap')",
             "tip={scene='unknown',frameId=10,text='加载中'};assert(not utils.proceedTipPage(tip),'Loading frames are not tips')",
+            "tip={scene='loading',frameId=11,text='限时赛事 更新提醒 购买至尊通行证后即可自动领取 不再提示',words={{text='明白了！',x=1115,y=627}}}",
+            "assert(utils.proceedTipPage(tip) and atX==719-627 and atY==1115,'An event ad covering the loading page closes through the confirm button')",
+            "tip={scene='loading',frameId=12,text='加载中'};assert(not utils.proceedTipPage(tip),'A plain loading page still gets no tap')",
             "done=true end"));
         script(assets,List.of("utilities"),String.join("\n",
             "data={};run={data={['分支选择']='1',['危险等级']='0',['难度不足']='0'}};utils.carClubAtOrigin=true",
@@ -295,13 +316,62 @@ final class OrchestrationRecoveryChecks {
             "data={};run={data={['分支选择']='1',['危险等级']='0',['难度不足']='0'}};utils.carClubAtOrigin=true",
             "function print()end;function sleep()end;function toast()end;function keepCapture()end",
             "local taps,reads=0,0",
-            "function tap()taps=taps+1 end;function swipe()end;function touchDown()end;function touchMove()end;function touchUp()end",
+            "function tap()taps=taps+1 end;function swipe()end;function keyPress()end;function touchDown()end;function touchMove()end;function touchUp()end",
             "local cards={scene='unknown',words={{text='速度纪元4',x=200,y=240},{text='任务',x=200,y=280},",
             "{text='1983/7888',x=200,y=350},{text='特别任务',x=200,y=420},{text='0/60',x=200,y=470}}}",
             "local panel={scene='unknown',words={{text='危险等级',x=520,y=654},{text='车联包',x=900,y=560}}}",
             "function _soloEventUi()reads=reads+1;if reads==2 then return panel end;return cards end",
             "function test()assert(utils.spChoose()==-1,'A panel whose Start button was missed is not a main panel');",
             "assert(taps==1,'Only the card is tapped, never the bottom bar');done=true end"));
+        script(assets,List.of("utilities"),String.join("\n",
+            "data={};run={data={['分支选择']='2',['危险等级']='0',['难度不足']='0'}};utils.carClubAtOrigin=true",
+            "function print()end;function sleep()end;function toast()end;function keepCapture()end",
+            "local taps,tx,reads=0,0,0",
+            "function tap(x,y)taps=taps+1;tx=x end;function swipe()end;function keyPress()end;function touchDown()end;function touchMove()end;function touchUp()end",
+            "local cards={scene='unknown',words={{text='速度纪元2',x=200,y=240},{text='任务',x=200,y=280},",
+            "{text='2388/2388',x=200,y=350},{text='0/54',x=200,y=470}}}",
+            "local panel={scene='unknown',words={{text='赢取额外车联包',x=800,y=150},{text='开始任务',x=1043,y=604}}}",
+            "function _soloEventUi()reads=reads+1;if reads==1 then return cards end;return panel end",
+            "function _textWords()return {{text='开始任务',x=1043,y=604}}end",
+            "function test()assert(utils.spChoose()==1,'A card without the special-task label still opens its special branch');",
+            "assert(taps==4 and tx==1043,'The unfinished special task wins over the finished main line');done=true end"));
+        script(assets,List.of("utilities"),String.join("\n",
+            "data={};run={data={['分支选择']='2',['危险等级']='0',['难度不足']='0'}};utils.carClubAtOrigin=true",
+            "function print()end;function sleep()end;function toast()end;function keepCapture()end",
+            "local taps,reads=0,0",
+            "function tap()taps=taps+1 end;function swipe()end;function keyPress()end;function touchDown()end;function touchMove()end;function touchUp()end",
+            "local cards={scene='unknown',words={{text='速度纪元2',x=200,y=260},{text='任务',x=200,y=300},",
+            "{text='SP2388/2388',x=272,y=367},{text='特別任务',x=169,y=501},{text='尽0/54',x=218,y=535}}}",
+            "local panel={scene='unknown',words={{text='赢取比赛',x=200,y=270},{text='危险等级',x=95,y=430},{text='继续',x=1156,y=640}}}",
+            "function _soloEventUi()reads=reads+1;if reads==1 then return cards end;return panel end",
+            "function _textWords()return {{text='继续',x=1156,y=640}}end",
+            "function test()assert(utils.spChoose()==1,'Progress digits read together with icons still open the chapter');",
+            "assert(taps==4,'The special panel starts even without the Start-task label');done=true end"));
+        script(assets,List.of("utilities"),String.join("\n",
+            "data={};run={data={['分支选择']='2',['危险等级']='0',['难度不足']='0'}};utils.carClubAtOrigin=true",
+            "function print()end;function sleep()end;function toast()end;function keepCapture()end",
+            "local taps,reads=0,0",
+            "function tap()taps=taps+1 end;function swipe()end;function keyPress()end;function touchDown()end;function touchMove()end;function touchUp()end",
+            "utils.carClubToOrigin=function() utils.carClubAtOrigin=true end",
+            "local a={scene='unknown',words={{text='速度纪元2',x=200,y=240},{text='任务',x=200,y=280},",
+            "{text='7000/7888',x=200,y=350},{text='特别任务',x=200,y=420},{text='60/60',x=200,y=470}}}",
+            "local b={scene='unknown',words={{text='速度纪元3',x=600,y=240},{text='任务',x=600,y=280},",
+            "{text='7000/7888',x=600,y=350},{text='特别任务',x=600,y=420},{text='60/60',x=600,y=470}}}",
+            "local panel={scene='unknown',words={{text='危险等级',x=575,y=393}}}",
+            "function _soloEventUi()reads=reads+1;if reads<=3 then return reads==1 and a or b end;",
+            "if reads==4 then return a end;return panel end",
+            "function test()assert(utils.spChoose()==1,'The main line only runs after the strip shows no special task left');",
+            "assert(data['车联等级']==1 and taps==5,'Card, difficulty row and the three start taps');done=true end"));
+        script(assets,List.of("utilities"),String.join("\n",
+            "data={};run={data={['分支选择']='2',['危险等级']='0',['难度不足']='0'}};utils.carClubAtOrigin=true",
+            "function print()end;function sleep()end;function toast()end;function keepCapture()end",
+            "local taps=0",
+            "function tap()taps=taps+1 end;function swipe()end;function keyPress()end;function touchDown()end;function touchMove()end;function touchUp()end",
+            "utils.carClubToOrigin=function() utils.carClubAtOrigin=true end",
+            "local cards={scene='unknown',words={{text='速度纪元1',x=200,y=240},{text='任务',x=200,y=280}}}",
+            "function _soloEventUi()return cards end",
+            "function test()assert(utils.spChoose()==-1,'A fully cleared chapter card is never opened');",
+            "assert(taps==0,'A cleared card has no progress left, so it is not even tapped');done=true end"));
         script(assets,List.of("utilities"),String.join("\n",
             "data={};run={data={['分支选择']='1',['危险等级']='0',['难度不足']='0'}};utils.carClubAtOrigin=true",
             "function print()end;function sleep()end;function toast()end;function keepCapture()end",
@@ -314,6 +384,27 @@ final class OrchestrationRecoveryChecks {
             "function _soloEventUi()reads=reads+1;if reads==1 then return cards end;return hazard end",
             "function test()assert(utils.spChoose()=='noTicket','A hazard dialog found while reading the panel is a ticket problem');",
             "assert(taps==1,'The ticket problem is reported without pressing Start');done=true end"));
+        script(assets,List.of("utilities"),String.join("\n",
+            "data={};run={data={['分支选择']='2',['危险等级']='2',['难度不足']='1'}};utils.carClubAtOrigin=true",
+            "function print()end;function sleep()end;function toast()end;function keepCapture()end",
+            "function tap()error('A score-short race page must not be tapped')end;function swipe()end;function keyPress()end;function touchDown()end;function touchMove()end;function touchUp()end",
+            "function _soloEventUi()return {scene='unknown',text='AELLA-60 性能分不足，无法参加当前赛事',words={}}end",
+            "function test()assert(utils.spChoose()=='noScore','A score-short race page is handed back for a level drop');",
+            "assert(data['信息']=='车辆性能分不足，按难度不足配置降档','The drop is announced to the user');done=true end"));
+        script(assets,List.of("utilities"),String.join("\n",
+            "data={['车联等级']=3};run={data={['分支选择']='2',['危险等级']='2',['难度不足']='1'}};utils.carClubAtOrigin=false",
+            "function print()end;function sleep()end;function toast()end;function keepCapture()end",
+            "local taps={}",
+            "function tap(x,y)taps[#taps+1]={x,y} end;function swipe()end;function keyPress()end;function touchDown()end;function touchMove()end;function touchUp()end",
+            "utils.carClubToOrigin=function() error('A dropped level must be re-picked on the open panel') end",
+            "local panel={scene='unknown',words={{text='危险等级',x=575,y=393},{text='2',x=690,y=393},",
+            "{text='危险等级',x=575,y=571},{text='3',x=690,y=571}}}",
+            "function _soloEventUi()return panel end",
+            "function _textWords()return {{text='继续',x=1156,y=640}}end",
+            "function test()assert(utils.spChoose(2)==1,'A dropped level is re-picked on the open panel');",
+            "assert(taps[1][1]==719-393 and taps[1][2]==575,'The lower allowed row is tapped right away');",
+            "assert(data['车联等级']==2,'The re-picked level is remembered');",
+            "assert(data['信息']=='性能分不足，刷主线（难度2）','The drop reason is shown to the user');done=true end"));
         script(assets,List.of("utilities"),String.join("\n",
             "data={};run={data={['分支选择']='1',['危险等级']='0',['难度不足']='0'}};utils.carClubAtOrigin=true",
             "function print()end;function sleep()end;function toast()end;function keepCapture()end",

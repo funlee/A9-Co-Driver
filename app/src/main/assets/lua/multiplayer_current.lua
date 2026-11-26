@@ -349,7 +349,8 @@ function currentMultiplayer.run(resumingTutorial)
     local eventPressedAt=nil;local carPressedAt=nil;local selectedCar=nil
     local deferredCarPrompt=false
     local unverifiedCarBackAt=nil;local unverifiedCarBacks=0
-    local returnHomeAt=nil;local emptyCars={};local emptyDetailFrames=0;local emptyDetailFrame=nil
+    local returnHomeAt=nil;local seriesBacks=0;local homeFallbackAt=nil
+    local emptyCars={};local emptyDetailFrames=0;local emptyDetailFrame=nil
     local originRetries=0;local alignAttempts=0;local alignKey=nil;local alignFrames=0;local alignFrame=nil;local alignSwipeFrame=nil;local verifiedKey=nil
     local position={offset=0}
     local pageOffset,pageLeft,pageFrame
@@ -658,6 +659,12 @@ function currentMultiplayer.run(resumingTutorial)
       elseif scene=='rewardClaim' then
         verifiedLeague=nil
         status('领取联赛晋级奖励');if press(screen,'领取',530) then changed=tickCount() end
+      elseif not started and has(screen.text,'联赛奖励') and word(screen,'领取',530) then
+        -- 赛季结算奖励页（联赛奖励）：右下角领取，需在右上角关闭分支之前处理。
+        local leagueClaim=word(screen,'领取',530)
+        status('领取赛季结算奖励');click(leagueClaim.x,leagueClaim.y);sleep(1500);changed=tickCount()
+      elseif not started and has(screen.text,'点击任意位置') then
+        status('关闭结算奖励展示');click(640,550);sleep(1200);changed=tickCount()
       elseif scene=='promo' then
         local closed=false
         for _,w in ipairs(screen.words or {}) do
@@ -698,21 +705,38 @@ function currentMultiplayer.run(resumingTutorial)
       elseif (scene=='unknown' or scene=='result') and (scene=='result' or has(screen.text,'你的排名')) and word(screen,'继续',530) then
         resultSeen=raced;if raced then _sessionRaceResult(screen.finalRank or 0) end;status(settlementStatus(screen));postPress(screen,'继续',530,'rankResult')
       elseif not seriesSelected and (scene=='event' and not has(screen.text,series) or scene=='cars' or scene=='car') then
-        if not returnHomeAt then
-          returnHomeAt=tickCount()
+        -- Tapping 多人游戏 restores the last multiplayer sub-page. When that page is
+        -- the other series' event or garage, stepping back reaches the series carousel;
+        -- jumping straight home only repeats the same wrong page forever.
+        if not returnHomeAt then returnHomeAt=tickCount() end
+        if seriesBacks<3 then
+          seriesBacks=seriesBacks+1
+          status('当前不是目标系列，返回系列列表')
+          if has(screen.text,other) or scene=='cars' or scene=='car' then click(38,29) else keyPress('back') end
+          sleep(1500)
+        elseif homeFallbackAt then
+          if tickCount()-returnHomeAt>45000 then error('返回主界面后未确认切页，保留当前任务') end
+          data['信息']='已点击返回主界面，等待切页';sleep(500)
+        else
+          homeFallbackAt=tickCount()
           if screen.homeButton then click(screen.homeButton.x,screen.homeButton.y) else click(1250,30) end
           sleep(1500)
-        elseif tickCount()-returnHomeAt>30000 then
-          error('返回主界面后未确认切页，保留当前任务')
-        else data['信息']='已点击返回主界面，等待切页';sleep(500) end
+        end
       elseif scene=='exitGame' then
         utils.backToMain()
       elseif scene=='home' then
-        returnHomeAt=nil
+        returnHomeAt=nil;seriesBacks=0;homeFallbackAt=nil
         -- OCR can split 多人/游戏 into separate lines and omit 人. Both labels are in the same bottom tab.
         if not press(screen,'多人',580) and not press(screen,'多人游戏',580) then press(screen,'游戏',580) end
       elseif scene=='series' then
-        if seriesPressedAt then
+        -- 大师系列赛周结算到期时，系列卡片会被「赛季结算·奖励已就绪」占据；
+        -- 不领取奖励就无法进入该系列，需先点卡片上的领取再进系列。
+        local settlementClaim=word(screen,'领取',400)
+        if settlementClaim and not seriesPressedAt and
+            (has(screen.text,'奖励已就绪') or has(screen.text,'赛季结算')) then
+          status('领取赛季结算奖励')
+          click(settlementClaim.x,settlementClaim.y);sleep(1500);changed=tickCount()
+        elseif seriesPressedAt then
           if tickCount()-seriesPressedAt>30000 then error('点击赛事入口后未能确认切页，保留当前任务') end
         else
           -- The tabs can expose both series labels while the cards are still sliding.
