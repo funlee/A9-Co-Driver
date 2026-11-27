@@ -7,17 +7,13 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.Configuration;
 import android.graphics.Path;
-import android.graphics.PixelFormat;
 import android.graphics.Rect;
-import android.graphics.drawable.GradientDrawable;
 import android.os.*;
 import android.provider.Settings;
-import android.view.Gravity;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityWindowInfo;
-import android.widget.ImageButton;
 import java.util.*;
 import java.util.concurrent.*;
 import dev.funlee.a9.core.RouteEngine;
@@ -46,7 +42,7 @@ public final class TouchService extends AccessibilityService implements RouteEng
     private TaskControlMenu controlMenu;
     private AlertDialog taskFailureDialog;
     private String failureGamePackage="";
-    private ImageButton controlButton;
+    private TaskControlButton controlButton;
     private volatile GameActivityHint activityHint;
     private final Runnable refreshControlButton=this::updateControlButton;
     private final AccessibilityButtonController.AccessibilityButtonCallback shortcutCallback=
@@ -106,29 +102,14 @@ public final class TouchService extends AccessibilityService implements RouteEng
             return;
         }
         if(controlButton!=null)return;
-        ImageButton button=new ImageButton(this);
-        button.setImageResource(R.drawable.ic_steering_mark);
-        button.setContentDescription("A9 任务控制");
-        button.setPadding(dp(3),dp(3),dp(3),dp(3));
-        GradientDrawable background=new GradientDrawable();
-        background.setShape(GradientDrawable.OVAL);
-        background.setColor(0xeeecf6f3);
-        background.setStroke(dp(1),0xff087f73);
-        button.setBackground(background);
+        TaskControlButton button=new TaskControlButton(this);
         button.setOnClickListener(v->toggleTaskControls());
-        WindowManager.LayoutParams params=new WindowManager.LayoutParams(dp(32),dp(32),
-                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-                PixelFormat.TRANSLUCENT);
-        params.gravity=Gravity.RIGHT|Gravity.CENTER_VERTICAL;
-        params.x=dp(8);
-        params.setTitle("A9 游戏控制按钮");
         try{
-            getSystemService(WindowManager.class).addView(button,params);
+            button.show();
             controlButton=button;
             SessionState.hint(SessionState.hud.isEmpty()?SessionState.status:SessionState.hud);
         }catch(WindowManager.BadTokenException|SecurityException e){
-            SessionState.log("无法显示右侧任务控制按钮："+e.getMessage());
+            SessionState.log("无法显示任务控制按钮："+e.getMessage());
         }
     }
     private void removeControlButton(){
@@ -136,7 +117,6 @@ public final class TouchService extends AccessibilityService implements RouteEng
         getSystemService(WindowManager.class).removeViewImmediate(controlButton);
         controlButton=null;
     }
-    private int dp(int value){return Math.round(getResources().getDisplayMetrics().density*value);}
     private void openTaskControls(){
         if(activityHint!=null)activityHint.clear();
         TaskControlMenu menu=new TaskControlMenu(this,SessionState.inspecting,SessionState.paused,

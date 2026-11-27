@@ -155,7 +155,7 @@ public final class TaskStats {
             "\n系列赛前三率："+rate+" · 路程："+progress+"%"+
             "\n当前地图："+map+
             "\n"+overlayRaceCounts()+
-            "\n"+overlayRunCounts();
+            "\n"+overlayRunCounts()+" · 异常："+runFailures;
     }
     /** Key race statistics displayed while the game is on track. */
     public synchronized String overlayFullText(){
@@ -173,7 +173,7 @@ public final class TaskStats {
     private String overlayRunCounts(){
         long seconds=elapsed/1000;
         return "运行："+String.format(Locale.ROOT,"%02d:%02d:%02d",seconds/3600,seconds/60%60,seconds%60)+
-            " · 重启："+restarts+" · 异常："+runFailures;
+            " · 重启："+restarts;
     }
     public synchronized String panel(String phase){
         String first=phase==null?"":phase.split("\\n",2)[0];

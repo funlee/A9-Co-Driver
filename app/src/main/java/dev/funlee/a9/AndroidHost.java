@@ -623,7 +623,6 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         try {
             task=recognizer.process(InputImage.fromBitmap(upright,0));Text full=Tasks.await(task,12,TimeUnit.SECONDS);
             checkAccountText(full.getText());
-            String scene=solo?DailyEventUi.classifySolo(full.getText()):DailyEventUi.classify(full.getText());
             Map<String,Object> out=new LinkedHashMap<>();
             out.put("frameId",capture.frameId());out.put("text",full.getText());List<Object> words=new ArrayList<>();int[] later=null;
             for(Text.TextBlock block:full.getTextBlocks())for(Text.Line line:block.getLines()){
@@ -631,6 +630,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 words.add(Map.of("text",line.getText(),"x",b.centerX(),"y",b.centerY()));
                 if(VehicleUnlockGuard.laterLabel(line.getText(),b.left,b.top,b.right,b.bottom))later=new int[]{b.left,b.top,b.right,b.bottom};
             }
+            String scene=solo?DailyEventUi.classifySolo(full.getText(),words):DailyEventUi.classify(full.getText());
             boolean trial=VehicleUnlockGuard.trialStart(full.getText(),words);
             if(trial&&scene.equals("lockedCar"))scene="car";
             if(DailyEventUi.seasonPassUnlock(full.getText())){

@@ -43,6 +43,15 @@ final class DailyEventChecks {
                 VehicleUnlockGuard.trialStart(pending+" 免费试驾",List.of(Map.of("text","解锁车辆","x",1100,"y",650))))
             throw new AssertionError("A game-provided trial needs an actual Start action");
         String attributes="性能分 最大速度 加速 操控性 氮气";
+        String obscured="最大速度 (@ 加速 (③操控性 升級 X10/10 3號S 开 关 9A10/10+ 开始令2";
+        String jaguar="@加速 魚操控性 ②無气 升级 383.0 75.19 区9/9 开 TOUCHORIVE 性分 9A10/10+ 开始令2";
+        var start=List.of(Map.of("text","开始令2","x",1100,"y",650));
+        if(!DailyEventUi.classifySolo(obscured,start).equals("car")||
+                !DailyEventUi.classifySolo(jaguar,start).equals("car")||
+                !DailyEventUi.classifySolo(obscured,List.of(Map.of("text","开始","x",200,"y",300))).equals("unknown")||
+                !DailyEventUi.classifySolo(obscured+" 立即购买",start).equals("unknown")||
+                !DailyEventUi.classifySolo(obscured+" 获取这把车钥匙以解锁它! 获取钥匙! 性能分",start).equals("lockedCar"))
+            throw new AssertionError("A partly obscured solo detail needs the race button and must respect blocking scenes");
         if(!DailyEventUi.classifySolo(attributes+" 最高阶段 仓库 你已达到最高等级").equals("vehicleUpgrade")||
                 !DailyEventUi.classifySolo(attributes+" TOUCHDRIVE 升级 开始 7/8").equals("car"))
             throw new AssertionError("Vehicle attributes upgrade and the racing car detail are distinct");

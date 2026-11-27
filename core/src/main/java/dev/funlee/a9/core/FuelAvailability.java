@@ -5,7 +5,10 @@ import java.util.regex.Pattern;
 
 /** Empty-fuel badges in the aligned first six garage slots; never authorizes a tap. */
 public final class FuelAvailability {
-    private static final Pattern DETAIL_COUNTER=Pattern.compile("(?<![0-9])(10|[0-9])\\s*[/／]\\s*(10|[1-9])(?![0-9])");
+    // Either "10" may be split by OCR. Keep spaces between separate counters
+    // intact: in "1/1 0/3", the zero belongs to the second counter.
+    private static final Pattern DETAIL_COUNTER=Pattern.compile(
+            "(?<![0-9])(1\\s*0|[0-9])\\s*[/／]\\s*(1\\s*0(?!\\s*[/／])|[1-9])(?![0-9])");
 
     /** Upright vehicle-detail fuel counter, excluding tickets, blueprints and performance. */
     public static int detail(List<?> words) {
@@ -21,13 +24,14 @@ public final class FuelAvailability {
     /** Read an enlarged crop containing only the lower fuel counter. */
     public static int focusedDetail(String text){
         Set<Integer> values=new HashSet<>();
-        addCounters(text.replaceAll("\\s",""),values);
+        addCounters(text,values);
         return values.size()==1?values.iterator().next():-1;
     }
     private static void addCounters(String text,Set<Integer> values){
         var m=DETAIL_COUNTER.matcher(text);
         while(m.find()){
-            int fuel=Integer.parseInt(m.group(1)),capacity=Integer.parseInt(m.group(2));
+            int fuel=Integer.parseInt(m.group(1).replaceAll("\\s",""));
+            int capacity=Integer.parseInt(m.group(2).replaceAll("\\s",""));
             if(fuel<=capacity)values.add(fuel);
         }
     }

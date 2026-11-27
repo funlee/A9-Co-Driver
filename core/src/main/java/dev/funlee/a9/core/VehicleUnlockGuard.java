@@ -37,7 +37,9 @@ public final class VehicleUnlockGuard {
     }
     /** Require the trial offer and the race action on the same detail frame. */
     public static boolean trialStart(String text,List<?> words){
-        if(!normalize(text).contains("免费试驾"))return false;
+        return normalize(text).contains("免费试驾")&&hasRaceStart(words);
+    }
+    static boolean hasRaceStart(List<?> words){
         for(Object item:words){
             Map<?,?> word=(Map<?,?>)item;
             if(normalize((String)word.get("text")).startsWith("开始")&&

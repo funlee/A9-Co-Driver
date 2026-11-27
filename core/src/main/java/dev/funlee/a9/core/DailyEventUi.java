@@ -120,6 +120,17 @@ public final class DailyEventUi {
         return "unknown";
     }
 
+    public static String classifySolo(String text,List<?> words) {
+        String scene=classifySolo(text);
+        if(!scene.equals("unknown"))return scene;
+        // An activity hint can hide TouchDrive, and OCR can merge the performance
+        // heading with the score. The stat panel and the race button remain visible.
+        String t=VehicleUnlockGuard.normalize(text);
+        if(t.contains("升级")&&t.contains("加速")&&t.contains("操控性")&&
+                !t.contains("立即购买")&&!t.contains("立即入手")&&VehicleUnlockGuard.hasRaceStart(words))return "car";
+        return scene;
+    }
+
     /** An expired daily card can still open its reward tabs without offering a race. */
     public static boolean rewardOnly(String text, List<?> words, PixelFrame frame) {
         String normalized=MapMatcher.normalize(text);

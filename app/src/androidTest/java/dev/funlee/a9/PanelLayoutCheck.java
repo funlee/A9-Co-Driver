@@ -65,8 +65,8 @@ final class PanelLayoutCheck {
                     if(row.getTextSize()!=fontSize||row.getLayout().getEllipsisCount(0)!=0)
                         throw new AssertionError("Race row shrank or was truncated: "+row.getText());
                 }
-                if(!((TextView)raceRows.getChildAt(4)).getText().toString().endsWith("重启：0 · 异常：7"))
-                    throw new AssertionError("Race panel omitted the per-run anomaly count");
+                if(!((TextView)raceRows.getChildAt(4)).getText().toString().endsWith("重启：0"))
+                    throw new AssertionError("Race panel must end with the restart count");
                 java.util.ArrayList<View> earnings=new java.util.ArrayList<>();panel.findViewsWithText(earnings,"金币",View.FIND_VIEWS_WITH_TEXT);
                 if(!earnings.isEmpty())throw new AssertionError("Race panel must not show earnings rows");
                 Bitmap race=Bitmap.createBitmap(raceWidth,raceHeight,Bitmap.Config.ARGB_8888);panel.draw(new Canvas(race));
@@ -74,7 +74,7 @@ final class PanelLayoutCheck {
             } catch(Throwable e){error[0]=e;}
         });
         if(error[0]!=null)throw new AssertionError("Panel render failed",error[0]);
-        report.putString("result","PASS: full/compact panels rendered across startup/rewards/recovery/selection/matching/race/pause/result; race rows use one size without truncation and show anomalies; no game input");
+        report.putString("result","PASS: full/compact panels rendered across startup/rewards/recovery/selection/matching/race/pause/result; race rows use one size without truncation and omit the anomaly metric; no game input");
     }
     private static Button button(View view,String label){
         if(view instanceof Button&&label.contentEquals(((Button)view).getText()))return (Button)view;

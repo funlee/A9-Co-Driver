@@ -50,14 +50,15 @@ final class RewardChecks {
         check(!mixed.overlayFullText().contains("本局：")&&!mixed.overlayFullText().contains("收益覆盖")&&!mixed.overlayFullText().contains("上局")&&!mixed.overlayFullText().contains("累计指令"),"Race overlay omits removed detail rows");
         check(!mixed.overlayFullText().contains("金币")&&!mixed.overlayFullText().contains("经验值"),"Race overlay omits earnings entirely");
         check(!mixed.compact().contains("金币")&&!mixed.panel("").contains("金币"),"All panels omit coin earnings");
-        check(new TaskStats().overlayFullText().endsWith("重启：0 · 异常：0"),"A fresh task starts with zero anomalies");
+        check(new TaskStats().overlayText("").endsWith("重启：0 · 异常：0"),"A fresh task starts with zero anomalies");
         for(int i=0;i<7;i++)mixed.recordFailure();
         mixed.interrupted();
         mixed.recovered();
         mixed.project("杯赛");
-        check(mixed.overlayFullText().endsWith("重启：1 · 异常：7"),"Project changes and automatic recovery keep the uncapped per-run anomaly count");
+        check(mixed.overlayText("").endsWith("重启：1 · 异常：7"),"Project changes and automatic recovery keep the uncapped per-run anomaly count");
+        check(mixed.overlayFullText().endsWith("重启：1")&&!mixed.overlayFullText().contains("异常"),"Race panel shows runtime and restarts after failures");
         TaskStats resumed=TaskStats.restore(mixed.snapshot());
-        check(resumed.finished()==7&&resumed.overlayFullText().endsWith("重启：1 · 异常：0"),"A manual resume restores race progress and starts a new anomaly count");
+        check(resumed.finished()==7&&resumed.overlayText("").endsWith("重启：1 · 异常：0"),"A manual resume restores race progress and starts a new anomaly count");
         check(resumed.overlayFullText().contains(raceCounts),"Resumed tasks include previously saved club races in the season count");
         // A pre-removal checkpoint with earnings still restores: legacy keys are ignored.
         Map<String,Object> oldSaved=new LinkedHashMap<>(s.snapshot());oldSaved.put("coins",4800L);oldSaved.put("fame",189L);oldSaved.put("coinRaces",1);oldSaved.put("fameRaces",1);oldSaved.put("lastCoins",4800L);oldSaved.put("lastFame",189L);

@@ -137,6 +137,15 @@ final class OrchestrationRecoveryChecks {
         }
         if(FuelAvailability.focusedDetail("1 0／\n1 0")!=10||FuelAvailability.focusedDetail("99/10")!=-1)
             throw new AssertionError("Isolated fuel counter may split digits around the slash");
+        for(String split:List.of("改10/1 0","1 0/10","1 0／1 0")){
+            if(FuelAvailability.detail(List.of(Map.of("text",split,"x",562,"y",665)))!=10)
+                throw new AssertionError("Full-screen OCR split the ten-slot fuel counter: "+split);
+        }
+        if(FuelAvailability.focusedDetail("1/1 0/3")!=-1)
+            throw new AssertionError("Conflicting counters must remain unknown");
+        if(FuelAvailability.detail(List.of(Map.of("text","区9/9","x",540,"y",665),
+                Map.of("text","9A10/10+","x",1130,"y",183)))!=9)
+            throw new AssertionError("Nine fuel must be read independently of the ten event tickets above it");
         for(Map<String,Object> w:List.of(Map.<String,Object>of("text","0/10","x",1150,"y",183),Map.<String,Object>of("text","0/3","x",300,"y",300),Map.<String,Object>of("text","0/30","x",540,"y",665),Map.<String,Object>of("text","4/3","x",540,"y",665))){
             if(FuelAvailability.detail(List.of(w))!=-1)throw new AssertionError("Non-fuel ratio accepted");
         }
