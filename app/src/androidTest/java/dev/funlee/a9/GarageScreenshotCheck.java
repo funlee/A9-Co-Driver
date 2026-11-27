@@ -93,8 +93,8 @@ public final class GarageScreenshotCheck extends Instrumentation {
                 String name=scene.equals("cars")?arguments.getString("carsFrame","multiplayer-cars.png"):"multiplayer-car.png";
                 Bitmap side;
                 if(solo&&scene.equals("car")){
-                    FailureScreenshot.Entry entry=FailureScreenshot.read(getTargetContext());
-                    side=entry==null?null:entry.image;
+                    List<FailureScreenshot.Entry> entries=FailureScreenshot.readHistory(getTargetContext());
+                    side=entries.isEmpty()?null:FailureScreenshot.readImage(entries.get(0));
                 }else side=BitmapFactory.decodeFile(new File(getTargetContext().getFilesDir(),"runtime/"+name).getPath());
                 if(side==null)throw new AssertionError("Missing retained "+scene+" frame");
                 if(side.getWidth()==1280){Matrix m=new Matrix();m.postRotate(90);Bitmap normalized=Bitmap.createBitmap(side,0,0,side.getWidth(),side.getHeight(),m,false);side.recycle();side=normalized;}

@@ -54,10 +54,14 @@ public final class CaptureSession implements AutoCloseable {
             if(d!=null){d.getRealMetrics(m);resize(m.widthPixels,m.heightPixels);}
         }
     };
-    @SuppressWarnings("deprecation") static DisplayMetrics requireSupportedDisplay(Context context) {
-        loadRiskAccepted(context);
+    @SuppressWarnings("deprecation") static DisplayMetrics displayMetrics(Context context) {
         DisplayMetrics metrics=new DisplayMetrics();
         ((WindowManager)context.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRealMetrics(metrics);
+        return metrics;
+    }
+    static DisplayMetrics requireSupportedDisplay(Context context) {
+        loadRiskAccepted(context);
+        DisplayMetrics metrics=displayMetrics(context);
         requireSupportedSize(metrics.widthPixels,metrics.heightPixels);
         return metrics;
     }

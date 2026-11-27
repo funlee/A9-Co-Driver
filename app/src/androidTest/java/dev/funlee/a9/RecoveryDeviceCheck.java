@@ -92,36 +92,70 @@ public final class RecoveryDeviceCheck extends Instrumentation {
             @Override public File getFilesDir(){return directory;}
         };
         try{
-            if(FailureScreenshot.read(context)!=null)throw new AssertionError("Expected empty record");
-            byte[] oldReason="旧版异常".getBytes(java.nio.charset.StandardCharsets.UTF_8);
-            try(java.io.DataOutputStream out=new java.io.DataOutputStream(
-                    new java.io.FileOutputStream(new File(directory,"last-failure-v1")))){
-                out.writeLong(1234);out.writeInt(oldReason.length);out.write(oldReason);out.writeBoolean(false);
+            if (!FailureScreenshot.readHistory(context).isEmpty()) throw new AssertionError("Expected empty history");
+            File legacy = new File(directory, "last-failure-v1");
+            byte[] oldReason = "旧版异常".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            try (java.io.DataOutputStream out = new java.io.DataOutputStream(new java.io.FileOutputStream(legacy))) {
+                out.writeLong(1234);
+                out.writeInt(oldReason.length);
+                out.write(oldReason);
+                out.writeBoolean(false);
             }
-            FailureScreenshot.Entry old=FailureScreenshot.read(context);
-            if(old.time!=1234||!old.reason.equals("旧版异常")||!old.version.isEmpty()||old.image!=null)
-                throw new AssertionError("Older records must keep their original reason and unknown version");
-            String version=AppVersion.name(context);
-            if(version.isEmpty())throw new AssertionError("Expected an installed app version");
-            Bitmap image=Bitmap.createBitmap(16,9,Bitmap.Config.ARGB_8888);image.eraseColor(0xffcc3311);
-            java.util.concurrent.CompletableFuture<Boolean> saved=new java.util.concurrent.CompletableFuture<>();
-            FailureScreenshot.save(context,image,"恢复时未确认菜单",saved::complete);
-            if(!saved.get(5,TimeUnit.SECONDS))throw new AssertionError("Missing screenshot");
-            FailureScreenshot.Entry entry=FailureScreenshot.read(context);
-            if(entry.image.getPixel(3,3)!=0xffcc3311 || !entry.reason.equals("恢复时未确认菜单") ||
-                    entry.time<=0 || !entry.version.equals(version))
-                throw new AssertionError("Screenshot, time, reason and app version must belong to the same failure");
-            entry.image.recycle();
-            java.util.concurrent.CompletableFuture<Boolean> missing=new java.util.concurrent.CompletableFuture<>();
-            FailureScreenshot.save(context,null,"截屏授权已结束",missing::complete);
-            if(missing.get(5,TimeUnit.SECONDS))throw new AssertionError("Unexpected image");
-            entry=FailureScreenshot.read(context);
-            if(entry.image!=null||!entry.reason.equals("截屏授权已结束")||!entry.version.equals(version))
-                throw new AssertionError("A failure without a screenshot must still record its version");
-            report.putString("result","PASS: legacy record and versioned failures with or without a screenshot");
-        }finally{
-            File[] files=directory.listFiles();if(files!=null)for(File f:files)f.delete();
-            directory.delete();
+            FailureScreenshot.Entry old = FailureScreenshot.readHistory(context).get(0);
+            if (old.time != 1234 || !old.reason.equals("旧版异常") || !old.version.isEmpty() ||
+                    !old.androidVersion.isEmpty() || old.width != 0 || old.height != 0 || old.hasImage)
+                throw new AssertionError("Older records must keep their reason and leave unavailable device information blank");
+
+            String version = AppVersion.name(context);
+            if (version.isEmpty()) throw new AssertionError("Expected an installed app version");
+            Bitmap image = Bitmap.createBitmap(16, 9, Bitmap.Config.ARGB_8888);
+            image.eraseColor(0xffcc3311);
+            java.util.concurrent.CompletableFuture<Boolean> saved = new java.util.concurrent.CompletableFuture<>();
+            FailureScreenshot.save(context, image, "恢复时未确认菜单", saved::complete);
+            if (!saved.get(5, TimeUnit.SECONDS)) throw new AssertionError("Missing screenshot");
+            List<FailureScreenshot.Entry> entries = FailureScreenshot.readHistory(context);
+            FailureScreenshot.Entry entry = entries.get(0);
+            android.util.DisplayMetrics display = CaptureSession.displayMetrics(context);
+            Bitmap decoded = FailureScreenshot.readImage(entry);
+            try {
+                if (decoded == null || decoded.getPixel(3, 3) != 0xffcc3311 || !entry.reason.equals("恢复时未确认菜单") ||
+                        entry.time <= 0 || !entry.version.equals(version) || !entry.androidVersion.equals(Build.VERSION.RELEASE) ||
+                        entry.width != display.widthPixels || entry.height != display.heightPixels)
+                    throw new AssertionError("Screenshot and device metadata must belong to the same failure");
+            } finally {
+                if (decoded != null) decoded.recycle();
+            }
+            if (entries.size() != 2 || entries.get(1).time != old.time)
+                throw new AssertionError("The latest record must be first and preserve the pre-upgrade record");
+
+            java.util.concurrent.CompletableFuture<Boolean> missing = new java.util.concurrent.CompletableFuture<>();
+            FailureScreenshot.save(context, null, "截屏授权已结束", missing::complete);
+            if (missing.get(5, TimeUnit.SECONDS)) throw new AssertionError("Unexpected image");
+            entry = FailureScreenshot.readHistory(context).get(0);
+            if (FailureScreenshot.readImage(entry) != null || !entry.reason.equals("截屏授权已结束") ||
+                    !entry.version.equals(version) || !entry.androidVersion.equals(Build.VERSION.RELEASE))
+                throw new AssertionError("A failure without a screenshot must still record its metadata");
+
+            java.util.concurrent.CompletableFuture<Boolean> last = new java.util.concurrent.CompletableFuture<>();
+            for (int i = 1; i <= 5; i++) {
+                FailureScreenshot.save(context, null, "异常 " + i, i == 5 ? last::complete : null);
+            }
+            last.get(5, TimeUnit.SECONDS);
+            entries = FailureScreenshot.readHistory(context);
+            if (entries.size() != 5 || legacy.exists())
+                throw new AssertionError("Expected exactly five retained records and the older records to expire");
+            for (int i = 0; i < entries.size(); i++) {
+                if (!entries.get(i).reason.equals("异常 " + (5 - i)))
+                    throw new AssertionError("History is not newest first: " + entries.get(i).reason);
+            }
+            if (new File(directory, "failure-history").list().length != 5)
+                throw new AssertionError("Expired records are still on disk");
+            report.putString("result", "PASS: legacy record, per-failure metadata, optional screenshot and newest five records");
+        } finally {
+            try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.walk(directory.toPath())) {
+                for (java.nio.file.Path file : files.sorted(java.util.Comparator.reverseOrder()).toArray(java.nio.file.Path[]::new))
+                    java.nio.file.Files.deleteIfExists(file);
+            }
         }
     }
     private void leagueDemotionReplay(Bundle report)throws Exception{

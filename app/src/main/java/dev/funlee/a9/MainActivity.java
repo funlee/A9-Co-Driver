@@ -726,47 +726,162 @@ public final class MainActivity extends Activity {
         permissionRow(permissions,"比赛统计悬浮窗","在游戏中显示比赛数据",()->Settings.canDrawOverlays(this),()->startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName()))));
         body.addView(permissions);
         LinearLayout diagnostics=settingsGroup("问题排查");
-        settingRow(diagnostics,"最近一次异常","查看版本、发生时间、原因和现场截图","",this::showFailureScreenshot);
         body.addView(diagnostics);
+        FailureScreenshot.loadHistory(getApplicationContext(), entries -> {
+            if (isFinishing() || isDestroyed() || diagnostics.getParent() != body) return;
+            if (entries == null) {
+                diagnostics.addView(label("无法读取异常记录", BODY));
+            } else if (entries.isEmpty()) {
+                diagnostics.addView(label("暂无异常记录", BODY));
+            } else {
+                for (int i = 0; i < entries.size(); i++) {
+                    FailureScreenshot.Entry entry = entries.get(i);
+                    int index = i;
+                    settingRow(diagnostics, failureTime(entry.time),
+                            entry.reason.isEmpty() ? "未记录异常原因" : entry.reason, "",
+                            () -> new FailureDetails(entries).show(index));
+                }
+            }
+        });
         TextView about=label(getString(R.string.app_name)+"  "+AppVersion.name(this)+" · 本地运行",DETAIL);about.setGravity(Gravity.CENTER);body.addView(about);
     }
-    private void showFailureScreenshot() {
-        FailureScreenshot.load(getApplicationContext(), entry -> {
-            Bitmap bitmap=entry==null?null:entry.image;
-            if (isFinishing() || isDestroyed() || tab != SETTINGS) {
-                if(bitmap!=null)bitmap.recycle();
-                return;
+
+    private String failureTime(long time) {
+        return new java.text.SimpleDateFormat("yyyy年M月d日 HH:mm:ss", Locale.SIMPLIFIED_CHINESE)
+                .format(new Date(time));
+    }
+
+    private final class FailureDetails {
+        private final List<FailureScreenshot.Entry> entries;
+        private final AlertDialog dialog;
+        private final LinearLayout preview = column();
+        private final FailureScrollView scroll = new FailureScrollView();
+        private final TextView position = label("", DETAIL);
+        private final Button previous = compactButton("上一条", () -> move(-1));
+        private final Button next = compactButton("下一条", () -> move(1));
+        private final ImageView image = new ImageView(MainActivity.this);
+        private int index;
+
+        FailureDetails(List<FailureScreenshot.Entry> entries) {
+            this.entries = entries;
+            LinearLayout content = column();
+            if (entries.size() > 1) {
+                LinearLayout controls = row();
+                controls.setGravity(Gravity.CENTER_VERTICAL);
+                controls.setPadding(dp(ROW_GAP), 0, dp(ROW_GAP), 0);
+                position.setGravity(Gravity.CENTER);
+                position.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
+                controls.addView(previous, new LinearLayout.LayoutParams(-2, -2));
+                controls.addView(position, new LinearLayout.LayoutParams(0, -2, 1));
+                controls.addView(next, new LinearLayout.LayoutParams(-2, -2));
+                content.addView(controls);
             }
-            AlertDialog.Builder dialog=new AlertDialog.Builder(this).setTitle("最近一次异常").setPositiveButton("关闭",null);
-            LinearLayout preview=column();
-            preview.setPadding(dp(DIALOG_GUTTER),dp(ROW_GAP),dp(DIALOG_GUTTER),dp(ROW_GAP));
-            String version=AppVersion.name(this);
-            preview.addView(label("当前程序版本 "+(version.isEmpty()?"未知":version),DETAIL));
-            if(entry==null){
-                preview.addView(label("暂无异常记录",BODY));
-                showDialog(dialog.setView(scroll(preview)).create());
-                return;
+            preview.setPadding(dp(DIALOG_GUTTER), dp(ROW_GAP), dp(DIALOG_GUTTER), dp(ROW_GAP));
+            image.setAdjustViewBounds(true);
+            image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+            image.setPadding(0, dp(SPACE_LARGE), 0, 0);
+            image.setContentDescription("异常现场截图");
+            scroll.addView(preview);
+            content.addView(scroll, new LinearLayout.LayoutParams(-1, -2));
+            dialog = new AlertDialog.Builder(MainActivity.this).setTitle("异常详情")
+                    .setView(content).setPositiveButton("关闭", null).create();
+            dialog.setOnDismissListener(ignored -> image.setImageDrawable(null));
+        }
+
+        void show(int start) {
+            showEntry(start);
+            showDialog(dialog);
+        }
+
+        private void move(int step) {
+            int target = index + step;
+            if (target >= 0 && target < entries.size()) showEntry(target);
+        }
+
+        private void showEntry(int selected) {
+            index = selected;
+            FailureScreenshot.Entry entry = entries.get(index);
+            position.setText((index + 1) + " / " + entries.size());
+            previous.setEnabled(index > 0);
+            previous.setAlpha(previous.isEnabled() ? 1f : .45f);
+            next.setEnabled(index < entries.size() - 1);
+            next.setAlpha(next.isEnabled() ? 1f : .45f);
+
+            preview.removeAllViews();
+            image.setImageDrawable(null);
+            String resolution = entry.width > 0 && entry.height > 0
+                    ? entry.width + " × " + entry.height : "未记录";
+            preview.addView(label("发生时间  " + failureTime(entry.time), DETAIL));
+            preview.addView(label("应用版本  " + (entry.version.isEmpty() ? "未记录" : entry.version), DETAIL));
+            preview.addView(label("设备分辨率  " + resolution, DETAIL));
+            preview.addView(label("Android 版本  " + (entry.androidVersion.isEmpty() ? "未记录" : entry.androidVersion), DETAIL));
+
+            TextView title = heading("异常原因", SECTION);
+            title.setPadding(0, dp(SPACE_LARGE), 0, dp(SPACE_SMALL));
+            preview.addView(title);
+            TextView reason = label(entry.reason.isEmpty() ? "未记录异常原因" : entry.reason, BODY);
+            reason.setTextColor(INK);
+            reason.setTextIsSelectable(true);
+            preview.addView(reason);
+            TextView screenshotStatus = label(entry.hasImage ? "正在加载现场截图…" : "本次未取得现场截图", DETAIL);
+            preview.addView(screenshotStatus);
+            scroll.scrollTo(0, 0);
+
+            if (entry.hasImage) FailureScreenshot.loadImage(entry, bitmap -> {
+                if (!dialog.isShowing() || !screenshotStatus.isAttachedToWindow()) {
+                    if (bitmap != null) bitmap.recycle();
+                    return;
+                }
+                if (bitmap == null) {
+                    screenshotStatus.setText("无法读取现场截图");
+                } else {
+                    preview.removeView(screenshotStatus);
+                    image.setImageBitmap(bitmap);
+                    preview.addView(image, new LinearLayout.LayoutParams(-1, -2));
+                }
+            });
+        }
+
+        private final class FailureScrollView extends ScrollView {
+            private final int touchSlop;
+            private float startX, startY;
+            private boolean horizontal, vertical;
+
+            FailureScrollView() {
+                super(MainActivity.this);
+                touchSlop = ViewConfiguration.get(MainActivity.this).getScaledTouchSlop();
+                setVerticalScrollBarEnabled(false);
             }
-            if(entry.time>0)preview.addView(label(java.text.DateFormat.getDateTimeInstance().format(new Date(entry.time)),DETAIL));
-            if(entry.time>0&&(entry.version.isEmpty()||!entry.version.equals(version))){
-                preview.addView(label("异常发生时版本 "+(entry.version.isEmpty()?"未记录":entry.version),DETAIL));
+
+            @Override public boolean dispatchTouchEvent(MotionEvent event) {
+                int action = event.getActionMasked();
+                if (action == MotionEvent.ACTION_DOWN) {
+                    startX = event.getX();
+                    startY = event.getY();
+                    horizontal = vertical = false;
+                    super.dispatchTouchEvent(event);
+                    return true;
+                }
+                float deltaX = event.getX() - startX;
+                float deltaY = event.getY() - startY;
+                if (action == MotionEvent.ACTION_MOVE && !horizontal && !vertical) {
+                    if (Math.abs(deltaX) > touchSlop && Math.abs(deltaX) > Math.abs(deltaY) * 1.25f) {
+                        horizontal = true;
+                        MotionEvent cancel = MotionEvent.obtain(event);
+                        cancel.setAction(MotionEvent.ACTION_CANCEL);
+                        super.dispatchTouchEvent(cancel);
+                        cancel.recycle();
+                    } else if (Math.abs(deltaY) > touchSlop) {
+                        vertical = true;
+                    }
+                }
+                if (!horizontal) return super.dispatchTouchEvent(event);
+                if (action == MotionEvent.ACTION_UP && Math.abs(deltaX) >= dp(48)) {
+                    move(deltaX < 0 ? 1 : -1);
+                }
+                return true;
             }
-            TextView heading=label("异常原因",SECTION);
-            heading.setPadding(0,dp(SPACE_LARGE),0,dp(SPACE_SMALL));
-            preview.addView(heading);
-            TextView reason=label(entry.reason.isEmpty()?"旧版只保留了截图，未保存对应原因。":entry.reason,BODY);
-            reason.setTextColor(INK);reason.setTextIsSelectable(true);preview.addView(reason);
-            ImageView image=new ImageView(this);
-            if(bitmap!=null){
-                image.setAdjustViewBounds(true);image.setScaleType(ImageView.ScaleType.FIT_CENTER);
-                image.setPadding(0,dp(SPACE_LARGE),0,0);image.setImageBitmap(bitmap);
-                image.setContentDescription("异常现场截图");
-                preview.addView(image,new LinearLayout.LayoutParams(-1,-2));
-            }else preview.addView(label("本次未取得现场截图",DETAIL));
-            AlertDialog details=dialog.setView(scroll(preview)).create();
-            details.setOnDismissListener(ignored -> image.setImageDrawable(null));
-            showDialog(details);
-        });
+        }
     }
     private void taskPreferences(){
         body.addView(label("更改用于新开始的任务；续跑沿用原任务设置。",DETAIL));
@@ -931,7 +1046,7 @@ public final class MainActivity extends Activity {
             Toast.makeText(this,"杯赛位置不支持负数，已自动改为正数",Toast.LENGTH_SHORT).show();
         }
     }
-    @Override protected void onResume(){super.onResume();if(store!=null&&body!=null&&tab==PREFERENCES)render();SessionState.listener=this::updateSession;SessionState.changed();}
+    @Override protected void onResume(){super.onResume();if(store!=null&&body!=null&&(tab==PREFERENCES||tab==SETTINGS))render();SessionState.listener=this::updateSession;SessionState.changed();}
     @Override protected void onSaveInstanceState(Bundle out){out.putInt("tab",tab);out.putBoolean("routeOnlyWithoutCode",routeOnlyWithoutCode);out.putBoolean("pendingInspect",pendingInspect);out.putBoolean("pendingResume",pendingResume);out.putString("routeSelectedTrack",routeSelectedTrack);out.putString("routeSelectedMap",routeSelectedMap);out.putStringArrayList("expandedTracks",new ArrayList<>(expandedTracks));out.putStringArrayList("collapsedFilteredTracks",new ArrayList<>(collapsedFilteredTracks));super.onSaveInstanceState(out);}
     @Override protected void onPause(){if(failureNotice!=null)failureNotice.dismiss();SessionState.listener=null;super.onPause();}
 }
