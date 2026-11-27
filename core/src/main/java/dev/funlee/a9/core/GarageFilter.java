@@ -39,6 +39,7 @@ public final class GarageFilter {
         if(layout18By9)result.put("layout18By9",true);
         result.put("descending",descending);
         locateBox(f,result,"owned",wide?236:layout18By9?225:207);
+        locateBox(f,result,"stars",wide?418:layout18By9?385:351);
         locateBox(f,result,"rank",wide?491:layout18By9?457:414);
         return result;
     }
@@ -55,6 +56,8 @@ public final class GarageFilter {
                 int height=top<0?0:y-top;
                 if(height>=14 && height<=54 && height>best){
                     int cy=(top+y)/2;
+                    // A clipped edge of a neighboring sort checkbox can enter this window.
+                    if(Math.abs(cy-expectedY)>32){top=-1;continue;}
                     double on=fraction(frame,x-5,cy-5,x+5,cy+5,0);
                     double off=fraction(frame,x-5,cy-5,x+5,cy+5,3);
                     if(on>.45||off>.85){

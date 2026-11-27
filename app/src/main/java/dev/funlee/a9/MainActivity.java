@@ -331,8 +331,28 @@ public final class MainActivity extends Activity {
                 EditText e=edit(data.optString(key));e.setContentDescription(title);if(eventPosition){e.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_SIGNED);e.setOnFocusChangeListener((v,hasFocus)->{if(!hasFocus)sanitizeCupPosition((EditText)v);});}fields.addView(e);views.put(key,e);
             }
             else if(type.equals("CheckBoxGroup")){
-                boolean flat=key.equals("选车筛选");LinearLayout checks=flat?row():column();String selected=","+data.optString(key)+",";
-                for(int n=0;n<options.length();n++){CheckBox cb=checkBox(options.getString(n));cb.setTag(n);cb.setChecked(selected.contains(","+n+","));if(flat){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-2,-2);p.rightMargin=dp(SPACE_SMALL);checks.addView(cb,p);}else checks.addView(cb);}fields.addView(heading(key,BODY));fields.addView(checks);views.put(key,checks);
+                boolean garageFilter=key.equals("选车筛选");
+                ViewGroup checks;
+                if(garageFilter){
+                    GridLayout grid=new GridLayout(this);
+                    grid.setColumnCount(2);
+                    checks=grid;
+                }else checks=column();
+                String selected=","+data.optString(key)+",";
+                for(int n=0;n<options.length();n++){
+                    CheckBox box=checkBox(options.getString(n));
+                    box.setTag(n);
+                    box.setChecked(selected.contains(","+n+","));
+                    checks.addView(box);
+                }
+                if(garageFilter){
+                    // Stored option IDs 1 and 3 are the game's two alternative sort keys.
+                    CheckBox rank=checks.findViewWithTag(1),stars=checks.findViewWithTag(3);
+                    if(rank.isChecked())stars.setChecked(false);
+                    bindSortAlternative(rank,stars);
+                    bindSortAlternative(stars,rank);
+                }
+                fields.addView(heading(key,BODY));fields.addView(checks);views.put(key,checks);
             }else{
                 String title=key.equals("分支选择")?"任务类型":key.equals("难度不足")?"危险等级不足时":key;
                 if(key.equals("难度不足"))fields.addView(helpHeading(title,this::showDifficultyShortHelp));
@@ -356,7 +376,7 @@ public final class MainActivity extends Activity {
                     else if(view instanceof CheckBox)value=((CheckBox)view).isChecked()?"0":"";
                     else if(view instanceof Button)value=String.valueOf(view.getTag());
                     else if(view instanceof Spinner){int position=((Spinner)view).getSelectedItemPosition();value=e.getKey().equals("路线来源")?((List<String>)view.getTag()).get(position):String.valueOf(position);}
-                    else if(view instanceof LinearLayout){List<String> selected=new ArrayList<>();for(int j=0;j<((LinearLayout)view).getChildCount();j++){CheckBox cb=(CheckBox)((LinearLayout)view).getChildAt(j);if(cb.isChecked())selected.add(String.valueOf(cb.getTag()));}value=String.join(",",selected);}
+                    else if(view instanceof ViewGroup){ViewGroup checks=(ViewGroup)view;List<String> selected=new ArrayList<>();for(int j=0;j<checks.getChildCount();j++){CheckBox cb=(CheckBox)checks.getChildAt(j);if(cb.isChecked())selected.add(String.valueOf(cb.getTag()));}value=String.join(",",selected);}
                     data.put(e.getKey(),value);
                 }
                 int times=Integer.parseInt(data.optString("次数","1"));if(times<1||times>10000)throw new IllegalArgumentException("执行次数需为 1–10000");
@@ -378,6 +398,14 @@ public final class MainActivity extends Activity {
                 dialog.dismiss();render();
             }catch(Exception e){message(e.getMessage());}
         }));showDialog(dialog);
+    }
+    private void bindSortAlternative(CheckBox choice,CheckBox other){
+        choice.setOnCheckedChangeListener((view,checked)->{
+            if(checked && other.isChecked()){
+                other.setChecked(false);
+                showPreferenceToast("已按"+choice.getText()+"排序，已取消"+other.getText());
+            }
+        });
     }
     private void worldRewardFields(LinearLayout fields,Map<String,View> views,JSONObject data) {
         TextView section=heading("动态奖励",BODY);
@@ -901,7 +929,12 @@ public final class MainActivity extends Activity {
     private void saveSetting(String key,Object value)throws JSONException{
         JSONObject next=new JSONObject(store.config.toString());next.put(key,value);store.config=next;store.save();
         int position=pageScroll.getScrollY();render();pageScroll.post(()->pageScroll.scrollTo(0,position));
-        if(preferenceToast!=null)preferenceToast.cancel();preferenceToast=Toast.makeText(this,"已保存",Toast.LENGTH_SHORT);preferenceToast.show();
+        showPreferenceToast("已保存");
+    }
+    private void showPreferenceToast(String text){
+        if(preferenceToast!=null)preferenceToast.cancel();
+        preferenceToast=Toast.makeText(this,text,Toast.LENGTH_SHORT);
+        preferenceToast.show();
     }
     private Integer validNumber(EditText input,int min,int max,String unit){
         try{int value=Integer.parseInt(input.getText().toString().trim());if(value>=min&&value<=max){input.setError(null);return value;}}catch(NumberFormatException ignored){}

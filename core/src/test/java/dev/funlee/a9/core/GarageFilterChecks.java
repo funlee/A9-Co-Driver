@@ -4,13 +4,20 @@ import java.util.*;
 
 final class GarageFilterChecks {
     static int run(Path assets)throws Exception {
-        String fixture="data={};state={present=true,owned=0,rank=0,descending=0};taps=0;closed=0;"+
+        String fixture="data={};state={present=true,owned=0,rank=0,stars=0,descending=0};taps=0;closed=0;"+
             "function keepCapture()end;function _garageFilterState()return state end;"+
-            "function tap(x,y)taps=taps+1;if x==509 then state.owned=1-state.owned elseif x==304 then state.rank=1-state.rank elseif x==436 then state.descending=1-state.descending elseif x==134 then closed=closed+1;state.present=false elseif x==600 then state.present=true else error('unexpected tap') end end;";
+            "function tap(x,y)taps=taps+1;if x==509 then state.owned=1-state.owned elseif x==304 then state.rank=1-state.rank;state.stars=0 elseif x==368 then state.stars=1-state.stars;state.rank=0 elseif x==436 then state.descending=1-state.descending elseif x==134 then closed=closed+1;state.present=false elseif x==600 then state.present=true else error('unexpected tap') end end;";
         List<String> cases=List.of(
             "assert(utils.configureGarageFilter('0,1,2'));assert(taps==4 and closed==1 and state.owned==1 and state.rank==1 and state.descending==1)",
             "state.owned=1;state.rank=1;state.descending=1;utils.configureGarageFilter('0,1,2');assert(taps==1,'already selected state toggled off')",
             "state.owned=1;state.rank=1;state.descending=1;utils.configureGarageFilter('0');assert(taps==3 and state.owned==1 and state.rank==0 and state.descending==0)",
+            "state.rank=1;utils.configureGarageFilter('0,2,3');assert(state.stars==1 and state.rank==0 and state.owned==1 and state.descending==1 and closed==1);"+
+                "state.present=true;utils.configureGarageFilter('0,2,3');assert(taps==6 and closed==2,'second visit toggled star sorting');"+
+                "state.present=true;utils.configureGarageFilter('0,1,2');assert(state.stars==0 and state.rank==1 and closed==3)",
+            "utils.configureGarageFilter('3');assert(state.stars==1 and state.rank==0 and state.descending==0 and closed==1)",
+            "state.stars=1;utils.configureGarageFilter('0');assert(state.stars==0 and state.owned==1 and closed==1)",
+            "state.stars=-1;local ok,msg=pcall(utils.configureGarageFilter,'3');assert(not ok and msg:find('星级',1,true) and taps==0)",
+            "local ok,msg=pcall(utils.configureGarageFilter,'1,3');assert(not ok and msg:find('只能选择一项',1,true) and taps==0)",
             "state.present=false;utils.configureGarageFilter('0,1,2');assert(taps==5 and closed==1)",
             "state.rank=-1;local ok=pcall(utils.configureGarageFilter,'1');assert(not ok and taps==0 and closed==0)",
             "tap=function()taps=taps+1 end;local ok=pcall(utils.configureGarageFilter,'0');assert(not ok and taps==6 and closed==0,'failed click accepted')",
@@ -40,9 +47,10 @@ final class GarageFilterChecks {
         fill(pixels,290,570,315,595,0xc3fb12);
         fill(pixels,1190,55,1260,110,0xff0054);
         fill(pixels,325,218,360,253,0x000921);
+        fill(pixels,325,356,360,391,0x000921);
         fill(pixels,325,420,360,455,0xc3fb12);
         Map<String,Object> shifted=GarageFilter.read(new PixelFrame(720,1280,pixels));
-        if(!Integer.valueOf(0).equals(shifted.get("owned")) || !Integer.valueOf(1).equals(shifted.get("rank")))
+        if(!Integer.valueOf(0).equals(shifted.get("owned")) || !Integer.valueOf(0).equals(shifted.get("stars")) || !Integer.valueOf(1).equals(shifted.get("rank")))
             throw new AssertionError("Shifted checkbox interiors: "+shifted);
         Map<?,?> center=(Map<?,?>)shifted.get("ownedCenter");
         if(center==null || (int)center.get("y")<218 || (int)center.get("y")>253)

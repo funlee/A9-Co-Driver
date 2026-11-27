@@ -20,15 +20,22 @@ final class TaskEditingDeviceCheck {
     private Context isolated;
     private UiAutomation ui;
     private TaskEditingDeviceCheck(Instrumentation test){this.test=test;}
-    static void run(Instrumentation test,Bundle report)throws Exception {new TaskEditingDeviceCheck(test).run(report);}
-    private void run(Bundle report)throws Exception {
+    static void run(Instrumentation test,Bundle report,boolean garageSortOnly)throws Exception {new TaskEditingDeviceCheck(test).run(report,garageSortOnly);}
+    private void run(Bundle report,boolean garageSortOnly)throws Exception {
         Context base=test.getTargetContext();String preferences="task-editing-check-"+UUID.randomUUID();
         isolated=new ContextWrapper(base){
             @Override public Context getApplicationContext(){return this;}
             @Override public SharedPreferences getSharedPreferences(String name,int mode){return base.getSharedPreferences(preferences,mode);}
         };
         try {
-            store=new LocalStore(isolated);checkDefaults();
+            store=new LocalStore(isolated);
+            if(garageSortOnly){
+                launchEditor(base);
+                checkGarageSort();
+                report.putString("result","PASS: mutually exclusive garage sorting, clear, save and reopen in all six event editors");
+                return;
+            }
+            checkDefaults();
             check(store.config.getInt("raceTimeout")==900,"Wrong initial race timeout");
             check(store.config.getJSONObject("global").getBoolean("autoToken")&&store.config.getJSONObject("global").getBoolean("freePkg"),"Wrong initial global task options");
             String initial=tasks().toString();reload();check(initial.equals(tasks().toString()),"Default identities did not persist");
@@ -53,9 +60,9 @@ final class TaskEditingDeviceCheck {
             checkWorldLeagues();
             store.config.put("accuracy",91).put("global",new JSONObject().put("autoToken",false).put("freePkg",false));store.save();
             String route=store.routeKeys().get(0);store.saveRoute(route,"1,31");
-            ui=test.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES);
-            activity=(MainActivity)test.startActivitySync(new Intent(base,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));bind();
+            launchEditor(base);
             screenshot("default-queue.png");
+            checkGarageSort();
             checkTaskRoutes();
             clickTask("世界系列赛");
             screenshot("world-editor-open.png");
@@ -175,6 +182,30 @@ final class TaskEditingDeviceCheck {
         JSONArray legacy=new JSONArray();for(int i=0;i<20;i++)legacy.put(new JSONObject().put("项目","多人上").put("enabled",false).put("data",new JSONObject(oldDefaults.toString())));
         store.config.put("projects",legacy);store.config.remove("taskQueueVersion");store.save();reload();checkDefaults();
         store.config=original;store.save();
+    }
+    private void launchEditor(Context base){
+        ui=test.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES);
+        activity=(MainActivity)test.startActivitySync(new Intent(base,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));bind();
+    }
+    private void checkGarageSort()throws Exception {
+        JSONObject original=new JSONObject(store.config.toString());
+        for(int index:new int[]{0,CUP,SPECIAL,DAILY,MASTER,WORLD}){
+            JSONObject settings=tasks().getJSONObject(index).getJSONObject("data");
+            settings.put("选车筛选","0,1,2");
+            openTaskForm(index);scrollToControl("星级");
+            check(node("性能分").isChecked()&&!node("星级").isChecked(),"Legacy rank sorting changed");
+            click("星级");
+            check(!node("性能分").isChecked()&&node("星级").isChecked(),"Stars did not replace rank");
+            click("保存");reload();bind();
+            check(tasks().getJSONObject(index).getJSONObject("data").getString("选车筛选").equals("0,2,3"),"Star selection lost on save");
+            openTaskForm(index);scrollToControl("星级");
+            check(node("星级").isChecked()&&!node("性能分").isChecked(),"Star selection lost on reopen");
+            click("性能分");
+            check(node("性能分").isChecked()&&!node("星级").isChecked(),"Rank did not replace stars");
+            click("性能分");click("保存");reload();bind();
+            check(tasks().getJSONObject(index).getJSONObject("data").getString("选车筛选").equals("0,2"),"Clearing sort also cleared other filters");
+        }
+        store.config=original;store.save();bind();
     }
     private void checkTaskRoutes()throws Exception {
         String map=store.addCustomMap("路线测试赛道","任务测试地图","0,21");

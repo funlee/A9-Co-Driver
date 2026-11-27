@@ -1607,6 +1607,9 @@ end
 -- Set requested state, rather than toggling blindly on every visit.
 function utils.configureGarageFilter(selection)
   if selection == "" then return true end
+  local selected={}
+  for id in tostring(selection):gmatch('[^,]+') do selected[id]=1 end
+  if selected['1'] and selected['3'] then error('星级和性能分只能选择一项') end
   if not _garageFilterState then error("车库筛选识别不可用") end
   if _garageFilterPrepare then _garageFilterPrepare() end
   local function read() keepCapture();return _garageFilterState() end
@@ -1620,18 +1623,18 @@ function utils.configureGarageFilter(selection)
     end
   end
   if not state.present then error("未识别到车库筛选面板，已停止选车") end
-  local ownedRow,rankRow,sortRow=509,304,436
+  local ownedRow,rankRow,starsRow,sortRow=509,304,368,436
   -- Try both arrows and the center of the sort control if the direction stays the same.
   local sortColumns={[0]={352,340,328},[1]={328,340,352}}
   if state.wide then
-    ownedRow,rankRow,sortRow=478,224,385
+    ownedRow,rankRow,starsRow,sortRow=478,224,301,385
     sortColumns={[0]={330,340,350},[1]={350,340,330}}
   elseif state.layout18By9 then
-    ownedRow,rankRow,sortRow=494,262,411
+    ownedRow,rankRow,starsRow,sortRow=494,262,334,411
     sortColumns={[0]={350,340,330},[1]={330,340,350}}
   end
   local options={{"0","owned",ownedRow,340,"已拥有"},{"1","rank",rankRow,340,"性能分"},
-    {"2","descending",sortRow,sortColumns,"降序"}}
+    {"3","stars",starsRow,340,"星级"},{"2","descending",sortRow,sortColumns,"降序"}}
   -- Re-sorting redraws the list for about a second, so a single reading after a tap can
   -- still show the old direction; a click that lands mid-draw flips it straight back.
   local function settled(key,wanted)
@@ -1649,7 +1652,7 @@ function utils.configureGarageFilter(selection)
   end
   local function applyOptions()
     for _,option in ipairs(options) do
-      local wanted=string.find(selection,option[1],1,true) and 1 or 0
+      local wanted=selected[option[1]] or 0
       local sorting=option[2]=='descending'
       local label=sorting and wanted==0 and '升序' or option[5]
       local confirmed=false
@@ -1682,7 +1685,7 @@ function utils.configureGarageFilter(selection)
   end
   -- Confirm the complete combination immediately before applying it.
   for _,option in ipairs(options) do
-    local wanted=string.find(selection,option[1],1,true) and 1 or 0
+    local wanted=selected[option[1]] or 0
     if state[option[2]]~=wanted then error("车库筛选状态发生变化") end
   end
   tap(134,320)
