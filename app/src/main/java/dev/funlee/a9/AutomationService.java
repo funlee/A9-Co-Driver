@@ -53,6 +53,7 @@ public final class AutomationService extends Service {
         if(worker!=null){SessionState.log("已有运行中的任务");return START_NOT_STICKY;}
         try {
             runGeneration++;
+            SessionState.stats=new TaskStats();
             RunStatusRecord.clearFailure(this);
             waitForMenuOnStart=intent.getBooleanExtra("waitForMenuOnStart",false);
             inspecting=intent.getBooleanExtra("inspect",false);sampleRequested=false;
@@ -71,7 +72,7 @@ public final class AutomationService extends Service {
             RunStatusRecord.save(this,true,"正在准备本地任务");
             resumeState=intent.getBooleanExtra("resume",false)?SessionRecord.read(this):null;
             if(intent.getBooleanExtra("resume",false)&&(resumeState==null||resumeState.optBoolean("complete")))throw new IllegalStateException("没有可继续的未完成任务");
-            SessionState.stats=resumeState==null?new TaskStats():TaskStats.restore((Map<String,Object>)LocalStore.javaValue(resumeState.getJSONObject("stats")));
+            if(resumeState!=null)SessionState.stats=TaskStats.restore((Map<String,Object>)LocalStore.javaValue(resumeState.getJSONObject("stats")));
             SessionState.dashboardEnabled=!inspecting;SessionState.status(resumeState==null?"正在准备本地任务":"正在恢复上次任务，已完赛 "+SessionState.stats.finished()+" 局");
             worker=new Thread(()->execute(inspecting),"a9-automation");worker.start();
         }catch(Exception e){failRun("启动失败："+e.getMessage());}
@@ -234,6 +235,7 @@ public final class AutomationService extends Service {
 
     private void failRun(String detail) {
         if (stopping) return;
+        if (!inspecting) SessionState.stats.recordFailure();
         Bitmap frame = null;
         try {
             if (capture != null) frame = capture.copyLatestFrame();

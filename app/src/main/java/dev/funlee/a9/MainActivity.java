@@ -781,7 +781,7 @@ public final class MainActivity extends Activity {
         permissionStatusRow(permissions,"自动操作","必需 · 允许助手点击和滑动",this::touchPermissionStatus,()->startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
         permissionRow(permissions,"比赛统计悬浮窗","在游戏中显示比赛数据",()->Settings.canDrawOverlays(this),()->startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,Uri.parse("package:"+getPackageName()))));
         body.addView(permissions);
-        LinearLayout diagnostics=settingsGroup("问题排查");
+        LinearLayout diagnostics=settingsGroup(RunIssue.FAILURE_LOG_TITLE);
         body.addView(diagnostics);
         FailureScreenshot.loadHistory(getApplicationContext(), entries -> {
             if (isFinishing() || isDestroyed() || diagnostics.getParent() != body) return;

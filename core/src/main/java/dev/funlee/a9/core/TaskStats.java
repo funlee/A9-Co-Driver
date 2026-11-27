@@ -8,6 +8,7 @@ public final class TaskStats {
     private static final String SEASON_LABEL=MultiplayerUi.displayMode("特殊赛事");
     private int target,started,finished,returned,fallbacks,progress,actions,eventCount,totalActions;
     private int cycle,projectTarget,projectBase,rank,ranked,topThree,restarts;
+    private int runFailures; // Excluded from checkpoints so each manual start or resume begins at zero.
     private long matchingSeconds=-1;
     private long elapsed;
     private boolean fallback;
@@ -24,6 +25,7 @@ public final class TaskStats {
     public synchronized boolean isMatching(){return matchingSeconds>=0;}
     public synchronized void recovered(){interrupted();restarts++;operation="重启后继续剩余任务";}
     public synchronized void interrupted(){active=false;resultRecorded=false;returnRecorded=false;matchingSeconds=-1;operation="正在恢复任务";}
+    public synchronized void recordFailure(){runFailures++;}
     public synchronized int restartCount(){return restarts;}
     public synchronized String projectMode(){return modeKey;}
     public synchronized long elapsedMillis(){return elapsed;}
@@ -105,6 +107,8 @@ public final class TaskStats {
     public synchronized int rankedCount(){return ranked;}
     public synchronized int topThreeCount(){return topThree;}
     private int multiplayerCount(){return count(MultiplayerUi.WORLD)+count(MultiplayerUi.MASTER)+count(MultiplayerUi.WEEKEND);}
+    // Classic and domination both settle under the special event project type.
+    private int seasonCount(){return count("特殊赛事")+count("车联");}
     public synchronized int count(String key){return counts.getOrDefault(key,0);}
     public synchronized String phase(String phase){
         String first=phase==null?"":phase.split("\n",2)[0];
@@ -147,32 +151,36 @@ public final class TaskStats {
         String state=phase(status);
         String action=state.equals("已暂停")||state.equals("恢复游戏")||state.equals("任务停止")?state:operation;
         if(fallback&&active&&!resultRecorded)action+=" · 左划兜底";
-        long seconds=elapsed/1000;
-        int multi=multiplayerCount(),cups=count("杯赛")+count("每日战利品");
-        int special=count("特殊赛事");
         return "当前操作："+action+
-            "\n多人前三率："+rate+" · 路程："+progress+"%"+
+            "\n系列赛前三率："+rate+" · 路程："+progress+"%"+
             "\n当前地图："+map+
-            "\n多人："+multi+"，"+DAILY_LABEL+"："+cups+"，"+SEASON_LABEL+"："+special+
-            "\n运行："+String.format(Locale.ROOT,"%02d:%02d:%02d",seconds/3600,seconds/60%60,seconds%60)+" · 重启："+restarts;
+            "\n"+overlayRaceCounts()+
+            "\n"+overlayRunCounts();
     }
     /** Key race statistics displayed while the game is on track. */
     public synchronized String overlayFullText(){
         String rate=ranked==0?"—":String.format(Locale.ROOT,"%.1f%%",100.0*topThree/ranked);
-        int multi=multiplayerCount(),cups=count("杯赛")+count("每日战利品"),special=count("特殊赛事");
-        long seconds=elapsed/1000;
         return "地图："+map+
             "\n路程："+progress+"% · 指令："+actions+"/"+eventCount+
-            "\n多人："+multi+"，"+DAILY_LABEL+"："+cups+"，"+SEASON_LABEL+"："+special+
-            "\n前三："+rate+"（"+topThree+"/"+ranked+"）"+
-            "\n运行："+String.format(Locale.ROOT,"%02d:%02d:%02d",seconds/3600,seconds/60%60,seconds%60)+" · 重启："+restarts;
+            "\n"+overlayRaceCounts()+
+            "\n系列赛前三率："+rate+
+            "\n"+overlayRunCounts();
+    }
+    private String overlayRaceCounts(){
+        int daily=count("杯赛")+count("每日战利品");
+        return "系列赛："+multiplayerCount()+"，每日赛："+daily+"，赛季赛："+seasonCount();
+    }
+    private String overlayRunCounts(){
+        long seconds=elapsed/1000;
+        return "运行："+String.format(Locale.ROOT,"%02d:%02d:%02d",seconds/3600,seconds/60%60,seconds%60)+
+            " · 重启："+restarts+" · 异常："+runFailures;
     }
     public synchronized String panel(String phase){
         String first=phase==null?"":phase.split("\\n",2)[0];
         if(first.length()>20)first=first.substring(0,20)+"…";
         long seconds=elapsed/1000;
         String time=String.format(Locale.ROOT,"%02d:%02d:%02d",seconds/3600,seconds/60%60,seconds%60);
-        int multi=multiplayerCount();
+        int multi=multiplayerCount(),daily=count("杯赛")+count("每日战利品"),season=seasonCount();
         String rate=ranked==0?"—":String.format(Locale.ROOT,"%.1f%%",100.0*topThree/ranked);
         return mode+
                 (projectTarget>0?" "+(finished-projectBase)+"/"+projectTarget:"")+"\n"+first+
@@ -180,7 +188,7 @@ public final class TaskStats {
                 "\n多人 "+multi+" · 世界 "+count(MultiplayerUi.WORLD)+" / 大师 "+count(MultiplayerUi.MASTER)+" / 周末 "+count(MultiplayerUi.WEEKEND)+
                 "\n多人前三名率 "+rate+"（"+topThree+"/"+ranked+"）"+
                 "\n名次未确认时不计入前三名率 · 本局 "+(rank>0?"第 "+rank+" 名":"—")+
-                "\n"+DAILY_LABEL+" "+(count("杯赛")+count("每日战利品"))+" · "+SEASON_LABEL+" "+count("特殊赛事")+" · 其他 "+(finished-multi-count("杯赛")-count("每日战利品")-count("特殊赛事"))+
+                "\n"+DAILY_LABEL+" "+daily+" · "+SEASON_LABEL+" "+season+" · 其他 "+(finished-multi-daily-season)+
                 "\n地图："+map+"\n进度 "+progress+"% · 指令 "+actions+"/"+eventCount+
                 "\n当前操作："+operation+"\n累计指令 "+totalActions+" · 兜底 "+fallbacks+" 局"+
                 (matchingSeconds>=0?"\n匹配等待 "+matchingSeconds+" 秒 / "+MatchmakingWatchdog.TIMEOUT_SECONDS+" 秒":"")+

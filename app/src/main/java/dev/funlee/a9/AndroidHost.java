@@ -98,6 +98,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     }
     void recordQueueFailure(String reason)throws Exception{
         checkpoint.failure(reason);
+        SessionState.stats.recordFailure();
         runningQueueWork=false;
         persist(false);
         SessionState.status(checkpoint.failureSummary());

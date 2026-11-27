@@ -3,7 +3,7 @@ package dev.funlee.a9.core;
 final class RunIssueChecks {
     static void run() {
         String message=RunIssue.stopMessage("[string cup]:13: java.lang.IllegalStateException: 无法确认车辆燃油\nstack traceback:",true);
-        CoreChecks.check(message.equals("无法确认车辆燃油\n\n异常界面已截图保存，可在程序【偏好设置 → 问题排查】中查看。"),"Terminal notice gives the reason and the saved screenshot location");
+        CoreChecks.check(message.equals("无法确认车辆燃油\n\n异常界面已截图保存，可在程序【偏好设置 → 异常日志】中查看。"),"Terminal notice gives the reason and the saved screenshot location");
         CoreChecks.check(RunIssue.stopMessage("截屏授权已结束",false).contains("未能保存截图"),"A missing screenshot is reported accurately");
         check("请先开启 A9辅助驾驶的无障碍服务",RunIssue.Action.ACCESSIBILITY);
         check("无障碍服务已开启但未连接",RunIssue.Action.ACCESSIBILITY);

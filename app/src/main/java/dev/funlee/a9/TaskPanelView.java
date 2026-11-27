@@ -13,8 +13,8 @@ import dev.funlee.a9.core.TaskStats;
 @android.annotation.SuppressLint("ViewConstructor")
 final class TaskPanelView extends LinearLayout {
     static final int WIDTH=200,HEIGHT=161,COMPACT_HEIGHT=64;
-    private static final int RACE_STATS_WIDTH=232,RACE_STATS_HEIGHT=164;
-    private static final int MATCHING_HEIGHT=33;
+    private static final int RACE_STATS_WIDTH=344,RACE_STATS_HEIGHT=164;
+    private static final int MATCHING_WIDTH=232,MATCHING_HEIGHT=33;
     private final TextView title;
     private final LinearLayout information;
     private final LinearLayout actions;
@@ -60,10 +60,15 @@ final class TaskPanelView extends LinearLayout {
         actions.setVisibility(GONE);
         title.getLayoutParams().height=px(25);
         title.setAutoSizeTextTypeUniformWithConfiguration(px(13),px(18),1,TypedValue.COMPLEX_UNIT_PX);
-        for(TextView row:rows)
-            row.setAutoSizeTextTypeUniformWithConfiguration(px(11),px(17),1,TypedValue.COMPLEX_UNIT_PX);
+        for(TextView row:rows){
+            row.setAutoSizeTextTypeWithDefaults(TextView.AUTO_SIZE_TEXT_TYPE_NONE);
+            row.setTextSize(TypedValue.COMPLEX_UNIT_PX,px(17));
+        }
     }
-    int panelWidth(){return actions.getVisibility()==GONE?RACE_STATS_WIDTH:WIDTH;}
+    int panelWidth(){
+        if(actions.getVisibility()==GONE)return compact?MATCHING_WIDTH:RACE_STATS_WIDTH;
+        return WIDTH;
+    }
     int panelHeight(){
         if(actions.getVisibility()==GONE)return compact?MATCHING_HEIGHT:RACE_STATS_HEIGHT;
         return compact?COMPACT_HEIGHT:HEIGHT;

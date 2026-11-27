@@ -31,15 +31,18 @@ final class RewardChecks {
         Map<String,Object> oldCup=legacy.snapshot();oldCup.put("mode","杯赛");
         TaskStats restoredCup=TaskStats.restore(oldCup);
         check(restoredCup.compact().startsWith("每日赛事")&&restoredCup.count("杯赛")==1,"Resumed cups use the new label and keep saved totals");
-        TaskStats mixed=new TaskStats();int n=0;
-        for(String mode:List.of("世界系列赛","杯赛","特殊赛事","每日战利品","大师系列赛")){
-            mixed.project(mode);mixed.begin("test",false);mixed.result(++n==5?5:1);mixed.returned();
+        TaskStats mixed=new TaskStats();
+        // Classic and domination use the same project key; club races have their own key.
+        for(String mode:List.of(MultiplayerUi.WORLD,"杯赛","特殊赛事","每日战利品",MultiplayerUi.MASTER,"特殊赛事","车联")){
+            mixed.project(mode);mixed.begin("test",false);mixed.result(mode.equals(MultiplayerUi.MASTER)?5:1);mixed.returned();
         }
-        check(mixed.finished()==5&&mixed.rankedCount()==2&&mixed.topThreeCount()==1,"Only world/master races enter either top-three numerator or denominator");
+        check(mixed.finished()==7&&mixed.rankedCount()==2&&mixed.topThreeCount()==1,"Only world/master races enter either top-three numerator or denominator");
         check(mixed.compact().contains("多人前三 50.0%（1/2）"),"Mixed-task panel explicitly labels multiplayer-only rate");
-        check(mixed.overlayText("比赛中").contains("多人：2，每日赛事：2，赛季赛事：1")&&mixed.overlayFullText().contains("多人：2，每日赛事：2，赛季赛事：1"),"Overlays merge world/master, group daily with cups and retain special events separately");
-        check(mixed.overlayText("比赛中").contains("多人前三率：50.0%")&&mixed.overlayText("已暂停").startsWith("当前操作：已暂停"),"Reference-style overlay keeps multiplayer-only rate and pause state");
-        check(mixed.panel("").contains("每日赛事 2 · 赛季赛事 1 · 其他 0")&&!mixed.overlayText("").contains("生涯"),"Detailed and compact panels keep the same separate cup/special totals");
+        String raceCounts="系列赛：2，每日赛：2，赛季赛：3";
+        check(mixed.overlayText("比赛中").contains(raceCounts)&&mixed.overlayFullText().contains(raceCounts),"Special race counts include classic, domination and club races");
+        check(mixed.overlayText("比赛中").contains("系列赛前三率：50.0%")&&mixed.overlayText("已暂停").startsWith("当前操作：已暂停"),"Reference-style overlay keeps multiplayer-only rate and pause state");
+        check(mixed.overlayFullText().contains("\n系列赛前三率：50.0%\n"),"Race overlay displays the top-three rate as a percentage only");
+        check(mixed.panel("").contains("每日赛事 2 · 赛季赛事 3 · 其他 0")&&!mixed.overlayText("").contains("生涯"),"The detailed panel counts club races under season events");
         mixed.cycle(3);
         check(!mixed.overlayFullText().contains("轮")&&!mixed.compact().contains("轮")&&!mixed.panel("比赛中").contains("轮"),"User-facing stats omit queue cycle numbers");
         check(mixed.overlayFullText().split("\n").length==5,"Race overlay no longer carries an earnings row");
@@ -47,6 +50,15 @@ final class RewardChecks {
         check(!mixed.overlayFullText().contains("本局：")&&!mixed.overlayFullText().contains("收益覆盖")&&!mixed.overlayFullText().contains("上局")&&!mixed.overlayFullText().contains("累计指令"),"Race overlay omits removed detail rows");
         check(!mixed.overlayFullText().contains("金币")&&!mixed.overlayFullText().contains("经验值"),"Race overlay omits earnings entirely");
         check(!mixed.compact().contains("金币")&&!mixed.panel("").contains("金币"),"All panels omit coin earnings");
+        check(new TaskStats().overlayFullText().endsWith("重启：0 · 异常：0"),"A fresh task starts with zero anomalies");
+        for(int i=0;i<7;i++)mixed.recordFailure();
+        mixed.interrupted();
+        mixed.recovered();
+        mixed.project("杯赛");
+        check(mixed.overlayFullText().endsWith("重启：1 · 异常：7"),"Project changes and automatic recovery keep the uncapped per-run anomaly count");
+        TaskStats resumed=TaskStats.restore(mixed.snapshot());
+        check(resumed.finished()==7&&resumed.overlayFullText().endsWith("重启：1 · 异常：0"),"A manual resume restores race progress and starts a new anomaly count");
+        check(resumed.overlayFullText().contains(raceCounts),"Resumed tasks include previously saved club races in the season count");
         // A pre-removal checkpoint with earnings still restores: legacy keys are ignored.
         Map<String,Object> oldSaved=new LinkedHashMap<>(s.snapshot());oldSaved.put("coins",4800L);oldSaved.put("fame",189L);oldSaved.put("coinRaces",1);oldSaved.put("fameRaces",1);oldSaved.put("lastCoins",4800L);oldSaved.put("lastFame",189L);
         TaskStats migrated=TaskStats.restore(oldSaved);

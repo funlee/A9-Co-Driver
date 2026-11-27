@@ -6,22 +6,26 @@ import android.graphics.*;
 import android.os.Bundle;
 import android.view.*;
 import android.widget.*;
+import dev.funlee.a9.core.MapMatcher;
 import dev.funlee.a9.core.TaskStats;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 
 /** Offscreen production view rendering; no activity, overlay window or game input. */
 final class PanelLayoutCheck {
     static void run(Instrumentation test,Bundle report)throws Exception {
         final Throwable[] error={null};
         test.runOnMainSync(()->{
-            try {
+            try (Reader rules=new InputStreamReader(test.getTargetContext().getAssets().open("data/map-rules.tsv"),StandardCharsets.UTF_8)) {
                 Context context=new ContextThemeWrapper(test.getTargetContext(),R.style.AppTheme);
+                String mapName=new MapMatcher(rules).displayName("印度低语瀑布道");
                 TaskStats stats=new TaskStats();stats.project("大师系列赛");stats.cycle(1);stats.projectTarget(20);
-                stats.begin("季风秘境幽林飞瀑",false);stats.result(2);stats.returned();
-                for(String mode:new String[]{"杯赛","每日战利品","特殊赛事"}) {
+                stats.begin(mapName,false);stats.result(2);stats.returned();
+                for(String mode:new String[]{"杯赛","每日战利品","特殊赛事","特殊赛事","车联"}) {
                     stats.project(mode);stats.begin("示例地图",false);stats.legacyCompleted();
                 }
-                stats.project("大师系列赛");stats.begin("季风秘境幽林飞瀑",false);stats.progress(58,18,39);stats.operation("N · 氮气");stats.elapsed(17*60000L);
+                stats.project("大师系列赛");stats.begin(mapName,false);stats.progress(58,18,39);stats.operation("N · 氮气");stats.elapsed(17*60000L);
+                for(int i=0;i<7;i++)stats.recordFailure();
                 TextView heading=new TextView(context);Button pause=new Button(context),stop=new Button(context);
                 pause.setText("暂停");stop.setText("停止");
                 TaskPanelView panel=TaskPanelView.create(context,heading,pause,stop);
@@ -47,6 +51,22 @@ final class PanelLayoutCheck {
                 int raceWidth=scale*panel.panelWidth()/1280,raceHeight=scale*panel.panelHeight()/1280;
                 panel.measure(View.MeasureSpec.makeMeasureSpec(raceWidth,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(raceHeight,View.MeasureSpec.EXACTLY));
                 panel.layout(0,0,raceWidth,raceHeight);checkTextFits(panel);
+                LinearLayout raceRows=(LinearLayout)panel.getChildAt(1);
+                TextView mapRow=(TextView)raceRows.getChildAt(0);
+                if(!"地图：季风秘境-幽林飞瀑".contentEquals(mapRow.getText()))
+                    throw new AssertionError("Race panel must separate track and map names: "+mapRow.getText());
+                if(!"系列赛：1，每日赛：2，赛季赛：3".contentEquals(((TextView)raceRows.getChildAt(2)).getText()))
+                    throw new AssertionError("Race panel must count classic, domination and club races as season races");
+                if(!"系列赛前三率：100.0%".contentEquals(((TextView)raceRows.getChildAt(3)).getText()))
+                    throw new AssertionError("Race panel must show the series top-three rate as a percentage only");
+                float fontSize=mapRow.getTextSize();
+                for(int i=0;i<5;i++){
+                    TextView row=(TextView)raceRows.getChildAt(i);
+                    if(row.getTextSize()!=fontSize||row.getLayout().getEllipsisCount(0)!=0)
+                        throw new AssertionError("Race row shrank or was truncated: "+row.getText());
+                }
+                if(!((TextView)raceRows.getChildAt(4)).getText().toString().endsWith("重启：0 · 异常：7"))
+                    throw new AssertionError("Race panel omitted the per-run anomaly count");
                 java.util.ArrayList<View> earnings=new java.util.ArrayList<>();panel.findViewsWithText(earnings,"金币",View.FIND_VIEWS_WITH_TEXT);
                 if(!earnings.isEmpty())throw new AssertionError("Race panel must not show earnings rows");
                 Bitmap race=Bitmap.createBitmap(raceWidth,raceHeight,Bitmap.Config.ARGB_8888);panel.draw(new Canvas(race));
@@ -54,7 +74,7 @@ final class PanelLayoutCheck {
             } catch(Throwable e){error[0]=e;}
         });
         if(error[0]!=null)throw new AssertionError("Panel render failed",error[0]);
-        report.putString("result","PASS: full/compact panels rendered across startup/rewards/recovery/selection/matching/race/pause/result; pause/stop callbacks available; race panel omits earnings; no game input");
+        report.putString("result","PASS: full/compact panels rendered across startup/rewards/recovery/selection/matching/race/pause/result; race rows use one size without truncation and show anomalies; no game input");
     }
     private static Button button(View view,String label){
         if(view instanceof Button&&label.contentEquals(((Button)view).getText()))return (Button)view;

@@ -11,6 +11,9 @@ import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.text.*;
 import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions;
 import dev.funlee.a9.core.*;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 
 /** Replays saved screenshots without game input; optional production-layout preview uses sample data. */
@@ -35,9 +38,13 @@ public final class DashboardScreenshotCheck extends Instrumentation {
                 if(frame!=source)frame.recycle();source.recycle();
             }
             if(preview){
+                String mapName;
+                try(Reader rules=new InputStreamReader(getTargetContext().getAssets().open("data/map-rules.tsv"),StandardCharsets.UTF_8)){
+                    mapName=new MapMatcher(rules).displayName("喜马拉雅山冰封路径");
+                }
                 TaskStats stats=new TaskStats();stats.cycle(1);stats.project("世界系列赛");stats.projectTarget(30);
-                for(int n:new int[]{1,4,6,7,8}){stats.begin("神山垭口冰封路径",false);stats.result(n);stats.returned();}
-                stats.begin("神山垭口冰封路径",false);stats.progress(45,18,39);stats.operation("D · 漂移 3000ms");stats.elapsed(89*60_000);
+                for(int n:new int[]{1,4,6,7,8}){stats.begin(mapName,false);stats.result(n);stats.returned();}
+                stats.begin(mapName,false);stats.progress(45,18,39);stats.operation("D · 漂移 3000ms");stats.elapsed(89*60_000);
                 runOnMainSync(()->{
                     Context context=new ContextThemeWrapper(getTargetContext(),dev.funlee.a9.R.style.AppTheme);
                     TextView label=new TextView(context);label.setText(stats.panel("示例预览 · 未运行比赛"));

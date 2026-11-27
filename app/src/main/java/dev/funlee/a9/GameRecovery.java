@@ -14,6 +14,7 @@ import android.provider.Settings;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityWindowInfo;
 import dev.funlee.a9.core.MatchmakingWatchdog;
+import dev.funlee.a9.core.TaskStats;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.function.BooleanSupplier;
@@ -44,6 +45,7 @@ final class GameRecovery {
     private final String game,label;
     private final BooleanSupplier stopped,paused;
     private final Handler main=new Handler(Looper.getMainLooper());
+    private final TaskStats stats=SessionState.stats;
     private final Set<String> launchers=new HashSet<>();
     private final ArrayDeque<Long> attempts=new ArrayDeque<>();
     private long pausedMillis;
@@ -109,6 +111,7 @@ final class GameRecovery {
         awaitReady(permit==null);return true;
     }
     private void restartGame(String reason,boolean waitAfterStop)throws Exception{
+        stats.recordFailure();
         String message="即将重启游戏："+reason;
         status(message);
         while(!onMain(()->{touch.showRestartNotice(message);return true;}))gate();

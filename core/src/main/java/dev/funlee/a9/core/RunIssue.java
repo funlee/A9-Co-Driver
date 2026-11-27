@@ -2,6 +2,7 @@ package dev.funlee.a9.core;
 
 /** User-facing recovery guidance. Raw engine errors remain in runtime logs. */
 public final class RunIssue {
+    public static final String FAILURE_LOG_TITLE = "异常日志";
     public enum Action { ACCESSIBILITY, CAPTURE, SETTINGS, TASK_PREFERENCES, GAME, QUEUE }
     public final String title, guidance, actionLabel;
     public final Action action;
@@ -21,7 +22,7 @@ public final class RunIssue {
         return reason;
     }
     public static String stopMessage(String detail,boolean saved){
-        return reason(detail)+"\n\n"+(saved?"异常界面已截图保存，可在程序【偏好设置 → 问题排查】中查看。":"本次异常未能保存截图。");
+        return reason(detail)+"\n\n"+(saved?"异常界面已截图保存，可在程序【偏好设置 → "+FAILURE_LOG_TITLE+"】中查看。":"本次异常未能保存截图。");
     }
     public static RunIssue from(String detail) {
         String text=detail==null?"":detail;
