@@ -21,7 +21,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             "cmpColorEx","cmpColor","getPixelColor","findColor","findMultiColor","findPic","snapShot","rotateImage",
             "getDisplaySize","getDisplayRotate","getWorkPath","getSdPath","getPackageName","getInstalledApk","frontAppName","runApp","stopApp","keyPress",
             "setScreenScale","setControlBarPos","rnd","toast","print","colorToRGB","_jsonEncode","_jsonDecode","_textOcr","_textWords","_digit","_mapMatch","_recoverEventStart","_requestGameRestart","_specialEventList","_recoveryUi","_popupUi","_legacyPopupProbe","_legacyPopupDismiss","_soloGarageScore","_soloDetailScore",
-            "_validateRoute","_driverBegin","_driverStep","_driverEnd","_racePanel","_hud","_taskNotice","_finished","_multiplayerUi","_rewardUi","_fallbackBegin","_fallbackStep","_sessionCycle","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_sessionLegacyCompleted","_sessionLegacyPrepare","_sessionLegacyMap","_sessionOperation","_routeDisplay","_cupCards","_cupScrollDelta","_cupClaimState","_dailyEventUi","_soloEventUi","_soloGarageUi","_garageFilterState","_garageFilterPrepare","_dailyTaskStatus","_queueResume","_queueRewardsDone","_queueEnter","_queueDone","_queueBeginRewards","_queueHomeConfirmed","_requirePlayerAction");
+            "_validateRoute","_driverBegin","_driverStep","_driverEnd","_racePanel","_hud","_taskNotice","_finished","_multiplayerUi","_rewardUi","_fallbackBegin","_fallbackStep","_sessionCycle","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_sessionLegacyCompleted","_sessionLegacyPrepare","_sessionLegacyMap","_sessionOperation","_routeDisplay","_cupCards","_cupScrollDelta","_cupClaimState","_dailyEventUi","_soloEventUi","_soloGarageUi","_garageFilterState","_garageFilterPrepare","_dailyTaskStatus","_usedCarEntries","_selectCarEntry","_queueResume","_queueRewardsDone","_queueEnter","_queueDone","_queueBeginRewards","_queueHomeConfirmed","_requirePlayerAction");
     private final Context context;
     private final LocalStore store;
     private final CaptureSession capture;
@@ -126,6 +126,12 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         checkpoint.restore(cycle,q.getInt("index"),q.getInt("completed"),q.optInt("rewardCycle",cycle));
         checkpoint.restoreRecovery(q.optInt("failures"),q.optBoolean("needsHome"),q.optBoolean("homeRestarted"),
                 q.optBoolean("rewardWork"),q.optString("firstFailure"),q.optString("lastFailure"));
+        JSONArray used=q.optJSONArray("usedCarEntries");
+        if(used!=null){
+            List<Integer> entries=new ArrayList<>();
+            for(int i=0;i<used.length();i++)entries.add(used.getInt(i));
+            checkpoint.restoreCarEntries(entries);
+        }
         restoredQueue=true;
     }
     public void persist(boolean complete)throws Exception{
@@ -170,7 +176,13 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         panelChecked=false;
         if(legacyPrepared){
             boolean racing=RaceHud.visible(frame,wideViewport())&&popupPanel()==null;
-            if(racing&&!legacyRaceSeen){legacyRaceSeen=true;SessionState.stats.begin(legacyMap,legacyInvalid);SessionState.activity("比赛开始，辅助驾驶中");}
+            if(racing&&!legacyRaceSeen){
+                legacyRaceSeen=true;SessionState.stats.begin(legacyMap,legacyInvalid);
+                if(checkpoint.carRaceStarted()){
+                    try{persist(false);}catch(Exception e){throw new IllegalStateException(hardStop,e);}
+                }
+                SessionState.activity("比赛开始，辅助驾驶中");
+            }
             if(legacyRaceSeen)SessionState.racePanel(racing);
         }
     }
@@ -990,6 +1002,8 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 case "_routeDisplay":return result(l,store.matcher.displayName(s(l,1)));
                 case "_sessionCycle":SessionState.stats.cycle(n(l,1));return 0;
                 case "_dailyTaskStatus":return result(l,dailySkipReason(n(l,1)));
+                case "_usedCarEntries":return result(l,checkpoint.usedCarEntries());
+                case "_selectCarEntry":checkpoint.selectCarEntry(n(l,1),l.toBoolean(2));return 0;
                 case "_queueResume":{
                     Map<String,Object> saved=new LinkedHashMap<>(checkpoint.resume());
                     saved.put("restored",restoredQueue);

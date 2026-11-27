@@ -48,6 +48,10 @@ final class QueueRetryChecks {
                 (boolean) saved.getOrDefault("needsHome", false), (boolean) saved.getOrDefault("homeRestarted", false),
                 (boolean) saved.getOrDefault("rewardWork", false), (String) saved.getOrDefault("firstFailure", ""),
                 (String) saved.getOrDefault("lastFailure", ""));
+        List<Integer> entries=new ArrayList<>();
+        if(saved.get("usedCarEntries") instanceof List<?>)
+            for(Object slot:(List<?>)saved.get("usedCarEntries"))entries.add((Integer)slot);
+        restored.restoreCarEntries(entries);
         return restored;
     }
 
@@ -55,6 +59,9 @@ final class QueueRetryChecks {
         TaskCheckpoint pending = fromDisk(Map.of("cycle", 3, "index", 2, "completed", 1));
         check(pending.completed() == 1 && !pending.needsHome(), "Older records resume their saved race count");
         pending.enter(3, 2, 5);
+        pending.selectCarEntry(1,false);
+        check(pending.carRaceStarted(),"Actual race consumes the configured entry");
+        pending.selectCarEntry(2,false);
         pending.failure("first");
         check(pending.beginHomeRestart(), "First failure to reach home permits one restart");
         pending = fromDisk(pending.resume());
@@ -64,10 +71,17 @@ final class QueueRetryChecks {
         pending = fromDisk(pending.resume());
         pending.enter(3, 2, 5);
         check((int) pending.resume().get("failures") == 1, "Restart after reaching home preserves the used retry");
+        check(pending.usedCarEntries().equals(List.of(1)) && !pending.carRaceStarted(),
+                "Retry retains the raced car, not the unstarted selection");
+        pending.selectCarEntry(3,false);pending.carRaceStarted();
+        check(pending.usedCarEntries().equals(List.of(1,3)),"Next confirmed car extends the saved rotation");
+        pending.selectCarEntry(2,true);pending.carRaceStarted();
+        check(pending.usedCarEntries().equals(List.of(2)),"The next rotation starts when its first car races");
         pending.failure("second");
         check(pending.failureSummary().contains("first") && pending.failureSummary().contains("second"),
                 "Both failures remain available when deciding to skip");
         pending.homeConfirmed();
+        check(pending.usedCarEntries().isEmpty(),"Skipping to the next project clears its vehicle history");
         Map<String, Object> saved = pending.resume();
         check((int) saved.get("index") == 3 && (int) saved.get("completed") == 0,
                 "Skipping a failed project creates no extra race completions");

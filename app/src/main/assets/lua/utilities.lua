@@ -1804,23 +1804,30 @@ function utils.chooseCarCup(carList)
     return true
   end
   if clickMode and not openFirstCar(tonumber(carList[1])) then return 'garageChanged' end
-  local empty={};local unavailable={};local locked={}
+  local empty={};local unavailable={};local locked={};local missing={}
   for pass=1,2 do
     for j,raw in ipairs(carList) do
       local car=tonumber(raw)
       if not car or car==0 then error('车辆序号无效，保留当前任务') end
       if data['超时状态'] then error('选车超时，保留当前任务') end
-      if not empty[car] and not unavailable[car] and not locked[car] and (not rotate or data['用车次数']['car'..j]~=1) then
+      if not missing[car] and not empty[car] and not unavailable[car] and not locked[car] and (not rotate or data['用车次数']['car'..j]~=1) then
         local retryX,retryY,slot,fuel,detail
         if clickMode then
           if not lastCar and not openFirstCar(car) then return 'garageChanged' end
           utils.clickChoose(car,lastCar)
         elseif useGrid then
           if car<1 or car%1~=0 then error('滑动选车需要正整数车辆序号') end
-          origin=origin or vehicleGrid.soloOrigin()
-          slot=vehicleGrid.soloCar(origin,car)
-          if not slot then return 'garageChanged' end
+          local reason,count
+          if not origin then origin,reason=vehicleGrid.soloOrigin() end
+          if not origin then return reason or 'garageChanged' end
+          slot,reason,count=vehicleGrid.soloCar(origin,car)
           origin=nil
+          if reason=='pastEnd' then
+            missing[car]=true
+            print('已确认车库末尾，共 '..count..' 辆，跳过配置车辆 '..car)
+            goto nextCar
+          end
+          if not slot then return 'garageChanged' end
           if slot.availability=='locked' or slot.availability=='starUp' then
             fuel=slot.availability=='locked' and 'vehicleLocked' or 'starUp'
             print('配置车辆 '..car..(fuel=='starUp' and ' 待升星' or ' 尚未解锁')..'，已在列表跳过')
@@ -1894,6 +1901,7 @@ function utils.chooseCarCup(carList)
           print('配置车辆 '..car..' 未打开详情，尝试下一辆配置车辆')
         elseif fuel=='trial' or (type(fuel)=='number' and fuel>0) then
           data['用车次数']['car'..j]=1
+          if rotate and _selectCarEntry then _selectCarEntry(j,pass==2) end
           if dailyGrid then utils.verifiedDailyCar=slot or true end
           utils.selectNextTaskCar=false
           data['信息']='使用配置车辆 '..car..(fuel=='trial' and '（免费试驾）' or '，剩余燃油 '..fuel)
@@ -1904,12 +1912,13 @@ function utils.chooseCarCup(carList)
           if not clickMode and not (slot and (slot.availability=='starUp' or slot.availability=='empty')) then utils.backToGarage() end
         end
       end
+      ::nextCar::
     end
     local noneAvailable=true
     local missingDetails=false
     for _,raw in ipairs(carList) do
       local car=tonumber(raw)
-      if not empty[car] and not locked[car] then
+      if not missing[car] and not empty[car] and not locked[car] then
         if wide and unavailable[car] then missingDetails=true else noneAvailable=false end
       end
     end
@@ -1918,6 +1927,7 @@ function utils.chooseCarCup(carList)
         if next(locked) then return 'vehicleUnavailable' end
         break
       end
+      if next(missing) then return 'vehicleUnavailable' end
       if next(locked) then return 'vehicleLocked' end
       data['信息']='配置车辆均不可出赛，跳过本轮任务';print(data['信息']);return 'fuelEmpty'
     end

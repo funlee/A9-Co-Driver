@@ -133,7 +133,7 @@ local function confirmCar(screen,card,index,position,readFull)
 end
 local function awaitGarageOverlap(previous,position,direction,afterFrame,readGrid)
   local stableOffset,stableLeft,lastGarage
-  local stableFrames=0
+  local stableFrames,endFrames=0,0
   for retry=1,18 do
     sleep(90)
     local nextScreen=readGrid and readGrid() or _multiplayerUi(false,false,true)
@@ -141,6 +141,17 @@ local function awaitGarageOverlap(previous,position,direction,afterFrame,readGri
     if nextScreen.frameId and nextScreen.frameId>afterFrame then
       afterFrame=nextScreen.frameId
       local nextGarage=nextScreen.garage or {};lastGarage=nextGarage
+      -- Only a rightward drag on an already anchored final column can prove exhaustion.
+      -- Match its artwork and empty trailing space again after the drag has settled.
+      if readGrid and direction==1 and (previous.lastIndex or 0)>0 and
+          nextGarage.lastIndex==previous.lastIndex and math.abs(nextGarage.left-previous.left)<=3 then
+        local old=previous.cards[#previous.cards]
+        local last=nextGarage.cards[#nextGarage.cards]
+        if old and last and old.index==last.index and sameCard(old,last,12) then
+          endFrames=endFrames+1
+          if endFrames>=3 then return nextScreen,position.offset,nextGarage,afterFrame,true end
+        else endFrames=0 end
+      else endFrames=0 end
       local offset=nil
       if not readGrid and direction==-1 and nextGarage.start and nextGarage.rank==position.rank then offset=0
       else
@@ -208,7 +219,12 @@ local function locateCar(screen,index,position,readGrid,readFull)
     local duration,hold=wide and 600 or 300,wide and 180 or 100
     local from=direction==1 and 1100 or 300
     swipe(419,from,419,from-direction*distance,duration,hold)
-    local nextScreen,offset,lastGarage,lastFrame=awaitGarageOverlap(garage,position,direction,screen.frameId,readGrid)
+    local nextScreen,offset,lastGarage,lastFrame,atEnd=awaitGarageOverlap(garage,position,direction,screen.frameId,readGrid)
+    if atEnd then
+      local count=offset+lastGarage.lastIndex
+      if index>count then return nil,'pastEnd',count end
+      error('车库末页未能确认目标车位，已停止选车')
+    end
     if not nextScreen and wide and lastGarage then
       -- A short reverse drag can bring the overlap back. Keep the same verified anchor
       -- and direction until the corrected position is confirmed in consecutive frames.

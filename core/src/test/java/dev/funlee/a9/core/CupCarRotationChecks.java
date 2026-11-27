@@ -60,14 +60,25 @@ final class CupCarRotationChecks {
             lua.start("test");boolean alive=true;for(int i=0;i<30&&alive;i++)alive=lua.step(i*1000L);
             if(alive)throw new AssertionError("Obscured nitro start did not terminate");
         }
-        return cases.size()+1+dailyGrid(assets);
+        try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
+            lua.load("utilities",Files.readString(assets.resolve("lua/utilities.lua")));
+            lua.load("fixture",setup);
+            lua.load("workflow",Files.readString(assets.resolve("lua/workflows.lua")));
+            lua.load("resume","function _usedCarEntries()return {1.0} end;function test()"+
+                    "run.data={['次数']='0',['选车方式']='1',['用车模式']='1'};run.project();"+
+                    "assert(utils.chooseCarCup({5,1})==true and selected==1,'Retry must restore consumed entry before choosing') end");
+            lua.start("test");boolean alive=true;
+            for(int i=0;i<120&&alive;i++)alive=lua.step(i*1000L);
+            if(alive)throw new AssertionError("Resumed rotation timed out");
+        }
+        return cases.size()+2+dailyGrid(assets);
     }
     private static int dailyGrid(Path assets)throws Exception {
         String fixture;
         try(var input=CupCarRotationChecks.class.getResourceAsStream("/daily-car-grid.lua")){
             fixture=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
         }
-        var scenarios=List.of("empty-focused","empty-delayed","empty-unfiltered","empty-filtered","empty-cup","empty-special","empty-club","empty-stale","empty-unknown","empty-timeout","empty-missing-frame","empty-recovered","empty-unconfirmed","at-start","filtered-click","filtered-slide","confirm-click","confirm-slide","confirm-obscured","confirm-home","confirm-car-click","confirm-moving","confirm-stale","ordered","stuck","mismatch","model","large","locked","locked-only","locked-detail","star-card","star-detail","star-only");
+        var scenarios=List.of("end-confirmed","end-unconfirmed","empty-focused","empty-delayed","empty-unfiltered","empty-filtered","empty-cup","empty-special","empty-club","empty-stale","empty-unknown","empty-timeout","empty-missing-frame","empty-recovered","empty-unconfirmed","at-start","filtered-click","filtered-slide","confirm-click","confirm-slide","confirm-obscured","confirm-home","confirm-car-click","confirm-moving","confirm-stale","ordered","stuck","mismatch","model","large","locked","locked-only","locked-detail","star-card","star-detail","star-only");
         for(String scenario:scenarios)
                 try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
             lua.set("scenario",scenario);
@@ -109,9 +120,16 @@ final class CupCarRotationChecks {
                 List.of(Map.of("x",611,"y",654,"text","0/4")),16.0/9).get("cards");
         if(!"empty".equals(((Map<?,?>)cards.get(3)).get("availability")))
             throw new AssertionError("A 0/N counter overrides the bright fuel pill");
+        int nextEdge=97+2*474;
+        for(int x=nextEdge+5;x<nextEdge+80;x++)for(int y=253;y<=386;y++)pixels[x*720+719-y]=0xff709093;
+        if(!Integer.valueOf(4).equals(MultiplayerGarage.soloSlots(new PixelFrame(720,1280,pixels),List.of(),16.0/9).get("lastIndex")))
+            throw new AssertionError("Floating task controls in the trailing gutter must not hide the final column");
+        for(int x=nextEdge;x<=nextEdge+80;x++)pixels[x*720+719-195]=0xffefdfab;
+        if(!Integer.valueOf(0).equals(MultiplayerGarage.soloSlots(new PixelFrame(720,1280,pixels),List.of(),16.0/9).get("lastIndex")))
+            throw new AssertionError("A following card outline must prevent an end-of-garage match");
         for(int x=46;x<87;x++)for(int y=195;y<670;y++)pixels[x*720+719-y]=0xff963815;
         if(Boolean.TRUE.equals(MultiplayerGarage.soloSlots(new PixelFrame(720,1280,pixels),List.of(),16.0/9).get("start")))
             throw new AssertionError("A clipped preceding card cannot be counted as the origin");
-        return scenarios.size()+4;
+        return scenarios.size()+6;
     }
 }

@@ -1,5 +1,8 @@
 package dev.funlee.a9.core;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -8,17 +11,21 @@ public final class TaskCheckpoint {
     private int cycle=1,index=1,completed,target,rewardCycle;
     private boolean projectDone,rewardWork,needsHome,homeRestarted;
     private int failures;
+    private final LinkedHashSet<Integer> usedCarEntries=new LinkedHashSet<>();
+    private int selectedCarEntry;
+    private boolean newCarRotation;
     private String firstFailure="",lastFailure="";
 
     public void enter(int round,int project,int count){
         if(needsHome)throw new IllegalStateException("项目开始前尚未确认主界面");
-        if(round!=cycle||project!=index||projectDone){completed=0;projectDone=false;clearFailures();}
+        selectedCarEntry=0;newCarRotation=false;
+        if(round!=cycle||project!=index||projectDone){usedCarEntries.clear();completed=0;projectDone=false;clearFailures();}
         cycle=round;index=project;target=Math.max(0,count);
         if(completed>target)throw new IllegalArgumentException("Saved project progress exceeds its target");
     }
     public void beginRewards(int round){
         if(needsHome)throw new IllegalStateException("领奖前尚未确认主界面");
-        if(cycle!=round){cycle=round;index=1;completed=0;target=0;projectDone=false;}
+        if(cycle!=round){usedCarEntries.clear();cycle=round;index=1;completed=0;target=0;projectDone=false;}
         if(!rewardWork)clearFailures();
         rewardWork=true;
     }
@@ -30,8 +37,25 @@ public final class TaskCheckpoint {
         completed(stats.finished()-before);
         return conflict;
     }
+    // Entries are positions in the configured list: deliberate duplicate cars remain distinct.
+    public List<Integer> usedCarEntries(){return new ArrayList<>(usedCarEntries);}
+    public void selectCarEntry(int entry,boolean restartRotation){
+        if(entry<1)throw new IllegalArgumentException("配置车辆下标无效");
+        selectedCarEntry=entry;
+        newCarRotation|=restartRotation;
+    }
+    public boolean carRaceStarted(){
+        if(selectedCarEntry==0)return false;
+        if(newCarRotation)usedCarEntries.clear();
+        usedCarEntries.add(selectedCarEntry);
+        selectedCarEntry=0;newCarRotation=false;
+        return true;
+    }
+    public void restoreCarEntries(List<Integer> entries){
+        usedCarEntries.clear();usedCarEntries.addAll(entries);
+    }
     public int completed(){return completed;}
-    public void projectDone(){projectDone=true;clearFailures();}
+    public void projectDone(){projectDone=true;usedCarEntries.clear();selectedCarEntry=0;newCarRotation=false;clearFailures();}
     public void rewardsDone(int round){rewardCycle=round;rewardWork=false;clearFailures();}
 
     private void clearFailures(){
@@ -65,6 +89,7 @@ public final class TaskCheckpoint {
     public void restore(int round,int project,int done){restore(round,project,done,0);}
     public void restore(int round,int project,int done,int lastRewardCycle){
         if(round<1||project<1||done<0)throw new IllegalArgumentException("Invalid saved queue position");
+        usedCarEntries.clear();selectedCarEntry=0;newCarRotation=false;
         cycle=round;index=project;completed=done;target=done;projectDone=false;
         rewardCycle=lastRewardCycle;rewardWork=false;clearFailures();
     }
@@ -78,6 +103,7 @@ public final class TaskCheckpoint {
         Map<String,Object> state=new LinkedHashMap<>();
         state.put("cycle",cycle);state.put("index",projectDone?index+1:index);
         state.put("completed",projectDone?0:completed);state.put("rewardCycle",rewardCycle);
+        if(!usedCarEntries.isEmpty())state.put("usedCarEntries",usedCarEntries());
         state.put("failures",failures);state.put("needsHome",needsHome);state.put("homeRestarted",homeRestarted);
         state.put("rewardWork",rewardWork);state.put("firstFailure",firstFailure);state.put("lastFailure",lastFailure);
         return state;

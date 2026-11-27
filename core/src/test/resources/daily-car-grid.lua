@@ -7,7 +7,8 @@ local confirmCase=scenario:match('^confirm%-(.*)')
 local fullReads=0
 local emptyCase=scenario:match('^empty%-(.*)')
 local emptyFullReads=0
-local filtered=scenario=='filtered-slide' or scenario=='filtered-click' or confirmCase or emptyCase
+local endCase=scenario:match('^end%-(.*)')
+local filtered=endCase or scenario=='filtered-slide' or scenario=='filtered-click' or confirmCase or emptyCase
 if filtered then
   run.data['选车筛选']='0,1,2'
   utils.configureGarageFilter=function()return true end
@@ -18,7 +19,7 @@ if emptyCase=='cup' then data['项目']='杯赛';run.data['选车方式']='1' en
 if emptyCase=='special' then data['项目']='特殊赛事' end
 if emptyCase=='club' then data['项目']='车联' end
 if emptyCase=='unfiltered' then run.data['选车筛选']='' end
-local blankReads=emptyCase and 0 or 2
+local blankReads=(emptyCase or endCase) and 0 or 2
 local bounceReads=0
 local returns=0
 function print()end
@@ -47,7 +48,7 @@ function _soloGarageUi(fast)
     return {scene='cars',frameId=frame,gridOnly=fast,garage={start=false,left=-1,pitch=474,cards={}}}
   end
   local cards={}
-  for i=1,6 do
+  for i=1,endCase and math.min(6,8-offset) or 6 do
     local number=offset+i
     cards[i]={index=i,x=280+math.floor((i-1)/2)*474,y=i%2==1 and 308 or 550,
       signature=signature(number),score=fast and '' or tostring(5900-number),model=scenario=='model' and 'CCXR' or '',
@@ -57,6 +58,7 @@ function _soloGarageUi(fast)
   local left=atStart and 97 or offset==0 and 376 or 200
   bounceReads=math.max(0,bounceReads-1)
   local garage={start=atStart,leadingClear=offset==0,left=left,pitch=474,cards=cards}
+  if endCase and offset==4 and endCase~='unconfirmed' then garage.lastIndex=#cards end
   if not fast and confirmCase then
     fullReads=fullReads+1
     if confirmCase=='home' or confirmCase=='car-click' then
@@ -90,7 +92,7 @@ function swipe(y,from,endY,to,duration)
     if offset==0 then bounceReads=4 end
   else
     assert(resets>=1 or filtered,'Do not count cars before a verified origin')
-    offset=offset+2
+    offset=endCase and math.min(4,offset+2) or offset+2
   end
 end
 function tap(y,x)
@@ -118,6 +120,16 @@ function test()
       assert(ok and result==true and tapped[1]==1,'Transient empty list must recover')
     else
       assert(not ok and #tapped==0 and not next(data['用车次数']),'Unconfirmed/stale/timeout is not a normal skip: '..tostring(result))
+    end
+  elseif endCase then
+    if endCase=='confirmed' then
+      local cars={5,10,1,6,8,7,2}
+      for i=1,5 do assert(utils.chooseCarCup(cars)==true) end
+      assert(table.concat(tapped,',')=='5,1,6,8,7')
+      assert(utils.chooseCarCup({10,20})=='vehicleUnavailable' and #tapped==5)
+    else
+      local ok=pcall(utils.chooseCarCup,{10,1})
+      assert(not ok and #tapped==0,'A stalled drag without an end marker must not skip the car')
     end
   elseif confirmCase then
     function toast()end

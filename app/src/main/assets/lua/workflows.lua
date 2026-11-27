@@ -41,6 +41,11 @@ function run.main()
 end
 function run.project()
   run.nitro()
+  if _usedCarEntries then
+    for _,entry in ipairs(_usedCarEntries()) do
+      data['用车次数'][string.format('car%d',entry)]=1
+    end
+  end
   local ret = 0
   local times = tonumber(run.data["次数"]) or 1
   local daily=data['项目']=='每日战利品'

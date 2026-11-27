@@ -429,12 +429,14 @@ public final class MultiplayerGarage {
         }
         List<Object> cards=new ArrayList<>();
         int right=wide?1260:1280;
+        int lastIndex=0,lastEdge=-1;
         for(int column=0,x=left;left>=0&&x+190<=right;column++,x+=pitch){
             for(int row=0;row<2;row++){
                 int y=top+row*rowPitch;
                 int edge=-1;
                 for(int dx=-4;dx<=4&&edge<0;dx++)if(slotEdge(frame,x+dx,y,true))edge=x+dx;
                 if(edge<0)continue;
+                lastIndex=2*column+row+1;lastEdge=edge;
                 boolean clipped=edge+width>right;
                 cards.add(Map.of("index",2*column+row+1,"x",edge+(wide?145:190),"y",y+113,"left",edge,"top",y,
                         "signature",thumbnail(frame,edge,y),"clipped",clipped,
@@ -444,7 +446,16 @@ public final class MultiplayerGarage {
             }
         }
         boolean leadingClear=left>=87&&soloOriginGutter(frame,left,top,rowPitch);
+        // A partially visible next column can be too narrow for card OCR. Require
+        // visible empty space past the next expected edge in both rows.
+        int nextEdge=lastEdge+pitch,probeRight=Math.min(right-1,nextEdge+80);
+        boolean end=lastIndex>0 && probeRight-nextEdge>=42
+                && emptySoloColumnRow(frame,nextEdge,probeRight,top)
+                && emptySoloColumnRow(frame,nextEdge,probeRight,top+rowPitch);
+        if(end && lastIndex%2==1)
+            end=darkCardPatch(frame,lastEdge+15,lastEdge+width-12,top+rowPitch+8,top+rowPitch+205);
         return Map.of("left",left,"start",leadingClear&&left<=132,"leadingClear",leadingClear,
+                "lastIndex",end?lastIndex:0,
                 "cards",cards,"pitch",pitch);
     }
 
@@ -510,6 +521,18 @@ public final class MultiplayerGarage {
             total++;
         }
         return dark*10>=total*9;
+    }
+
+    private static boolean emptySoloColumnRow(PixelFrame frame,int edge,int right,int top){
+        // The floating task controls can cover the middle of the trailing gutter.
+        // Check the card header and footer separately, and reject a visible top outline
+        // even if the clipped card itself has dark artwork.
+        for(int y=top-4;y<=top+5;y++){
+            if(slotBorder(frame.pixel(719-y,edge+10),true) && slotBorder(frame.pixel(719-y,edge+24),true)
+                    && slotBorder(frame.pixel(719-y,edge+38),true))return false;
+        }
+        return darkCardPatch(frame,edge+4,right,top+12,top+45)
+                && darkCardPatch(frame,edge+4,right,top+204,top+217);
     }
 
     private static boolean soloOriginGutter(PixelFrame frame,int left,int top,int rowPitch){
