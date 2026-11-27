@@ -2354,14 +2354,17 @@ function utils.chooseCup(num,wide,configuredOnly)
       -- 只把这张卡选中，要点卡下沿的「进入」才真进赛事。只有慢速拖动（900ms）不会
       -- 被系统取消，位移约等于拖动距离-19 且不吸附，所以拖 224px 正好一格（卡距 186）。
       -- 实测拖 224px 实际走 205px（位移 = 拖动-19），比卡距 186 多 19，每步都在偏移。
-      -- 所以拖动距离取 205px，正好一格；剩一口气的误差交给下面的 align 逐步磨平。
-      local X0, DRAG, PITCH = 151, 205, 186
+      -- 所以 DRAG 取 186（期望位移一格），下面的 drag 内部再补上这 19px 的损耗。
+      local X0, DRAG, PITCH = 151, 186, 186
       local PX = 259              -- 竖向 x：横屏卡片图区 y≈460
       -- 第 6 个参数让触点在终点停 300ms 再抬起：不带这个停顿，拖动会被游戏当成
       -- 快速滑动吞掉，列表只挪动了实际距离的三分之一。
-      local function drag(span)   -- span>0 手指左移，列表向末尾滚
-        if span > 0 then swipe(PX, 1150, PX, 1150 - span, 700, 300)
-        else swipe(PX, 200, PX, 200 - span, 700, 300) end
+      -- span 是期望的位移量（正值 = 列表向末尾滚）。补 19px 损耗时必须取绝对值，
+      -- 否则负向偏移不足 19px 时会被算成反向拖动，校正等于没做。
+      local function drag(span)
+        local px = math.abs(span) + 19
+        if span > 0 then swipe(PX, 1150, PX, 1150 - px, 700, 300)
+        else swipe(PX, 200, PX, 200 + px, 700, 300) end
         sleep(600)
       end
       local function seen()
@@ -2396,7 +2399,7 @@ function utils.chooseCup(num,wide,configuredOnly)
             print('杯赛列表首卡中心 '..math.floor(first)..'，已对齐')
             return
           end
-          drag(off + 19)
+          drag(off)
           sleep(1000)
           local again = measure()
           local left = '?'
