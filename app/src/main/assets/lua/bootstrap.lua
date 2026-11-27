@@ -281,6 +281,7 @@ local skipReasons={
   cupClaimOnly='配置位置仅可领取奖励，已保留奖励',
   cupListObscured='待领奖励提示持续遮挡赛事位置，已保留奖励',
   cupPositionUnavailable='无法定位配置的赛事位置，请检查杯赛位置',
+  cupEntryUnconfirmed='已点击赛事入口，但未能确认进入赛事详情',
   cupPositionInvalid='杯赛位置必须为非零整数，请检查任务配置',
   fuelEmpty='配置车辆均无油或暂不可用',
   vehicleLocked='配置车辆尚未解锁',

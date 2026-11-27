@@ -9,36 +9,52 @@ public final class CupCarousel {
     public static final class ScrollTracker {
         private int[][] previous;
 
-        public Integer observe(PixelFrame frame, int direction) {
-            int[][] current = new int[5][1280];
-            for (int row = 0; row < current.length; row++) {
-                for (int x = 0; x < 1280; x++) current[row][x] = frame.pixel(719 - (545 + row * 20), x);
+        private static int[][] sample(PixelFrame frame) {
+            int[][] rows = new int[5][1280];
+            for (int row = 0; row < rows.length; row++) {
+                for (int x = 0; x < 1280; x++) rows[row][x] = frame.pixel(719 - (545 + row * 20), x);
             }
+            return rows;
+        }
+
+        public Integer observe(PixelFrame frame, int direction) {
             int[][] before = previous;
-            previous = current;
+            previous = sample(frame);
             if (direction == 0 || before == null) return 0;
-            double[] scores = new double[801];
+            return match(before, previous, direction > 0 ? 0 : -800, direction > 0 ? 800 : 0, 25, 5);
+        }
+
+        /** Card selection can recenter in either direction. Keep the pre-tap reference across reads. */
+        public Integer shiftSinceLastDrag(PixelFrame frame) {
+            // Two cards change size/art on selection. Allow more changed pixels, but require
+            // a clearer margin over competing translations before accepting the shift.
+            return previous == null ? null : match(previous, sample(frame), -800, 800, 48, 8);
+        }
+
+        private static Integer match(int[][] before, int[][] after, int min, int max, int maxError, int minMargin) {
+            double[] scores = new double[max - min + 1];
             int best = 0;
-            for (int distance = 0; distance < scores.length; distance++) {
+            for (int distance = min; distance <= max; distance++) {
                 int difference = 0, samples = 0;
-                for (int x = 70; x + distance <= 1210; x += 11) {
-                    int from = direction > 0 ? x + distance : x;
-                    int to = direction > 0 ? x : x + distance;
-                    for (int row = 0; row < current.length; row++) {
-                        int a = before[row][from], b = current[row][to];
+                for (int x = 70; x + Math.abs(distance) <= 1210; x += 11) {
+                    int from = x + Math.max(0, distance);
+                    int to = x - Math.min(0, distance);
+                    for (int row = 0; row < after.length; row++) {
+                        int a = before[row][from], b = after[row][to];
                         difference += Math.abs((a >> 16 & 255) - (b >> 16 & 255))
                                 + Math.abs((a >> 8 & 255) - (b >> 8 & 255)) + Math.abs((a & 255) - (b & 255));
                         samples += 3;
                     }
                 }
-                scores[distance] = (double) difference / samples;
-                if (scores[distance] < scores[best]) best = distance;
+                int index = distance - min;
+                scores[index] = (double) difference / samples;
+                if (scores[index] < scores[best]) best = index;
             }
-            if (scores[best] > 25) return null;
+            if (scores[best] > maxError) return null;
             for (int i = 0; i < scores.length; i++) {
-                if (Math.abs(i - best) > 15 && scores[i] < scores[best] + 5) return null;
+                if (Math.abs(i - best) > 15 && scores[i] < scores[best] + minMargin) return null;
             }
-            return direction > 0 ? best : -best;
+            return best + min;
         }
     }
     public static List<Map<String,Object>> cards(PixelFrame frame){

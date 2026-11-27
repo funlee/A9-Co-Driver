@@ -106,11 +106,11 @@ final class CupSelectionDeviceCheck implements LuaRuntime.Host {
         try{
             switch(name){
                 case "keepCapture":capture();return 0;
-                case "_cupScrollDelta":LuaRuntime.push(lua,scroll.observe(pixels,number(lua,1)));return 1;
+                case "_cupScrollDelta":LuaRuntime.push(lua,lua.isNoneOrNil(1) ? scroll.shiftSinceLastDrag(pixels) : scroll.observe(pixels,number(lua,1)));return 1;
                 case "_soloEventUi":{
                     // Geometry-only test host: exercise the production selected-card fallback
                     // when OCR does not supply an Enter button. Title checks use independent OCR.
-                    LuaRuntime.push(lua,Map.of("scene",targetTaps>0?"event":"cupList"));return 1;
+                    capture();LuaRuntime.push(lua,Map.of("scene",targetTaps>0?"event":"cupList"));return 1;
                 }
                 case "_cupCards":{
                     var cards=CupCarousel.cards(pixels);

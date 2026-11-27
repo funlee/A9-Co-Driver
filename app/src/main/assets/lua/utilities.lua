@@ -2171,10 +2171,80 @@ local function awaitCupList()
     sleep(400)
   end
 end
-local function cupEntryGuard(center)
-  local state=cupClaimState(center)
+local function cupEntryGuard(center,useCurrentFrame)
+  local state
+  if useCurrentFrame then state=_cupClaimState and _cupClaimState(center)
+  else state=cupClaimState(center) end
   if state=='claimOnly' then return 'cupClaimOnly' end
   if state=='spotlight' then return 'cupListObscured' end
+end
+-- The last drag measured the target on a known list frame. Read the highlight,
+-- entry button and scroll displacement from the same new frame as the OCR.
+local function selectedCupEntry(screen,card,allowBorder)
+  local list=screen.scene=='cupList' or screen.scene=='wideCupList'
+  if (not list and screen.scene~='unknown') or screen.closeX then return end
+  local shift=card.selected and 0 or _cupScrollDelta()
+  if not shift then return end
+  local expected=card.center-shift
+  local center
+  for _,current in ipairs(_cupCards() or {}) do
+    if current.selected then
+      if center or math.abs(current.center-expected)>=55 then return end
+      center=current.center
+    end
+  end
+  -- An obscured border can still have a readable entry button. In that case
+  -- match the button itself to the tracked position, not to a neighboring card.
+  local x=center or expected
+  local radius=center and 85 or 54
+  local button=findUiWord(screen,{['进入']=true},x-radius,x+radius,570,710)
+  if button then return center or button.x,button end
+  if list and allowBorder then return center end
+end
+
+local function enterDailyEventCard(position,card)
+  if not card.selected then
+    tap(189,card.center)
+    sleep(1);sleep(500)
+  end
+  local taps,lastTap=0,0
+  local previousCenter,lastFrame,lastScene
+  local deadline=tickCount()+9000
+  repeat
+    local screen=_soloEventUi() or {}
+    local scene=screen.scene
+    lastScene=scene or 'unknown'
+    if scene=='event' or scene=='clubRewards' or scene=='dailyRewardOnly' or scene=='cars' or scene=='car'
+        or (scene=='unknown' and not screen.closeX and cup and cup.detailVisible()) then
+      local title=(screen.text or ''):gsub('%s+',' ')
+      data['信息']='杯赛位置 '..position..'：'..lastScene..(title~='' and '，'..utf8.left(title,16) or '')
+      print('已确认第 '..position..' 个赛事位置，界面 '..lastScene..' 标题 '..utf8.left(title,40))
+      return 'entered'
+    end
+    if scene=='cupClaimSpotlight' then return nil,nil,'cupListObscured' end
+    if not screen.frameId or screen.frameId~=lastFrame then
+      lastFrame=screen.frameId
+      local center,button
+      if taps==0 or (taps==1 and tickCount()-lastTap>=2500) then
+        center,button=selectedCupEntry(screen,card,taps==0)
+      end
+      if center and previousCenter and math.abs(center-previousCenter)<=3 then
+        local blocked=cupEntryGuard(center,true)
+        if blocked then return nil,nil,blocked end
+        if button then tapUiWord(button) else tap(65,center) end
+        taps=taps+1
+        lastTap=tickCount()
+        if taps==1 then deadline=lastTap+10000 end
+        previousCenter=nil
+      else
+        previousCenter=center
+      end
+    end
+    sleep(400)
+  until tickCount()>=deadline
+  if taps==0 then return nil,'未确认第 '..position..' 张赛事卡的进入按钮' end
+  print('已点击第 '..position..' 张赛事卡的进入按钮，未确认赛事详情，最后界面 '..lastScene)
+  return nil,nil,'cupEntryUnconfirmed'
 end
 function utils.chooseCup(num,wide,configuredOnly)
   data["信息"] = "选择杯赛"
@@ -2420,36 +2490,7 @@ function utils.chooseCup(num,wide,configuredOnly)
       local blocked = cupEntryGuard(card.center)
       if blocked then return nil,nil,blocked end
       print('杯赛第 '..target..' 张卡实际中心 '..card.center)
-      if not card.selected then tap(189,card.center);sleep(1);sleep(1500) end
-      local picked = _soloEventUi()
-      if picked and picked.scene=='event' then return 'entered' end
-      local enter
-      for _,word in ipairs((picked and picked.words) or {}) do
-        if tostring(word.text):gsub('%s','')=='进入' and word.x and word.y and word.y>570 and word.y<710 then
-          enter=word;break
-        end
-      end
-      keepCapture();local selectedCards=_cupCards() or {};releaseCapture()
-      local selected=nearest(selectedCards,card.center)
-      if enter and math.abs(enter.x-card.center)<90 then
-        tap(719-math.floor(enter.y), math.floor(enter.x))
-      elseif selected and selected.selected then
-        tap(65,selected.center)
-      else
-        return nil,'未确认第 '..target..' 张赛事卡的进入按钮'
-      end
-      sleep(2500)
-      local scene = _soloEventUi()
-      local sc = scene and scene.scene
-      local title = scene and scene.text and string.gsub(tostring(scene.text), '%s+', ' ') or ''
-      -- 把进入的赛事标题一起记进任务信息：赛事列表按时间轮换，配置位置对不上时能直接看出来。
-      data['信息'] = '杯赛位置 '..target..'：'..tostring(sc)
-        ..(title ~= '' and ('，'..utf8.left(title, 16)) or '')
-      -- 截断不能按字节切：中文一个字 3 字节，切在半路上会得到非法 UTF-8，
-      -- 回传给 Java 的 NewStringUTF 时直接把进程打挂（java_vm_ext.cc:616）。
-      print('已按第 '..target..' 个赛事位置点击进入赛事，界面 '..tostring(sc)..' 标题 '..utf8.left(title, 40))
-      if sc=='cupList' or sc=='wideCupList' then return nil, '点击进入后仍在赛事列表页' end
-      return 'entered'
+      return enterDailyEventCard(target,card)
     end
     for step = 2, target do
       local moved = false

@@ -127,7 +127,7 @@ final class CupSelectionChecks {
         List<String> cases=List.of(
             "local entered=false;local offset=0;local delta=0;local picked=1;utf8.left=function(s)return s end;"+
                 "function swipe(x,a,y,b) local old=offset;offset=math.max(0,math.min(4*186,offset+a-b));delta=offset-old end;"+
-                "function _cupScrollDelta(d)return d==0 and 0 or delta end;"+
+                "function _cupScrollDelta(d)return (not d or d==0) and 0 or delta end;"+
                 "function _cupCards()local t={};for i=1,10 do local x=151+(i-1)*186-offset;"+
                 "if x>70 and x<1200 then t[#t+1]={center=x,selected=i==picked} end end;return t end;"+
                 "function _soloEventUi()return {scene=entered and 'event' or 'cupList'} end;"+
@@ -197,10 +197,15 @@ final class CupSelectionChecks {
                 || !Integer.valueOf(0).equals(tracker.observe(scrollFrame(845),1))
                 || !Integer.valueOf(-520).equals(tracker.observe(scrollFrame(325),-1)))
             throw new AssertionError("Cup scroll distance must follow the artwork, including a clamped last drag");
+        if(!Integer.valueOf(102).equals(tracker.shiftSinceLastDrag(scrollFrame(427)))
+                || !Integer.valueOf(-95).equals(tracker.shiftSinceLastDrag(scrollFrame(230))))
+            throw new AssertionError("Selection must use the pre-tap reference across reads in either direction");
         tracker.observe(new PixelFrame(720,1280,new int[720*1280]),0);
         if(tracker.observe(new PixelFrame(720,1280,new int[720*1280]),1)!=null)
             throw new AssertionError("An ambiguous image cannot establish a card position");
-        int checked=16;
+        if(tracker.shiftSinceLastDrag(new PixelFrame(720,1280,new int[720*1280]))!=null)
+            throw new AssertionError("An ambiguous selection shift must not authorize a tap");
+        int checked=18;
         for(String script:cases){
             cleanCupCache();
             try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
@@ -208,6 +213,25 @@ final class CupSelectionChecks {
                 lua.load("cup-case","function test()"+script+" end");lua.start("test");
                 boolean alive=true;for(int n=0;n<500&&alive;n++)alive=lua.step(n*1000L);
                 if(alive)throw new AssertionError("Cup selection did not terminate");
+            }
+            checked++;
+        }
+        String dailyEntry;
+        try(var input=CupSelectionChecks.class.getResourceAsStream("/daily-event-entry.lua")){
+            dailyEntry=new String(Objects.requireNonNull(input).readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
+        }
+        for(String scenario:List.of("delayed","retry","direct","covered-border","missing","unknown","stale","wrong-card")){
+            cleanCupCache();
+            try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
+                for(String module:List.of("bootstrap","utilities","cup","workflows"))
+                    lua.load(module,Files.readString(assets.resolve("lua/"+module+".lua")));
+                lua.set("LOCAL_ROOT","/tmp/a9-cup-check");
+                lua.set("scenario",scenario);
+                lua.load("daily-event-entry",dailyEntry);
+                lua.start("test");
+                boolean alive=true;
+                for(int n=0;n<1200&&alive;n++)alive=lua.step(n*100L);
+                if(alive)throw new AssertionError("Daily event entry timed out: "+scenario);
             }
             checked++;
         }

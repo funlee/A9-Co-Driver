@@ -823,7 +823,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                     if(CupCarousel.claimSpotlight(current))return result(l,"spotlight");
                     return result(l,!l.isNoneOrNil(1)&&CupCarousel.claimOnlyAt(current,n(l,1))?"claimOnly":"");
                 }
-                case "_cupScrollDelta":return result(l,cupScroll.observe(frame(),n(l,1)));
+                case "_cupScrollDelta":return result(l,l.isNoneOrNil(1) ? cupScroll.shiftSinceLastDrag(frame()) : cupScroll.observe(frame(),n(l,1)));
                 case "_cupCards":{
                     Map<String,Object> popup=popupOverPixelMenu();
                     return popup.isEmpty()?result(l,CupCarousel.cards(frame(),wideViewport())):result(l,popup);

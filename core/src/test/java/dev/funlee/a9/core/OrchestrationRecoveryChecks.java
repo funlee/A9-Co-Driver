@@ -473,7 +473,7 @@ final class OrchestrationRecoveryChecks {
             "function _soloEventUi()return {scene=phase,dailyLoot=phase=='event',text='每日车辆战利品'}end",
             "run.carDetails={['杯赛']=function()return 'fuelEmpty' end};cup={openRaceGarage=function()assert(run.dailyLoot);phase='car';return true end}",
             "function test()assert(run.project()=='fuelEmpty' and chosen);done=true end"));
-        for(String outcome:List.of("cupListObscured","cupPositionUnavailable","cupPositionInvalid","cupClaimOnly","garageEmpty","noTicket","-1")){
+        for(String outcome:List.of("cupListObscured","cupPositionUnavailable","cupEntryUnconfirmed","cupPositionInvalid","cupClaimOnly","garageEmpty","noTicket","-1")){
             script(assets,List.of("bootstrap"),String.join("\n",
                 "data={};local notices,finished=0,0;function localInit()end;function monitor()end;function print()end;function _hud()end",
                 "UIconfig={routeOnly='',ActiveProj={true,true},projects={{['项目']='杯赛',data={['次数']='3',['杯赛位置']='5'}},{['项目']='多人下',data={['次数']='1'}}}}",

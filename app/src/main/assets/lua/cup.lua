@@ -13,6 +13,10 @@ local config = {
   tips = "190|808|FFFFFF-101010,190|912|12FBC3-101010"
 }
 
+function cup.detailVisible()
+  return cmpColorEx(config.cupInfo,1)==1
+end
+
 -- The event is already recognized by OCR. Use its Race button when the
 -- legacy cup page colors no longer line up with the display.
 function cup.openRaceGarage(screen)
