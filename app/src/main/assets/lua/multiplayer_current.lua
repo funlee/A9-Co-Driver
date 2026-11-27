@@ -131,7 +131,7 @@ local function confirmCar(screen,card,index,position,readFull)
   if daily then error('未能确认选车页面或目标车位，保留任务进度（第 '..index..' 辆，场景 '..lastScene..'，新帧 '..reads..'）') end
   error('目标车位仍在移动，未选择车辆')
 end
-local function awaitGarageOverlap(previous,position,direction,afterFrame,readGrid)
+local function awaitGarageOverlap(previous,position,direction,afterFrame,readGrid,restoreAnchor)
   local stableOffset,stableLeft,lastGarage
   local stableFrames,endFrames=0,0
   for retry=1,18 do
@@ -153,7 +153,13 @@ local function awaitGarageOverlap(previous,position,direction,afterFrame,readGri
         else endFrames=0 end
       else endFrames=0 end
       local offset=nil
-      if not readGrid and direction==-1 and nextGarage.start and nextGarage.rank==position.rank then offset=0
+      if restoreAnchor and nextGarage.left and math.abs(nextGarage.left-previous.left)<20
+          and (not nextGarage.rank or nextGarage.rank=='' or nextGarage.rank==position.rank)
+          and rememberedOffset(restoreAnchor,nextGarage)==position.offset then
+        -- A corrective drag can return almost exactly to the verified page. Matching
+        -- two distinct cards restores that offset without counting any new columns.
+        offset=position.offset
+      elseif not readGrid and direction==-1 and nextGarage.start and nextGarage.rank==position.rank then offset=0
       else
         local candidates={}
         local moved=(tonumber(previous.left) or 0)-(tonumber(nextGarage.left) or 0)
@@ -193,7 +199,7 @@ local function awaitGarageOverlap(previous,position,direction,afterFrame,readGri
 end
 local function locateCar(screen,index,position,readGrid,readFull)
   local garage=screen.garage
-  local attempts=0
+  local attempts,restores=0,0
   while true do
     for _,card in ipairs(garage.cards or {}) do
       if card.index+position.offset==index and not card.clipped then
@@ -212,11 +218,10 @@ local function locateCar(screen,index,position,readGrid,readFull)
     if attempts>60 then error('无法连续核验配置车辆 '..index..' 的跨屏位置，已停止选车') end
     local direction=index<=position.offset and -1 or 1
     local pitch=math.min(tonumber(garage.pitch) or 359,readGrid and 480 or 464)
-    -- Ultrawide layouts can show only two complete columns. Leave most of a column
-    -- visible across the drag, and give the carousel time to settle before release.
-    local wide=pitch==359 or readGrid~=nil
-    local distance=wide and math.floor(pitch*0.7) or pitch
-    local duration,hold=wide and 600 or 300,wide and 180 or 100
+    -- The league rail can leave only two complete columns even at 16:9.
+    -- Keep an identified column on screen and release only after the drag settles.
+    local distance=math.floor(pitch*(restores>0 and 0.45 or 0.7))
+    local duration,hold=600,180
     local from=direction==1 and 1100 or 300
     swipe(419,from,419,from-direction*distance,duration,hold)
     local nextScreen,offset,lastGarage,lastFrame,atEnd=awaitGarageOverlap(garage,position,direction,screen.frameId,readGrid)
@@ -225,13 +230,19 @@ local function locateCar(screen,index,position,readGrid,readFull)
       if index>count then return nil,'pastEnd',count end
       error('车库末页未能确认目标车位，已停止选车')
     end
-    if not nextScreen and wide and lastGarage then
+    if not nextScreen and lastGarage then
       -- A short reverse drag can bring the overlap back. Keep the same verified anchor
       -- and direction until the corrected position is confirmed in consecutive frames.
-      print('宽屏选车翻页重叠不足，回拖核验上一页车辆')
+      print('选车翻页重叠不足，回拖核验上一页车辆')
       local backFrom=direction==1 and 300 or 1100
       swipe(419,backFrom,419,backFrom+direction*distance,duration,hold)
-      nextScreen,offset,lastGarage=awaitGarageOverlap(garage,position,direction,lastFrame,readGrid)
+      local anchor
+      if not readGrid and restores<2 then anchor={offset=position.offset,cards=garage.cards} end
+      nextScreen,offset,lastGarage=awaitGarageOverlap(garage,position,direction,lastFrame,readGrid,anchor)
+      if anchor and nextScreen and offset==position.offset and math.abs(nextScreen.garage.left-garage.left)<20 then
+        restores=restores+1
+        print('回拖已核对原车位，缩短滑动距离继续定位第 '..index..' 辆')
+      end
     end
     if not nextScreen then
       if _jsonEncode then print('翻页定位失败，起始偏移 '..position.offset..'：'.._jsonEncode(garage)..' → '.._jsonEncode(lastGarage or {})) end

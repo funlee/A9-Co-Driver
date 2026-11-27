@@ -927,8 +927,12 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 case "_garageFilterPrepare":
                     prepareOverlay(false,true);return 0;
                 case "_garageFilterState":{
+                    if(l.toBoolean(1))capture();
                     Map<String,Object> popup=popupOverPixelMenu();
-                    return popup.isEmpty()?result(l,GarageFilter.read(frame(),viewportAspect())):result(l,popup);
+                    if(!popup.isEmpty())return result(l,popup);
+                    Map<String,Object> filter=new LinkedHashMap<>(GarageFilter.read(frame(),viewportAspect()));
+                    filter.put("frameId",capture.frameId());
+                    return result(l,filter);
                 }
                 case "keepCapture": capture();return result(l,ModalPopup.possibleClubMilestone(frame)||popupPanel()!=null);
                 case "releaseCapture": return 0;

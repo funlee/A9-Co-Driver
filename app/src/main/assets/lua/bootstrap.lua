@@ -39,9 +39,9 @@ if tap then
 end
 if swipe then
   local rawSwipe=swipe
-  function swipe(x1,y1,x2,y2,ms)
+  function swipe(x1,y1,x2,y2,...)
     if not inFrame(x1,y1) or not inFrame(x2,y2) then print('忽略越界滑动',x1,y1,x2,y2) return end
-    return rawSwipe(x1,y1,x2,y2,ms)
+    return rawSwipe(x1,y1,x2,y2,...)
   end
 end
 if touchDown then

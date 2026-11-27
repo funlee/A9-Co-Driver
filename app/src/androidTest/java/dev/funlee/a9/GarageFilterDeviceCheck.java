@@ -82,7 +82,7 @@ final class GarageFilterDeviceCheck implements LuaRuntime.Host {
     }
     @Override public int call(String name,Lua lua){try{
         if(name.equals("keepCapture")){capture();return 0;}
-        if(name.equals("_garageFilterState")){LuaRuntime.push(lua,GarageFilter.read(frame));return 1;}
+        if(name.equals("_garageFilterState")){if(lua.toBoolean(1))capture();LuaRuntime.push(lua,GarageFilter.read(frame));return 1;}
         if(name.equals("tap")){
             int x=(int)lua.toInteger(1),y=(int)lua.toInteger(2);
             if(((x>=484&&x<=533)||(x>=281&&x<=324)||(x>=345&&x<=390)||x==436)&&y>=320&&y<=355)optionTaps++;

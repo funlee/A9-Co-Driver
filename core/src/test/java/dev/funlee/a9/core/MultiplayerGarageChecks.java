@@ -278,11 +278,13 @@ final class MultiplayerGarageChecks {
         try(var input=MultiplayerGarageChecks.class.getResourceAsStream("/world-car-pagination.lua")){
             paginationCases=new String(input.readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
         }
-        for(String scenario:List.of("car27","empty27","locked27","remembered","reversePage","differentPage","unreadableAfterRace","emptyBoth","delayedPage","missingBottom","slowPagination","fuzzyName","sameColumnShift","clippedOverlap","lockedOverlap","overshoot","targetMoved","targetSettled","stuckPage","wideCar10","wideCar10Overscroll","filtered","filteredMaster")){
+        for(String scenario:List.of("car27","empty27","locked27","remembered","reversePage","differentPage","unreadableAfterRace","emptyBoth","delayedPage","missingBottom","slowPagination","fuzzyName","sameColumnShift","clippedOverlap","lockedOverlap","overshoot","targetMoved","targetSettled","stuckPage","wideCar10","wideCar10Overscroll","standardCar9","standardCar9Overscroll","standardCar9ReturnToAnchor","standardCar9StuckAtAnchor","filtered","filteredMaster")){
             try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
                 lua.set("scenario",scenario);
                 lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));
-                lua.load("pagination-"+scenario,paginationCases);lua.start("test");
+                lua.load("pagination-"+scenario,paginationCases);
+                if(scenario.startsWith("standardCar9"))lua.load("bootstrap",Files.readString(assets.resolve("lua/bootstrap.lua")));
+                lua.start("test");
                 for(int i=0;i<600;i++)if(!lua.step(i*(scenario.equals("slowPagination")?4000L:1000L)))break;
                 lua.load("verify","assert(done,scenario)");
             }

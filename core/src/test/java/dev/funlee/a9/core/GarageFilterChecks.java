@@ -12,7 +12,7 @@ final class GarageFilterChecks {
             "state.owned=1;state.rank=1;state.descending=1;utils.configureGarageFilter('0,1,2');assert(taps==1,'already selected state toggled off')",
             "state.owned=1;state.rank=1;state.descending=1;utils.configureGarageFilter('0');assert(taps==3 and state.owned==1 and state.rank==0 and state.descending==0)",
             "state.rank=1;utils.configureGarageFilter('0,2,3');assert(state.stars==1 and state.rank==0 and state.owned==1 and state.descending==1 and closed==1);"+
-                "state.present=true;utils.configureGarageFilter('0,2,3');assert(taps==6 and closed==2,'second visit toggled star sorting');"+
+                "state.present=true;utils.configureGarageFilter('0,2,3');assert(taps==5 and closed==2,'second visit toggled star sorting');"+
                 "state.present=true;utils.configureGarageFilter('0,1,2');assert(state.stars==0 and state.rank==1 and closed==3)",
             "utils.configureGarageFilter('3');assert(state.stars==1 and state.rank==0 and state.descending==0 and closed==1)",
             "state.stars=1;utils.configureGarageFilter('0');assert(state.stars==0 and state.owned==1 and closed==1)",
@@ -33,6 +33,12 @@ final class GarageFilterChecks {
             "state.owned=1;state.rank=1;local flips=0;local originalTap=tap;"+
                 "tap=function(x,y)if x==436 then flips=flips+1;if flips<=3 then return end end;originalTap(x,y) end;"+
                 "assert(utils.configureGarageFilter('0,1,2') and state.descending==1 and closed==1 and flips==4,'A failed first pass must be retried once')",
+            "state.owned=1;state.rank=1;state.descending=1;local reads=0;_garageFilterState=function(fresh)assert(fresh);reads=reads+1;state.frameId=reads;return state end;"+
+                "assert(utils.configureGarageFilter('0,1,2') and reads==3 and taps==1,'Verify all preset options together')",
+            "local reads=0;_garageFilterState=function()reads=reads+1;state.frameId=reads;if reads==6 then state.owned=1 end;return state end;"+
+                "local original=tap;tap=function(x,y)if x==509 then taps=taps+1 else original(x,y) end end;"+
+                "assert(utils.configureGarageFilter('0') and taps==2 and closed==1,'A slow redraw must not get a second toggle')",
+            "state.owned=1;state.frameId=1;local ok=pcall(utils.configureGarageFilter,'0');assert(not ok and taps==0,'A stale projection cannot confirm the panel')",
             "state.wide=true;state.owned=1;state.rank=1;tap=function(x,y) if x==134 then state.present=false else assert(x==385 and y==(state.descending==0 and 350 or 330));state.descending=1-state.descending end end;assert(utils.configureGarageFilter('0,1,2'));state.present=true;assert(utils.configureGarageFilter('0,1'));assert(state.descending==0)"
         );
         for(String script:cases)try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())) {

@@ -1612,7 +1612,7 @@ function utils.configureGarageFilter(selection)
   if selected['1'] and selected['3'] then error('星级和性能分只能选择一项') end
   if not _garageFilterState then error("车库筛选识别不可用") end
   if _garageFilterPrepare then _garageFilterPrepare() end
-  local function read() keepCapture();return _garageFilterState() end
+  local function read() return _garageFilterState(true) end
   local state=read()
   if not state.present then
     if state.wide then tap(570,1156) else tap(600,1192) end
@@ -1635,58 +1635,58 @@ function utils.configureGarageFilter(selection)
   end
   local options={{"0","owned",ownedRow,340,"已拥有"},{"1","rank",rankRow,340,"性能分"},
     {"3","stars",starsRow,340,"星级"},{"2","descending",sortRow,sortColumns,"降序"}}
-  -- Re-sorting redraws the list for about a second, so a single reading after a tap can
-  -- still show the old direction; a click that lands mid-draw flips it straight back.
-  local function settled(key,wanted)
-    local agree=0
-    for i=1,6 do
-      state=read()
-      if not state.present then return false end
-      if state[key]==wanted then
-        agree=agree+1
-        if agree>=2 then return true end
-      else agree=0 end
-      sleep(350)
-    end
-    return false
+  -- Selecting one sort key can clear the other in the same redraw.
+  if selected['3'] then options[2],options[3]=options[3],options[2] end
+  local function refresh(delay)
+    sleep(delay);state=read()
+    if data['超时状态'] then error('车库筛选已超时') end
+    if not state.present then error('车库筛选面板意外关闭') end
   end
   local function applyOptions()
     for _,option in ipairs(options) do
-      local wanted=selected[option[1]] or 0
-      local sorting=option[2]=='descending'
-      local label=sorting and wanted==0 and '升序' or option[5]
-      local confirmed=false
+      local id,key,row,control,label=table.unpack(option)
+      local wanted=selected[id] or 0
+      if key=='descending' and wanted==0 then label='升序' end
       for attempt=1,3 do
-        if settled(option[2],wanted) then confirmed=true;break end
-        if not state.present then error("车库筛选面板意外关闭") end
-        -- An unreadable checkbox is not the opposite state; never click over it.
-        if state[option[2]]~=1-wanted then break end
-        data["信息"]="设置车库筛选："..label
-        if sorting then
-          local columns=option[4][wanted]
-          tap(option[3],columns[math.min(attempt,#columns)])
+        if state[key]==wanted then break end
+        if state[key]~=1-wanted then return label end
+        local before=state.frameId
+        data['信息']='设置车库筛选：'..label
+        if key=='descending' then
+          tap(row,control[wanted][attempt])
         else
-          local center=state[option[2]..'Center']
-          tap(center and 719-center.y or option[3],center and center.x or option[4])
+          local center=state[key..'Center']
+          tap(center and 719-center.y or row,center and center.x or control)
         end
-        sleep(600)
-        if data["超时状态"] then error("车库筛选已超时") end
+        -- Return as soon as the change is visible. A slow list redraw gets time to
+        -- finish before another tap can accidentally undo the first one.
+        for poll=1,9 do
+          refresh(poll==1 and 150 or 240)
+          if state[key]==wanted and (not before or state.frameId~=before) then break end
+        end
+        if before and state.frameId==before then return label end
       end
-      if not confirmed then state=read();return label end
+      if state[key]~=wanted then return label end
     end
+    -- Confirm all four values together on a second frame before closing the panel.
+    local before=state.frameId
+    for poll=1,8 do
+      refresh(120)
+      if not before or state.frameId~=before then
+        for _,option in ipairs(options) do
+          if state[option[2]]~=(selected[option[1]] or 0) then return option[5] end
+        end
+        return
+      end
+    end
+    return '筛选画面更新'
   end
-  -- A panel that stays unresponsive right after a race settle gets one full second pass.
   local unconfirmed=applyOptions()
   if unconfirmed then
     print('车库筛选未确认：'..unconfirmed..'，再试一遍')
-    sleep(800)
+    refresh(400)
     unconfirmed=applyOptions()
-    if unconfirmed then error("无法确认车库筛选："..unconfirmed) end
-  end
-  -- Confirm the complete combination immediately before applying it.
-  for _,option in ipairs(options) do
-    local wanted=selected[option[1]] or 0
-    if state[option[2]]~=wanted then error("车库筛选状态发生变化") end
+    if unconfirmed then error('无法确认车库筛选：'..unconfirmed) end
   end
   tap(134,320)
   for i=1,20 do
