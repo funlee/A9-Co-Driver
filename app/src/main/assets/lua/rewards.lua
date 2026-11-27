@@ -115,7 +115,7 @@ local function backHome()
       -- The current store has a fixed Home icon; Back may race its closing animation.
       click(s.homeButton or {x=1250,y=30})
     elseif has(s,'每日目标') or has(s,'掉落几率') or has(s,'此包内可能包含') or
-           has(s,'每日车辆战利品') or has(s,'世界系列赛') or has(s,'大师系列赛') then
+           has(s,'每日车辆战利品') or has(s,'世界系列赛') or has(s,'大师系列赛') or has(s,'周末系列赛') then
       keyPress('back');pause(1600)
     else pause(800) end
   end

@@ -43,7 +43,7 @@ public final class MultiplayerGarage {
         Map<?,?> title=null;
         for(Object item:words){
             Map<?,?> w=(Map<?,?>)item;
-            if(leagueText(w.get("text").toString()).equals("世界系列赛")){
+            if(leagueText(w.get("text").toString()).equals(MultiplayerUi.WORLD)){
                 if(title!=null)return "";
                 title=w;
             }
@@ -374,13 +374,17 @@ public final class MultiplayerGarage {
 
     /** Number physical row pairs, including unavailable cars. No labels are needed to locate a slot. */
     public static Map<String,Object> slots(PixelFrame frame,List<?> words,String rank,double aspect){
-        return slots(frame,words,rank,aspect,false);
+        return slots(frame,words,rank,aspect,MultiplayerUi.WORLD);
     }
-    public static Map<String,Object> slots(PixelFrame frame,List<?> words,String rank,double aspect,boolean master){
+    public static Map<String,Object> slots(PixelFrame frame,List<?> words,String rank,double aspect,String series){
         boolean wide=aspect>2.07,medium=aspect>=2.0&&!wide;
         int top=wide?215:medium?206:195,rowPitch=wide?231:medium?233:237;
         int pitch=wide?359:medium?405:464,width=wide?348:medium?393:450;
-        String league=master?(masterRail(frame,words)?"大师系列赛":""):league(frame,words,rank,wide,medium);
+        boolean seriesCars=MultiplayerUi.usesSeriesCars(series);
+        String league;
+        if(MultiplayerUi.WEEKEND.equals(series))league=weekendRail(frame,words)?series:"";
+        else if(MultiplayerUi.MASTER.equals(series))league=masterRail(frame,words)?series:"";
+        else league=league(frame,words,rank,wide,medium);
         int left=-1;
         for(int x=wide?18:4;x<650;x++){
             if(slotEdge(frame,x,top)&&slotEdge(frame,x,top+rowPitch)){left=x;break;}
@@ -388,7 +392,7 @@ public final class MultiplayerGarage {
         boolean originRegion=left>=(wide?215:202)&&left<=(wide?233:220);
         // The rail emblem is separate from the highlighted shortcut. Read it
         // only when the first card's geometry confirms the rail is present.
-        if(!master&&!wide&&!medium&&originRegion&&league.isEmpty()){
+        if(!seriesCars&&!wide&&!medium&&originRegion&&league.isEmpty()){
             league=leagueStripe(frame,109,409,175,433);
             // The Gold shield blends into orange near the label. Confirm its lower
             // stripe against the highlighted shortcut before trusting the first column.
@@ -592,6 +596,21 @@ public final class MultiplayerGarage {
     public static String soloScore(String text){
         java.util.regex.Matcher number=SOLO_SCORE.matcher(text.replaceAll("[,，\\s]",""));
         return number.find()?number.group(1):"";
+    }
+
+    private static boolean weekendRail(PixelFrame frame,List<?> words){
+        for(Object item:words){
+            Map<?,?> word=(Map<?,?>)item;
+            if(pos(word,"x")>=95&&pos(word,"x")<=185&&pos(word,"y")>=370&&pos(word,"y")<=480
+                    &&MapMatcher.normalize(word.get("text").toString()).replace('週','周').replace('決','决').contains("周末对决"))return true;
+        }
+        // The teal nameplate on the weekend shield is often too small for full-frame OCR.
+        int teal=0;
+        for(int y=405;y<=428;y+=2)for(int x=106;x<=178;x+=2){
+            int color=frame.pixel(719-y,x),r=color>>16&255,g=color>>8&255,b=color&255;
+            if(g>=100&&g-r>=55&&Math.abs(g-b)<=25)teal++;
+        }
+        return teal>=100;
     }
 
     private static boolean masterRail(PixelFrame frame,List<?> words){

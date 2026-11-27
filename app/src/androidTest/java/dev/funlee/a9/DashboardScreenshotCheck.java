@@ -35,7 +35,7 @@ public final class DashboardScreenshotCheck extends Instrumentation {
                 if(frame!=source)frame.recycle();source.recycle();
             }
             if(preview){
-                TaskStats stats=new TaskStats();stats.cycle(1);stats.project("多人上");stats.projectTarget(30);
+                TaskStats stats=new TaskStats();stats.cycle(1);stats.project("世界系列赛");stats.projectTarget(30);
                 for(int n:new int[]{1,4,6,7,8}){stats.begin("神山垭口冰封路径",false);stats.result(n);stats.returned();}
                 stats.begin("神山垭口冰封路径",false);stats.progress(45,18,39);stats.operation("D · 漂移 3000ms");stats.elapsed(89*60_000);
                 runOnMainSync(()->{

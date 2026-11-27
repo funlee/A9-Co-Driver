@@ -27,7 +27,7 @@ final class StabilityChecks {
             if(name.equals("tap"))milestoneTaps.add(l.toInteger(1)+","+l.toInteger(2));
             return 0;
         },List.of("_multiplayerUi","_sessionProject","_hud","print","tap"))){
-            lua.set("data",Map.of("项目","多人下"));lua.set("run",Map.of("data",Map.of("次数",20)));
+            lua.set("data",Map.of("项目","大师系列赛"));lua.set("run",Map.of("data",Map.of("次数",20)));
             lua.load("helpers","utils={defultCfg=function(v,d)return v or d end}");
             lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));lua.start("currentMultiplayer.run");
             for(int n=0;n<4&&milestoneTaps.isEmpty();n++)lua.step(n*1000L);
@@ -78,7 +78,7 @@ final class StabilityChecks {
             if(name.equals("tap")){taps.add(l.toInteger(1)+","+l.toInteger(2));phase[0]++;}
             return 0;
         },List.of("_multiplayerUi","_sessionProject","_hud","print","tap","rnd"))){
-            lua.set("data",Map.of("项目","多人下"));lua.set("run",Map.of("data",Map.of("次数",1)));
+            lua.set("data",Map.of("项目","大师系列赛"));lua.set("run",Map.of("data",Map.of("次数",1)));
             lua.load("helpers","utils={defultCfg=function(v,d) return v or d end}");
             lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));lua.start("currentMultiplayer.run");
             for(int n=0;n<8&&taps.size()<2;n++)lua.step(n*2000L);
@@ -95,7 +95,7 @@ final class StabilityChecks {
             if(name.equals("_sessionRaceResult")||name.equals("_sessionRaceReturned"))results[0]++;
             return 0;
         },List.of("_multiplayerUi","_sessionProject","_hud","print","tap","_sessionRaceResult","_sessionRaceReturned"))){
-            lua.set("data",Map.of("项目","多人上"));lua.set("run",Map.of("data",Map.of("次数",10)));
+            lua.set("data",Map.of("项目","世界系列赛"));lua.set("run",Map.of("data",Map.of("次数",10)));
             lua.load("helpers","utils={defultCfg=function(v,d) return v or d end}");
             lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));lua.start("currentMultiplayer.run");
             try{for(int n=0;n<500;n++)lua.step(n*1000L);}catch(RuntimeException e){if(!e.getMessage().contains(expectedError))throw e;limited=true;}
@@ -170,7 +170,7 @@ final class StabilityChecks {
                 if(!mode.equals("manual"))config.put("自选奖励","0");
                 if(mapped)config.put("worldRewardRules",mode.equals("laterMilestone")?List.of(Map.of("score",32700,"position",1)):
                         List.of(Map.of("score",30700,"position",2),Map.of("score",31700,"position",mode.equals("offscreen")?6:4)));
-                lua.set("data",Map.of("项目","多人上"));lua.set("run",Map.of("data",config));
+                lua.set("data",Map.of("项目","世界系列赛"));lua.set("run",Map.of("data",config));
                 lua.load("helpers","utils={defultCfg=function(v,d) return v or d end}");
                 lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));lua.start("currentMultiplayer.run");
                 try{for(int n=0;n<40&&rewardTaps.size()<2;n++)lua.step(n*1000L);}
@@ -208,15 +208,15 @@ final class StabilityChecks {
             if(name.equals("_multiplayerUi")){
                 int n=reads[0]++;
                 int x=n<2?350:640;
-                int frame=n<=1?1:n==2?2:n==3?2:n;
+                int frame=n<2?n+1:n==3?2:n;
                 LuaRuntime.push(l,Map.of("scene","series","text","世界系列赛 大师系列赛","frameId",frame,
-                        "words",List.of(Map.of("text","大师系列赛","x",x,"y",450))));
+                        "words",List.of(Map.of("text",n<2?"大师系列赛 周末系列赛":"大师系列赛","x",x,"y",450))));
                 return 1;
             }
             if(name.equals("tap"))taps.add(reads[0]+":"+l.toInteger(2));
             return 0;
         },List.of("_multiplayerUi","_sessionProject","_hud","print","tap"))){
-            lua.set("data",Map.of("项目","多人下"));
+            lua.set("data",Map.of("项目","大师系列赛"));
             lua.set("run",Map.of("data",Map.of("次数",1)));
             lua.load("helpers","utils={defultCfg=function(v,d)return v or d end}");
             lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));
@@ -235,7 +235,7 @@ final class StabilityChecks {
             pages.addAll(List.of("series","series","event","event"));
             pages.addAll(Collections.nCopies(6,"cars"));pages.addAll(Collections.nCopies(2,"car"));pages.add("race");
             int[] reads={0},begins={0},cards={0},swipes={0},bonusTaps={0},resultTaps={0};String[] current={""};
-            TaskStats stats=new TaskStats();stats.project("多人上");boolean rejected=false;
+            TaskStats stats=new TaskStats();stats.project("世界系列赛");boolean rejected=false;
             try(LuaRuntime lua=new LuaRuntime((name,l)->{
                 if(name.equals("_multiplayerUi")){
                     int n=reads[0]++;current[0]=pages.get(Math.min(n,pages.size()-1));
@@ -256,7 +256,7 @@ final class StabilityChecks {
                 }
                 return 0;
             },List.of("_multiplayerUi","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_sessionOperation","_fallbackBegin","_fallbackStep","cmpColor","tap","swipe","print","_hud"))){
-                lua.set("data",Map.of("项目","多人上","多人",0));lua.set("run",Map.of("data",Map.of("次数",2,"多人选路","1","青铜用车",List.of("1"))));
+                lua.set("data",Map.of("项目","世界系列赛","多人",0));lua.set("run",Map.of("data",Map.of("次数",2,"多人选路","1","青铜用车",List.of("1"))));
                 lua.load("helpers","utils={defultCfg=function(v,d)return v or d end}");lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));lua.start("currentMultiplayer.run");
                 try{for(int i=0;i<180&&begins[0]<2;i++)lua.step(i*2000L);}catch(RuntimeException e){if(!e.getMessage().contains("未确认比赛结算"))throw e;rejected=true;}
             }
@@ -305,7 +305,7 @@ final class StabilityChecks {
             return 0;
         },List.of("_multiplayerUi","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned",
                 "_sessionOperation","_fallbackBegin","_fallbackStep","tap","swipe","print","_hud"))){
-            lua.set("data",Map.of("项目","多人下","多人",0));lua.set("run",Map.of("data",Map.of("次数",1)));
+            lua.set("data",Map.of("项目","大师系列赛","多人",0));lua.set("run",Map.of("data",Map.of("次数",1)));
             lua.load("helpers","utils={defultCfg=function(v,d)return v or d end}");
             lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));
             lua.start("currentMultiplayer.run");
@@ -317,7 +317,7 @@ final class StabilityChecks {
         String observed="你的排名 你已 断开连接 连接丟失 你的用时 00:00.000 排行榜 继续";
         check(MultiplayerUi.classify(observed).equals("raceDisconnected"),"Observed disconnected result overrides normal result labels");
         check(MultiplayerUi.classify("连接丢失").equals("raceDisconnected"),"Incomplete disconnect animation is recognized before result appears");
-        int[] reads={0},begins={0};TaskStats stats=new TaskStats();stats.project("多人上");
+        int[] reads={0},begins={0};TaskStats stats=new TaskStats();stats.project("世界系列赛");
         try(LuaRuntime lua=new LuaRuntime((name,l)->{
             if(name.equals("_multiplayerUi")){
                 int n=reads[0]++;String scene=n==0||n==4?"race":n==1||n==3?"raceDisconnected":n==2||n==5?"result":"event";
@@ -332,7 +332,7 @@ final class StabilityChecks {
             if(name.equals("_fallbackStep")){l.push(20);return 1;}
             return 0;
         },List.of("_multiplayerUi","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_sessionOperation","_fallbackBegin","_fallbackStep","tap","swipe","print","_hud"))){
-            lua.set("data",Map.of("项目","多人上","多人",0));lua.set("run",Map.of("data",Map.of("次数",1,"多人选路","1")));
+            lua.set("data",Map.of("项目","世界系列赛","多人",0));lua.set("run",Map.of("data",Map.of("次数",1,"多人选路","1")));
             lua.load("helpers","utils={defultCfg=function(v,d)return v or d end}");lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));lua.start("currentMultiplayer.run");
             for(int i=0;i<50&&stats.returnedCount()==0;i++)lua.step(i*2000L);
         }
@@ -363,7 +363,7 @@ final class StabilityChecks {
                 if(name.equals("done")){outcome[0]=l.toString(1);completedAt[0]=clock[0];}
                 return 0;
             },List.of("_multiplayerUi","_sessionProject","tap","swipe","_hud","print","_sessionRaceResult","_sessionRaceReturned","done"))){
-                lua.set("data",Map.of("项目","多人下"));lua.set("run",Map.of("data",Map.of("次数",10,"多人下用车",
+                lua.set("data",Map.of("项目","大师系列赛"));lua.set("run",Map.of("data",Map.of("次数",10,"赛事用车",
                     scenario==2?List.of("1","7"):scenario==3?List.of("1"):List.of("1","2","3","4","5","6"))));
                 lua.load("helpers","utils={defultCfg=function(v,d)return v or d end};function test() done(currentMultiplayer.run()) end");
                 lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));lua.start("test");
@@ -389,12 +389,12 @@ final class StabilityChecks {
                     case "_sessionCycle":cycle[0]=(int)l.toInteger(1);break;
                     case "_taskNotice":check(l.toString(1).contains("跳过项目 2")&&l.toString(1).contains("无油")&&l.toInteger(2)==4000,"Empty-fuel skip gives a visible reason");break;
                     case "empty":boolean empty=cycle[0]==4;if(empty)skipped[0]++;l.push(empty);return 1;
-                    case "race":total[0]++;if(l.toString(1).equals("多人上"))world[0]++;else master[0]++;checkpoint.completed(1);break;
+                    case "race":total[0]++;if(l.toString(1).equals("世界系列赛"))world[0]++;else master[0]++;checkpoint.completed(1);break;
                     case "_finished":finished[0]=true;break;
                     default:break;
                 }return 0;
             },List.of("_queueResume","_queueEnter","_queueDone","_sessionProject","_sessionCycle","_finished","_hud","print","race","empty","_taskNotice"))){
-                lua.set("UIconfig",Map.of("routeOnly","","projects",List.of(Map.of("项目","多人上","data",Map.of("次数",10)),Map.of("项目","多人下","data",Map.of("次数",10))),"ActiveProj",List.of(true,true)));
+                lua.set("UIconfig",Map.of("routeOnly","","projects",List.of(Map.of("项目","世界系列赛","data",Map.of("次数",10)),Map.of("项目","大师系列赛","data",Map.of("次数",10))),"ActiveProj",List.of(true,true)));
                 lua.load("bootstrap",Files.readString(assets.resolve("lua/bootstrap.lua")));
                 lua.load("helpers","data={};run={};utils={backToMain=function()end};function localInit() end;function monitor() sleep(99999999) end;currentMultiplayer={run=function() local done=_sessionProject(data['项目'],10);if empty() then return 'fuelEmpty' end;for i=done+1,10 do race(data['项目']);sleep(1) end end}");
                 lua.start("main");try{for(int n=0;n<500&&!finished[0]&&total[0]<200;n++)lua.step(n*2000L);}catch(RuntimeException e){if(!e.getMessage().contains("injected after skip"))throw e;}
@@ -421,7 +421,7 @@ final class StabilityChecks {
             }
             return 0;
         },List.of("_multiplayerUi","_sessionProject","tap","swipe","_hud","print"))){
-            lua.set("data",Map.of("项目","多人下"));lua.set("run",Map.of("data",Map.of("次数",10,"多人下用车",List.of("1","2","3","4"))));
+            lua.set("data",Map.of("项目","大师系列赛"));lua.set("run",Map.of("data",Map.of("次数",10,"赛事用车",List.of("1","2","3","4"))));
             lua.load("helpers","utils={defultCfg=function(v,d)return v or d end}");
             lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));lua.start("currentMultiplayer.run");
             for(int i=0;i<20&&taps.isEmpty();i++)lua.step(i*2000L);
@@ -445,7 +445,7 @@ final class StabilityChecks {
                     default:break;
                 }return 0;
             },List.of("_queueResume","_queueEnter","_queueDone","_sessionProject","_sessionCycle","_finished","_hud","print","race","empty","_taskNotice"))){
-                lua.set("UIconfig",Map.of("routeOnly","","maxCycles",5,"projects",List.of(Map.of("项目","多人上","data",Map.of("次数",30)),Map.of("项目","多人下","data",Map.of("次数",20))),"ActiveProj",List.of(true,true)));
+                lua.set("UIconfig",Map.of("routeOnly","","maxCycles",5,"projects",List.of(Map.of("项目","世界系列赛","data",Map.of("次数",30)),Map.of("项目","大师系列赛","data",Map.of("次数",20))),"ActiveProj",List.of(true,true)));
                 lua.load("bootstrap",Files.readString(assets.resolve("lua/bootstrap.lua")));
                 lua.load("helpers","data={};run={};utils={backToMain=function()end};function localInit() end;function monitor() sleep(99999999) end;currentMultiplayer={run=function() local done=_sessionProject(data['项目'],run.data['次数']);for i=done+1,run.data['次数'] do if empty() then return 'fuelEmpty' end;race();sleep(1) end end}");
                 lua.start("main");try{for(int n=0;n<600&&entries[0]<12;n++)lua.step(n*2000L);}catch(RuntimeException e){if(!e.getMessage().contains("injected final cycle recovery"))throw e;}
@@ -469,14 +469,14 @@ final class StabilityChecks {
                     default:break;
                 }return 0;
             },List.of("_queueResume","_queueEnter","_queueDone","_sessionProject","_sessionCycle","_finished","_hud","print","race"))){
-                lua.set("UIconfig",Map.of("routeOnly","","maxRaces",200,"projects",List.of(Map.of("项目","多人上","data",Map.of("次数",10)),Map.of("项目","多人下","data",Map.of("次数",10))),"ActiveProj",List.of(true,true)));
+                lua.set("UIconfig",Map.of("routeOnly","","maxRaces",200,"projects",List.of(Map.of("项目","世界系列赛","data",Map.of("次数",10)),Map.of("项目","大师系列赛","data",Map.of("次数",10))),"ActiveProj",List.of(true,true)));
                 lua.load("bootstrap",Files.readString(assets.resolve("lua/bootstrap.lua")));
                 lua.load("helpers","data={};run={};utils={backToMain=function()end};function localInit() end;function monitor() sleep(99999999) end;currentMultiplayer={run=function() local done=_sessionProject(data['项目'],10);for i=done+1,10 do race(data['项目']);sleep(1) end end}");
                 lua.start("main");try{for(int n=0;n<500&&!finished[0]&&races.size()<220;n++)lua.step(n*2000L);}catch(RuntimeException e){if(!e.getMessage().contains("injected crash"))throw e;}
             }
         }
         check(!finished[0]&&races.size()==220&&cycle[0]==11,"10+10 passes the old 200-race limit without stopping across recovery: "+failAt);
-        for(int i=0;i<220;i++)if(!races.get(i).equals(i%20<10?"多人上":"多人下"))throw new AssertionError("Queue order at "+i);
-        check(Collections.frequency(races,"多人上")==110&&Collections.frequency(races,"多人下")==110,"110 world and 110 master in alternating blocks");
+        for(int i=0;i<220;i++)if(!races.get(i).equals(i%20<10?"世界系列赛":"大师系列赛"))throw new AssertionError("Queue order at "+i);
+        check(Collections.frequency(races,"世界系列赛")==110&&Collections.frequency(races,"大师系列赛")==110,"110 world and 110 master in alternating blocks");
     }
 }

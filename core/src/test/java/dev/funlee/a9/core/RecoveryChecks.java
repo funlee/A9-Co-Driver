@@ -70,7 +70,7 @@ final class RecoveryChecks {
         w.uncertain(132_000);
         check(!w.active()&&w.elapsed(132_000)==0,"Long unknown screen expires matching evidence");
         check(MultiplayerUi.classify("其他玩家 圈").equals("unknown"),"Loading roster is not matching");
-        TaskStats stats=new TaskStats();stats.project("多人上");stats.matching(92_800);
+        TaskStats stats=new TaskStats();stats.project("世界系列赛");stats.matching(92_800);
         check(stats.currentActivity("多人流程：matching · 1/3").equals("匹配中 · 92 秒")&&
                 stats.panel("").contains("匹配等待 92 秒 / 60 秒"),"Both matching displays show elapsed time and the current limit");
         check(stats.currentActivity("已暂停").equals("已暂停"),"A paused task keeps its paused status");
@@ -84,6 +84,13 @@ final class RecoveryChecks {
         check(restored.finished()==1&&restored.topThreeCount()==1&&restored.elapsedMillis()==666000&&restored.restartCount()==2,"Persisted counters and elapsed survive helper restart; stale callbacks ignored");
         restored.begin("next",false);restored.result(4);restored.returned();
         check(restored.finished()==2&&restored.rankedCount()==2&&restored.topThreeCount()==1,"Resumed race increments saved totals once");
+        TaskStats weekend=new TaskStats();weekend.project(MultiplayerUi.WEEKEND);weekend.begin("",false);weekend.result(2);weekend.returned();
+        TaskStats savedWeekend=TaskStats.restore(weekend.snapshot());
+        check(savedWeekend.count(MultiplayerUi.WEEKEND)==1&&savedWeekend.topThreeCount()==1&&savedWeekend.panel("").contains("周末 1"),"Weekend result survives resume in multiplayer totals");
+        Map<String,Object> legacy=weekend.snapshot();
+        legacy.put("modeKey",MultiplayerUi.LEGACY_MASTER);legacy.put("counts",Map.of(MultiplayerUi.LEGACY_MASTER,1));
+        TaskStats savedMaster=TaskStats.restore(legacy);
+        check(savedMaster.projectMode().equals(MultiplayerUi.MASTER)&&savedMaster.count(MultiplayerUi.MASTER)==1,"Old session identity and counts migrate together");
         Map<String,Object> corrupt=new LinkedHashMap<>(stats.snapshot());corrupt.put("finished",999);boolean rejected=false;
         try{TaskStats.restore(corrupt);}catch(IllegalArgumentException expected){rejected=true;}
         check(rejected,"Reject inconsistent saved counters instead of fabricating progress");
@@ -95,7 +102,7 @@ final class RecoveryChecks {
             if(name.equals("tap"))inputs[0]++;
             return 0;
         },List.of("_multiplayerUi","_sessionProject","_hud","print","tap"))){
-            lua.set("data",Map.of("项目","多人上"));lua.set("run",Map.of("data",Map.of("次数",1)));
+            lua.set("data",Map.of("项目","世界系列赛"));lua.set("run",Map.of("data",Map.of("次数",1)));
             lua.load("stubs","utils={defultCfg=function(v,d) return v or d end}");
             lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));lua.start("currentMultiplayer.run");
             lua.step(0);lua.step(200000);lua.step(400000);
@@ -121,7 +128,7 @@ final class RecoveryChecks {
                 }return 0;
             },List.of("_queueResume","_queueEnter","_queueDone","_sessionProject","race","_sessionCycle","_finished","_hud","print"))){
                 lua.set("UIconfig",Map.of("routeOnly","","projects",List.of(
-                        Map.of("项目","多人上","data",Map.of("次数","30")),Map.of("项目","多人下","data",Map.of("次数","20"))),"ActiveProj",List.of(true,true)));
+                        Map.of("项目","世界系列赛","data",Map.of("次数","30")),Map.of("项目","大师系列赛","data",Map.of("次数","20"))),"ActiveProj",List.of(true,true)));
                 lua.load("bootstrap",Files.readString(assets.resolve("lua/bootstrap.lua")));
                 lua.load("stubs","data={};run={};utils={backToMain=function()end};function localInit() end;function monitor() sleep(99999999) end;currentMultiplayer={run=function() local done=_sessionProject(data['项目'],run.data['次数']); for i=done+1,tonumber(run.data['次数']) do race(data['项目']);sleep(1) end end}");
                 lua.start("main");
@@ -131,7 +138,7 @@ final class RecoveryChecks {
         }
         // Third-cycle callback runs in the same step as its first race; inspect the two complete cycles.
         check(races.size()>=100&&injected[0],"Resume reaches two complete 30+20 cycles after crash at "+failAt);
-        for(int i=0;i<100;i++)if(!races.get(i).equals(i%50<30?"多人上":"多人下"))throw new AssertionError("Wrong project order after recovery at "+failAt+", race "+i);
+        for(int i=0;i<100;i++)if(!races.get(i).equals(i%50<30?"世界系列赛":"大师系列赛"))throw new AssertionError("Wrong project order after recovery at "+failAt+", race "+i);
         check(stats.finished()==races.size()&&stats.restartCount()==1,"Confirmed results neither reset nor repeated after crash at "+failAt);
     }
 }

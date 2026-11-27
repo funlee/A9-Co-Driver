@@ -10,7 +10,7 @@
 | `data/forms.json` | 六类任务的配置项、选项与默认值 |
 | `data/provenance.json` | 随包资源摘要、发布授权和验证记录 |
 | `lua/shared.lua`、`utilities.lua`、`workflows.lua` | 适配后的共享状态、工具和任务运行逻辑 |
-| `lua/multiplayer_up.lua`、`multiplayer_down.lua`、`cup.lua`、`special.lua`、`club.lua`、`daily.lua` | 适配后的各赛事模块 |
+| `lua/multiplayer_world.lua`、`multiplayer_master.lua`、`cup.lua`、`special.lua`、`club.lua`、`daily.lua` | 适配后的各赛事模块 |
 | `lua/bootstrap.lua`、`multiplayer_current.lua` | 本项目编写的宿主适配、队列调度和现行多人赛流程 |
 | `licenses/` | LuaJava、jnigen 等依赖许可原文 |
 
@@ -73,7 +73,7 @@
 - 旧逻辑用固定颜色等待且不检查等待结果，随后盲点选项；性能分、排序箭头坐标已偏离当前控件，已选“拥有”也可能破坏旧等待条件。
 - `GarageFilter` 在规范化画面中识别完成按钮、关闭按钮、复选框颜色及双箭头高亮方向；未知状态不作为未选中处理。
 - `utils.configureGarageFilter` 由杯赛等共享选车及旧多人降分路径复用。先让悬浮窗避让，再检查面板、逐项设置并复核；每项最多三次点击，超时抛出明确错误，不带着错误筛选继续选车。空配置沿用原始不筛选行为。
-- 新版多人流程（世界系列赛／大师系列赛共用 `multiplayer_current.lua`）的选车界面是同一种筛选面板，配置里勾选“选车筛选”后每场比赛选车前应用一次，并清空序号位置记忆，因为筛选会重排整个车库列表。
+- 新版多人流程（世界系列赛／大师系列赛／周末系列赛共用 `multiplayer_current.lua`）的选车界面是同一种筛选面板，配置里勾选“选车筛选”后每场比赛选车前应用一次，并清空序号位置记忆，因为筛选会重排整个车库列表。
 - 用用户截图及 MuMu 的选中/未选中截图验证识别，真实 Lua 在“每日车辆战利品”选车界面完成三项设置、关闭/重开持久性验证及第二次调用幂等验证。仅操作筛选，无开赛、耗油、门票或购买行为；完整杯赛循环仍待验收。
 
 ### 赛事流程边界与每日战利品（2026-11-09）

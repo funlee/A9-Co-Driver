@@ -375,11 +375,12 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         return lastPopupInput==0||frame!=null&&capture.frameId()>lastPopupInput;
     }
     private Map<String,Object> multiplayerUi(boolean readSeriesScore,boolean raceExpected,boolean sampleGrid) throws Exception {
-        boolean master=SessionState.stats.masterSeries();
+        String series=SessionState.stats.projectMode();
+        boolean seriesCars=MultiplayerUi.usesSeriesCars(series);
         capture();
         ModalPopup.Panel panel=popupPanel();
         boolean unobstructed=panel==null&&!ModalPopup.possibleClubMilestone(frame)&&!ModalPopup.possibleBlueprintGift(frame);
-        if(unobstructed&&sampleGrid&&!master&&lastUiScene.equals("cars")){
+        if(unobstructed&&sampleGrid&&!seriesCars&&lastUiScene.equals("cars")){
             Map<String,Object> garage=MultiplayerGarage.slots(frame,List.of(),"",viewportAspect());
             if(!((List<?>)garage.get("cards")).isEmpty()&&!MultiplayerGarage.leagueTabs(frame).isEmpty())
                 return Map.of("frameId",capture.frameId(),"scene","cars","garage",garage,"gridOnly",true);
@@ -488,21 +489,21 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         }
         if(readSeriesScore){
             String normalized=MapMatcher.normalize(text).replace('賽','赛').replace('總','总').replace('計','计');
-            if(scene.equals("event")&&normalized.contains("世界系列赛")){
+            if(scene.equals("event")&&normalized.contains(MultiplayerUi.WORLD)){
                 if(wideViewport())addSeriesScore(out,excluded,315,525,460,578);
                 else addSeriesScore(out,excluded,303,550,520,595);
             }else if(Boolean.TRUE.equals(out.get("rewardPage"))&&normalized.contains("系列赛分数")&&normalized.contains("总计")){
                 addSeriesScore(out,excluded,543,505,690,550);
             }
         }
-        if(!master&&scene.equals("series")){
+        if(!seriesCars&&scene.equals("series")){
             String league=MultiplayerGarage.worldEntryLeague(words);
             if(!league.isEmpty())out.put("entryLeague",league);
         }
-        if(scene.equals("event")&&MapMatcher.normalize(text).replace('賽','赛')
-                .contains(master?"大师系列赛":"世界系列赛")){
-            String league=eventLeague(words,master);
-            if(!league.isEmpty())out.put(master?"masterLeague":"worldLeague",league);
+        if(scene.equals("event")&&!MultiplayerUi.WEEKEND.equals(series)&&MapMatcher.normalize(text).replace('賽','赛')
+                .contains(seriesCars?MultiplayerUi.MASTER:MultiplayerUi.WORLD)){
+            String league=eventLeague(words,seriesCars);
+            if(!league.isEmpty())out.put(seriesCars?"masterLeague":"worldLeague",league);
         }
         if(scene.equals("unknown")&&!text.isEmpty()&&!text.equals(lastUnknownText)&&clock-lastUnknownLog>=5000){
             lastUnknownLog=clock;lastUnknownText=text;SessionState.log("待识别界面文字："+text);
@@ -522,14 +523,14 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         if(scene.equals("cars")){
             boolean wide=ultrawideViewport();
             double aspect=viewportAspect();
-            Map<String,Object> garage=MultiplayerGarage.slots(frame,words,"",aspect,master);
+            Map<String,Object> garage=MultiplayerGarage.slots(frame,words,"",aspect,series);
             int left=(int)garage.get("left");
-            if(!master&&garage.get("rank").equals("")&&left>=(wide?215:202)&&left<=(wide?233:220)){
+            if(!seriesCars&&garage.get("rank").equals("")&&left>=(wide?215:202)&&left<=(wide?233:220)){
                 String rank=wide?text(262,126,305,185,4):text(250,90,335,200,3);
                 garage=MultiplayerGarage.slots(frame,words,rank,aspect);
             }
             out.put("garage",garage);
-            out.put("leagueTabs",master?Map.of():MultiplayerGarage.leagueTabs(frame));
+            out.put("leagueTabs",seriesCars?Map.of():MultiplayerGarage.leagueTabs(frame));
             if(((List<?>)garage.get("cards")).isEmpty())
                 snapshot(new File(root,"multiplayer-garage-unconfirmed.png").getAbsolutePath(),0,0,719,1279);
         }
@@ -759,11 +760,12 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         int before=SessionState.stats.finished();
         checkpoint.recordResult(SessionState.stats,0);
         if(SessionState.stats.finished()>before){
-            if(SessionState.stats.rankUnconfirmed())notifyRankSkipped("结算中途被打断，本局不计入统计");
             SessionState.activity("正在结算本局比赛");persist(false);
         }
     }
-    private void notifyRankSkipped(String message){
+    private void finishSettlement(){
+        String message=SessionState.stats.returned();
+        if(message.isEmpty())return;
         SessionState.log(message);
         if(touch!=null)touch.showTaskNotice(message,2500);
     }
@@ -1021,12 +1023,9 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                     if(legacyPrepared){legacyMap=s(l,1);legacyInvalid=l.toBoolean(2);SessionState.stats.routeMap(legacyMap,legacyInvalid);}return 0;
                 case "_sessionRaceResult":{
                     int before=SessionState.stats.finished(),beforeRanked=SessionState.stats.rankedCount();
-                    boolean conflict=checkpoint.recordResult(SessionState.stats,l.getTop()>0?n(l,1):0);
-                    if(conflict)notifyRankSkipped("名次读数前后不一致，本局不计入统计");
-                    else if(SessionState.stats.finished()>before&&SessionState.stats.rankUnconfirmed())
-                        notifyRankSkipped("结算中途被打断，本局不计入统计");
+                    checkpoint.recordResult(SessionState.stats,l.getTop()>0?n(l,1):0);
                     if(SessionState.stats.finished()>before)SessionState.activity("正在结算本局比赛");
-                    if(SessionState.stats.finished()>before)SessionState.log("任务累计完赛 "+SessionState.stats.finished()+" · 世界 "+SessionState.stats.count("多人上")+" / 大师 "+SessionState.stats.count("多人下")+" · 自动重启 "+SessionState.stats.restartCount());
+                    if(SessionState.stats.finished()>before)SessionState.log("任务累计完赛 "+SessionState.stats.finished()+" · 世界 "+SessionState.stats.count(MultiplayerUi.WORLD)+" / 大师 "+SessionState.stats.count(MultiplayerUi.MASTER)+" / 周末 "+SessionState.stats.count(MultiplayerUi.WEEKEND)+" · 自动重启 "+SessionState.stats.restartCount());
                     if(SessionState.stats.finished()!=before||SessionState.stats.rankedCount()!=beforeRanked)persist(false);
                     return 0;
                 }
@@ -1034,11 +1033,11 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                     if(!freshAfterPopup())return result(l,false);
                     if(!legacyPrepared||!legacyRaceSeen)throw new IllegalStateException("未确认本任务实际比赛，拒绝累计完赛或切换任务");
                     recordLegacyResult();
-                    SessionState.stats.returned();
+                    finishSettlement();
                     legacyPrepared=legacyRaceSeen=false;SessionState.overlayMode(false,false);
                     persist(false);return 0;
                 case "_sessionOperation":SessionState.stats.operation(s(l,1));return 0;
-                case "_sessionRaceReturned":SessionState.racePanel(false);SessionState.stats.returned();persist(false);return 0;
+                case "_sessionRaceReturned":SessionState.racePanel(false);finishSettlement();persist(false);return 0;
                 case "_fallbackBegin":
                     driverStart=clock;lastProgressTime=clock;lastProgress=-1;lastLoggedProgress=-10;progress.reset();return 0;
                 case "_fallbackStep": {

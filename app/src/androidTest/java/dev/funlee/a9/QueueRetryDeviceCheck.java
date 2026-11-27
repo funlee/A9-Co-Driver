@@ -145,7 +145,7 @@ final class QueueRetryDeviceCheck {
                 lua.set("modal",modal);
                 lua.set("UIconfig", Map.of("routeOnly","", "ActiveProj",List.of(true,true),
                         "projects",List.of(Map.of("项目","特殊赛事","data",Map.of("次数","3")),
-                                Map.of("项目","多人上","data",Map.of("次数","1")))));
+                                Map.of("项目","世界系列赛","data",Map.of("次数","1")))));
                 lua.load("bootstrap",store.asset("lua/bootstrap.lua"));
                 lua.load("utilities",store.asset("lua/utilities.lua"));
                 lua.load("fixture",fixture);

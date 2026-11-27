@@ -4,6 +4,8 @@ import java.util.*;
 
 /** Per-start counters. Unknown ranks never silently enter the top-three denominator. */
 public final class TaskStats {
+    private static final String DAILY_LABEL=MultiplayerUi.displayMode("杯赛");
+    private static final String SEASON_LABEL=MultiplayerUi.displayMode("特殊赛事");
     private int target,started,finished,returned,fallbacks,progress,actions,eventCount,totalActions;
     private int cycle,projectTarget,projectBase,rank,ranked,topThree,restarts;
     private long matchingSeconds=-1;
@@ -23,7 +25,7 @@ public final class TaskStats {
     public synchronized void recovered(){interrupted();restarts++;operation="重启后继续剩余任务";}
     public synchronized void interrupted(){active=false;resultRecorded=false;returnRecorded=false;matchingSeconds=-1;operation="正在恢复任务";}
     public synchronized int restartCount(){return restarts;}
-    public synchronized boolean masterSeries(){return modeKey.equals("多人下");}
+    public synchronized String projectMode(){return modeKey;}
     public synchronized long elapsedMillis(){return elapsed;}
     public synchronized Map<String,Object> snapshot(){
         Map<String,Object> m=new LinkedHashMap<>();
@@ -42,11 +44,13 @@ public final class TaskStats {
         s.cycle=number(m,"cycle");s.projectTarget=number(m,"projectTarget");s.projectBase=number(m,"projectBase");s.rank=number(m,"rank");s.ranked=number(m,"ranked");s.topThree=number(m,"topThree");s.restarts=number(m,"restarts");
         Object elapsed=m.get("elapsed");if(!(elapsed instanceof Number)||((Number)elapsed).longValue()<0)throw new IllegalArgumentException("Invalid elapsed time");s.elapsed=((Number)elapsed).longValue();
         for(String key:List.of("mode","modeKey","map","operation"))if(!(m.get(key) instanceof String))throw new IllegalArgumentException("Invalid saved label: "+key);
-        s.mode=(String)m.get("mode");s.modeKey=(String)m.get("modeKey");s.map=(String)m.get("map");s.operation="等待恢复任务";
+        s.modeKey=MultiplayerUi.migrateMode((String)m.get("modeKey"));
+        s.mode=s.modeKey.isEmpty()?(String)m.get("mode"):MultiplayerUi.displayMode(s.modeKey);
+        s.map=(String)m.get("map");s.operation="等待恢复任务";
         if(!(m.get("counts") instanceof Map))throw new IllegalArgumentException("Invalid mode counters");
         Map<?,?> counts=(Map<?,?>)m.get("counts");long sum=0;
-        for(Object key:counts.keySet()){if(!(key instanceof String))throw new IllegalArgumentException("Invalid mode");int n=number(counts,(String)key);sum+=n;s.counts.put((String)key,n);}
-        if(sum!=s.finished||s.returned>s.finished||s.count("多人上")+s.count("多人下")>s.started||s.topThree>s.ranked||s.ranked>s.count("多人上")+s.count("多人下")||s.rank>8||s.projectBase>s.finished||s.progress>100)
+        for(Object key:counts.keySet()){if(!(key instanceof String))throw new IllegalArgumentException("Invalid mode");int n=number(counts,(String)key);sum+=n;s.counts.merge(MultiplayerUi.migrateMode((String)key),n,Integer::sum);}
+        if(sum!=s.finished||s.returned>s.finished||s.multiplayerCount()>s.started||s.topThree>s.ranked||s.ranked>s.multiplayerCount()||s.rank>8||s.projectBase>s.finished||s.progress>100)
             throw new IllegalArgumentException("Saved task counters are inconsistent");
         s.fallback=Boolean.TRUE.equals(m.get("fallback"));s.fallbackReason=m.get("fallbackReason") instanceof String?(String)m.get("fallbackReason"):"";
         // The previous race no longer owns callbacks after a VM/service restart.
@@ -70,7 +74,7 @@ public final class TaskStats {
         if(index>=0){totalActions+=index>=actions?index-actions:index;actions=index;eventCount=count;}
     }
     public synchronized void result(){result(0);}
-    /** @return true when this call finished a race whose rank stayed unknown (settlement interrupted). */
+    /** @return true when conflicting readings invalidate a previously recorded rank. */
     public synchronized boolean result(int position){
         if(!active)return false;
         if(!resultRecorded){finished++;counts.merge(modeKey,1,Integer::sum);resultRecorded=true;progress=100;operation="结算奖励";}
@@ -80,8 +84,15 @@ public final class TaskStats {
         if(rank!=position){ranked--;if(rank<=3)topThree--;rank=0;rankConflict=true;return true;}
         return false;
     }
-    private boolean isMultiplayer(){return modeKey.equals("多人上")||modeKey.equals("多人下");}
-    public synchronized void returned(){if(active&&resultRecorded&&!returnRecorded){returned++;returnRecorded=true;active=false;operation="等待下一局";}}
+    private boolean isMultiplayer(){return MultiplayerUi.SERIES.contains(modeKey);}
+    /** Close settlement once, after reward screens have had a chance to supply the rank. */
+    public synchronized String returned(){
+        if(!active||!resultRecorded||returnRecorded)return "";
+        returned++;returnRecorded=true;active=false;operation="等待下一局";
+        if(!isMultiplayer()||rank!=0)return "";
+        String reason=rankConflict?"名次读数不一致":"未识别到名次";
+        return "本局已计入完赛；"+reason+"，不计入前三名率";
+    }
     /** Existing non-multiplayer workflow reports a completed iteration, never a race start. */
     public synchronized void legacyCompleted(){
         if(active&&!isMultiplayer()){result();returned();}
@@ -93,6 +104,7 @@ public final class TaskStats {
     public synchronized int totalActions(){return totalActions;}
     public synchronized int rankedCount(){return ranked;}
     public synchronized int topThreeCount(){return topThree;}
+    private int multiplayerCount(){return count(MultiplayerUi.WORLD)+count(MultiplayerUi.MASTER)+count(MultiplayerUi.WEEKEND);}
     public synchronized int count(String key){return counts.getOrDefault(key,0);}
     public synchronized String phase(String phase){
         String first=phase==null?"":phase.split("\n",2)[0];
@@ -136,41 +148,39 @@ public final class TaskStats {
         String action=state.equals("已暂停")||state.equals("恢复游戏")||state.equals("任务停止")?state:operation;
         if(fallback&&active&&!resultRecorded)action+=" · 左划兜底";
         long seconds=elapsed/1000;
-        int multi=count("多人上")+count("多人下"),cups=count("杯赛")+count("每日战利品");
+        int multi=multiplayerCount(),cups=count("杯赛")+count("每日战利品");
         int special=count("特殊赛事");
         return "当前操作："+action+
             "\n多人前三率："+rate+" · 路程："+progress+"%"+
             "\n当前地图："+map+
-            "\n多人："+multi+"，杯赛："+cups+"，特赛："+special+
+            "\n多人："+multi+"，"+DAILY_LABEL+"："+cups+"，"+SEASON_LABEL+"："+special+
             "\n运行："+String.format(Locale.ROOT,"%02d:%02d:%02d",seconds/3600,seconds/60%60,seconds%60)+" · 重启："+restarts;
     }
     /** Key race statistics displayed while the game is on track. */
     public synchronized String overlayFullText(){
         String rate=ranked==0?"—":String.format(Locale.ROOT,"%.1f%%",100.0*topThree/ranked);
-        int multi=count("多人上")+count("多人下"),cups=count("杯赛")+count("每日战利品"),special=count("特殊赛事");
+        int multi=multiplayerCount(),cups=count("杯赛")+count("每日战利品"),special=count("特殊赛事");
         long seconds=elapsed/1000;
         return "地图："+map+
             "\n路程："+progress+"% · 指令："+actions+"/"+eventCount+
-            "\n多人："+multi+"，杯赛："+cups+"，特赛："+special+
+            "\n多人："+multi+"，"+DAILY_LABEL+"："+cups+"，"+SEASON_LABEL+"："+special+
             "\n前三："+rate+"（"+topThree+"/"+ranked+"）"+
             "\n运行："+String.format(Locale.ROOT,"%02d:%02d:%02d",seconds/3600,seconds/60%60,seconds%60)+" · 重启："+restarts;
     }
-    /** True when the current finished multiplayer race ended without a confirmed rank. */
-    public synchronized boolean rankUnconfirmed(){return active&&resultRecorded&&isMultiplayer()&&rank==0;}
     public synchronized String panel(String phase){
         String first=phase==null?"":phase.split("\\n",2)[0];
         if(first.length()>20)first=first.substring(0,20)+"…";
         long seconds=elapsed/1000;
         String time=String.format(Locale.ROOT,"%02d:%02d:%02d",seconds/3600,seconds/60%60,seconds%60);
-        int multi=count("多人上")+count("多人下");
+        int multi=multiplayerCount();
         String rate=ranked==0?"—":String.format(Locale.ROOT,"%.1f%%",100.0*topThree/ranked);
         return mode+
                 (projectTarget>0?" "+(finished-projectBase)+"/"+projectTarget:"")+"\n"+first+
                 "\n完赛 "+finished+(target>0?"/"+target:"")+" · 已返回 "+returned+
-                "\n多人 "+multi+" · 世界 "+count("多人上")+" / 大师 "+count("多人下")+
+                "\n多人 "+multi+" · 世界 "+count(MultiplayerUi.WORLD)+" / 大师 "+count(MultiplayerUi.MASTER)+" / 周末 "+count(MultiplayerUi.WEEKEND)+
                 "\n多人前三名率 "+rate+"（"+topThree+"/"+ranked+"）"+
                 "\n名次未确认时不计入前三名率 · 本局 "+(rank>0?"第 "+rank+" 名":"—")+
-                "\n杯赛 "+(count("杯赛")+count("每日战利品"))+" · 特赛 "+count("特殊赛事")+" · 其他 "+(finished-multi-count("杯赛")-count("每日战利品")-count("特殊赛事"))+
+                "\n"+DAILY_LABEL+" "+(count("杯赛")+count("每日战利品"))+" · "+SEASON_LABEL+" "+count("特殊赛事")+" · 其他 "+(finished-multi-count("杯赛")-count("每日战利品")-count("特殊赛事"))+
                 "\n地图："+map+"\n进度 "+progress+"% · 指令 "+actions+"/"+eventCount+
                 "\n当前操作："+operation+"\n累计指令 "+totalActions+" · 兜底 "+fallbacks+" 局"+
                 (matchingSeconds>=0?"\n匹配等待 "+matchingSeconds+" 秒 / "+MatchmakingWatchdog.TIMEOUT_SECONDS+" 秒":"")+

@@ -1,4 +1,4 @@
-multiple1 = {}
+masterSeries = {}
 local config = {
   main = "690|1240|FFFFFF-101010,690|1252|3B2312-101010,670|1270|3B2312-101010",
   inMulti = "60|342|FFFFFF-101010,224|280|FFFFFF-101010,600|580|000000-101010",
@@ -8,144 +8,122 @@ local config = {
   racing = "680|50|FFFFFF-101010,660|70|FFFFFF-101010",
   ending = "70|920|12FBC3-101010,70|970|12FBC3-101010",
   finish = "48|672|00D8FF-101010,100|326|FFFFFF-101010,678|1250|3C2313-101010",
-  commonPrize = "87|1164|FFFFFF-101010,110|1102|311406-101010,68|1051|301307-101010",
-  inCarGroup = "589|660|3B1F0C-101010,579|606|FFFFFF-101010,560|582|2A1203-101010",
-  canNoUseCar = "368|150|F9EF33-101010,520|936|48372C-101010,70|250|48362C-101010"
+  commonPrize = "87|1164|FFFFFF-101010,110|1102|311406-101010,68|1051|301307-101010"
 }
-local carList = {}
-local function chooseCar(n)
-  if n <= 0 then
-    return false
-  end
-  local lastCar = 5
-  local lenCar = #carList[data["段位"]]
-  local hasLastCar = false
+local chooseCar = function(carList)
+  local lastCar = 1
+  local lenCar = #carList
   local hc = {300, 68}
   local lc = {
     60,
     550,
     1000
   }
+  local carFillter = utils.defultCfg(run.data["选车筛选"], "")
+  local carUseWay = utils.defultCfg(run.data["选车模式"], "")
   local carUseOnce = utils.defultCfg(run.data["用车模式"], "")
   local carAd = utils.defultCfg(run.data["广告修车"], "")
-  if data["用车情况"][2] ~= data["段位"] then
-    utils.initCar()
-  end
-  if data["用车情况"][1] ~= 0 and data["用车情况"][1] > 6 and data["用车情况"][2] ~= 0 and utils.adjustCar() then
-    lastCar = data["用车情况"][1]
-    n = data["用车情况"][2]
-    hasLastCar = true
+  if carFillter ~= "" then
+    utils.configureGarageFilter(carFillter)
   else
-    local ydw = {
-      [6] = 1100,
-      [5] = 1030,
-      [4] = 960,
-      [3] = 880,
-      [2] = 810,
-      [1] = 740
-    }
-    sleep(1000)
-    tap(600, ydw[n])
-    sleep(2000)
+    tap(600, 820)
+  end
+  sleep(2000)
+  if carUseWay == "1" then
+    tap(400, 220)
+    toast("即将开始点击选车")
+    sleep(3000)
+    if tonumber(carList[1]) < 0 then
+      toast("负数选车")
+      tap(360, 490)
+      sleep(700)
+      lastCar = -1
+    end
   end
   while true do
-    local temp = carList[n]
-    local car1 = tonumber(temp[1]) or 0
-    if car1 == 0 then
-      return chooseCar(n - 1)
-    end
-    for j = 1, #temp do
+    for j = 1, lenCar do
       do
-      local car = tonumber(temp[j]) or 1
-      if hasLastCar then
-        car = lastCar
-        j = data["用车情况"][3]
-        hasLastCar = false
-      end
-      if data["超时状态"] then
-        return false
-      end
-      sleep(100)
-      if carUseOnce == "1" and data["用车次数"]["car" .. j] ~= nil then
-        if lenCar <= j then
-          if data["用车次数"]["car" .. j] == 0 then
-            return chooseCar(n - 1)
-          else
-            data["用车次数"] = {}
+      local car = tonumber(carList[j]) or 1
+      if car ~= 0 then
+        if data["超时状态"] then
+          return false
+        end
+        sleep(100)
+        if carUseOnce == "1" and data["用车次数"]["car" .. j] ~= nil then
+          if lenCar <= j then
+            if data["用车次数"]["car" .. j] == 0 then
+              return false
+            else
+              data["用车次数"] = {}
+            end
+          end
+          if data["用车次数"]["car" .. j] == 1 then
+            goto lbl_372
           end
         end
-        if data["用车次数"]["car" .. j] == 1 then
-          goto lbl_297
-        end
-      end
-      local tempHL = utils.getCarHL(car)
-      local h, l = tempHL[1], tempHL[2]
-      local lastl = utils.getCarHL(lastCar)
-      lastl = lastl[2]
-      utils.carSwipe(l, lastl)
-      keepCapture()
-      if 4 < car then
-        l = 3
-      end
-      x, y = findMultiColor(hc[h], lc[l], hc[h] + 50, lc[l] + 250, "13FBC3-101010", "6|10|39260C-101010|158|-2|FFFFFF-101010", 2, 1)
-      if carAd ~= "" then
-        x1, y1 = findMultiColor(hc[h], lc[l], hc[h] + 60, lc[l] + 250, "5400FF-101010", "158|-2|FFFFFF-101010", 2, 1)
-      end
-      if x ~= -1 and y ~= -1 then
-        tap(x + 20, y)
-        sleep(50)
-        tap(x + 20, y)
-        data["用车次数"]["car" .. j] = 1
-        data["用车情况"] = {
-          car,
-          n,
-          j
-        }
-        sleep(2000)
-        return true
-      else
-        if carAd ~= "" then
-          tap(x1, y1)
-          utils.wait(config.carInfo)
-          sleep(1000)
-          if utils.carAd() == 1 then
+        if carUseWay == "1" then
+          utils.clickChoose(car, lastCar)
+          keepCapture()
+          if cmpColorEx(config.carInfo, 1) == 1 and cmpColor(75, 1030, "FFFFFF-030303", 1) == 0 and (cmpColor(50, 832, "12FBC3-101010", 1) == 1 or cmpColor(50, 832, "210900-101010", 1) == 1) then
+            return true
+          elseif carAd == "0" then
+            if utils.carAd() ~= 1 then
+              return false
+            end
+            return true
+          end
+        else
+          local tempHL = utils.getCarHL(car)
+          local h, l = tempHL[1], tempHL[2]
+          local lastl = utils.getCarHL(lastCar)
+          lastl = lastl[2]
+          utils.carSwipe(l, lastl)
+          keepCapture()
+          if 4 < car then
+            l = 3
+          end
+          x, y = findMultiColor(hc[h], lc[l], hc[h] + 50, lc[l] + 250, "13FBC3-101010", "6|10|39260C-101010|158|-2|FFFFFF-101010", 2, 1)
+          if carAd ~= "" then
+            x1, y1 = findMultiColor(hc[h], lc[l], hc[h] + 50, lc[l] + 250, "5400FF-101010", "158|-2|FFFFFF-101010", 2, 1)
+          end
+          if x ~= -1 and y ~= -1 then
+            tap(x + 20, y)
+            sleep(50)
+            tap(x + 20, y)
             data["用车次数"]["car" .. j] = 1
-            data["用车情况"] = {
-              car,
-              n,
-              j
-            }
+            sleep(2000)
             return true
           else
-            return false
+            if carAd ~= "" then
+              tap(x1, y1)
+              utils.wait(config.carInfo)
+              sleep(1000)
+              if utils.carAd() == 1 then
+                data["用车次数"]["car" .. j] = 1
+                data["用车情况"] = {
+                  car,
+                  n,
+                  j
+                }
+                return true
+              else
+                return false
+              end
+            end
+            data["用车次数"]["car" .. j] = 0
           end
         end
-        data["用车次数"]["car" .. j] = 0
+        lastCar = car
       end
-      lastCar = car
       end
-      ::lbl_297::
+      ::lbl_372::
     end
     if carUseOnce == "0" then
-      if n <= 0 then
-        return false
-      end
-      return chooseCar(n - 1)
+      return false
     end
   end
 end
-function multiple1.init()
-  carList = {
-    utils.defultCfg(run.data["青铜用车"], {1}),
-    utils.defultCfg(run.data["白银用车"], {1}),
-    utils.defultCfg(run.data["黄金用车"], {1}),
-    utils.defultCfg(run.data["白金用车"], {1}),
-    utils.defultCfg(run.data["钻石用车"], {1}),
-    utils.defultCfg(run.data["传奇用车"], {1})
-  }
-
-end
-multiple1.operation = {
+masterSeries.operation = {
   {
     config.main,
     function()
@@ -155,9 +133,9 @@ multiple1.operation = {
         tap(70, 700)
         sleep(500)
       end
-      tap(505, 800)
+      tap(370, 800)
       sleep(200)
-      tap(505, 800)
+      tap(370, 800)
       sleep(2000)
     end
   },
@@ -178,8 +156,12 @@ multiple1.operation = {
     config.carport,
     function()
       data["信息"] = "开始选车"
-      multiple1.init()
-      if chooseCar(data["段位"]) == false then
+      if chooseCar(utils.defultCfg(run.data["赛事用车"], {
+        1,
+        2,
+        3,
+        4
+      })) == false then
         return -1
       end
       sleep(2000)
@@ -319,23 +301,6 @@ multiple1.operation = {
       tap(50, 1220)
       sleep(2000)
     end
-  },
-  {
-    config.inCarGroup,
-    function()
-      data["信息"] = "在车组中"
-      if chooseCar(data["段位"]) == false then
-        return -1
-      end
-      sleep(2000)
-    end
-  },
-  {
-    config.canNoUseCar,
-    function()
-      data["信息"] = "车辆不能使用"
-      utils.backToMain()
-    end
   }
 }
-return multiple1
+return masterSeries

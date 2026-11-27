@@ -22,21 +22,24 @@ final class RewardChecks {
         for(String s:List.of("4,80","金币4800","4800\n4800","-1","+4800","88,888 金币"))check(RaceRewards.amount(s,false)==-1,"Invalid/merged coin crop rejected: "+s);
         check(RaceRewards.amount("0",false)==0&&RaceRewards.amount("+0",true)==0,"Confirmed zero is distinct from unknown");
         check(RaceRewards.amount("100,000",false)==100000,"Only settlement values have per-race caps");
-        TaskStats s=new TaskStats();s.project("多人下");
+        TaskStats s=new TaskStats();s.project("大师系列赛");
         s.begin("季风秘境幽林飞瀑",false);s.result(2);s.returned();
         check(s.snapshot().isEmpty()||!s.snapshot().containsKey("coins"),"Earnings no longer persist after settlement");
         TaskStats restore=TaskStats.restore(s.snapshot());
         check(!restore.compact().contains("收益")&&!restore.panel("").contains("收益"),"Panels omit earnings rows after the removal");
         TaskStats legacy=new TaskStats();legacy.project("杯赛");legacy.begin("测试",false);legacy.legacyCompleted();check(legacy.finished()==1&&legacy.returnedCount()==1&&legacy.rankedCount()==0,"Legacy completion commits the finished iteration, without entering multiplayer rate");
+        Map<String,Object> oldCup=legacy.snapshot();oldCup.put("mode","杯赛");
+        TaskStats restoredCup=TaskStats.restore(oldCup);
+        check(restoredCup.compact().startsWith("每日赛事")&&restoredCup.count("杯赛")==1,"Resumed cups use the new label and keep saved totals");
         TaskStats mixed=new TaskStats();int n=0;
-        for(String mode:List.of("多人上","杯赛","特殊赛事","每日战利品","多人下")){
+        for(String mode:List.of("世界系列赛","杯赛","特殊赛事","每日战利品","大师系列赛")){
             mixed.project(mode);mixed.begin("test",false);mixed.result(++n==5?5:1);mixed.returned();
         }
         check(mixed.finished()==5&&mixed.rankedCount()==2&&mixed.topThreeCount()==1,"Only world/master races enter either top-three numerator or denominator");
         check(mixed.compact().contains("多人前三 50.0%（1/2）"),"Mixed-task panel explicitly labels multiplayer-only rate");
-        check(mixed.overlayText("比赛中").contains("多人：2，杯赛：2，特赛：1")&&mixed.overlayFullText().contains("多人：2，杯赛：2，特赛：1"),"Overlays merge world/master, group daily with cups and retain special events separately");
+        check(mixed.overlayText("比赛中").contains("多人：2，每日赛事：2，赛季赛事：1")&&mixed.overlayFullText().contains("多人：2，每日赛事：2，赛季赛事：1"),"Overlays merge world/master, group daily with cups and retain special events separately");
         check(mixed.overlayText("比赛中").contains("多人前三率：50.0%")&&mixed.overlayText("已暂停").startsWith("当前操作：已暂停"),"Reference-style overlay keeps multiplayer-only rate and pause state");
-        check(mixed.panel("").contains("杯赛 2 · 特赛 1 · 其他 0")&&!mixed.overlayText("").contains("生涯"),"Detailed and compact panels keep the same separate cup/special totals");
+        check(mixed.panel("").contains("每日赛事 2 · 赛季赛事 1 · 其他 0")&&!mixed.overlayText("").contains("生涯"),"Detailed and compact panels keep the same separate cup/special totals");
         mixed.cycle(3);
         check(!mixed.overlayFullText().contains("轮")&&!mixed.compact().contains("轮")&&!mixed.panel("比赛中").contains("轮"),"User-facing stats omit queue cycle numbers");
         check(mixed.overlayFullText().split("\n").length==5,"Race overlay no longer carries an earnings row");
@@ -48,7 +51,7 @@ final class RewardChecks {
         Map<String,Object> oldSaved=new LinkedHashMap<>(s.snapshot());oldSaved.put("coins",4800L);oldSaved.put("fame",189L);oldSaved.put("coinRaces",1);oldSaved.put("fameRaces",1);oldSaved.put("lastCoins",4800L);oldSaved.put("lastFame",189L);
         TaskStats migrated=TaskStats.restore(oldSaved);
         check(migrated.compact().contains("完赛 1")&&!migrated.compact().contains("金币"),"Old resume files migrate without inventing or showing historical rewards");
-        TaskStats zero=new TaskStats();zero.project("多人上");zero.begin("zero",false);zero.result(8);zero.returned();check(!zero.compact().contains("收益"),"Settlement no longer reports reward coverage");
+        TaskStats zero=new TaskStats();zero.project("世界系列赛");zero.begin("zero",false);zero.result(8);zero.returned();check(!zero.compact().contains("收益"),"Settlement no longer reports reward coverage");
         TaskStats fallback=new TaskStats();fallback.begin("",true);check(fallback.phase("地图识别失败，左划兜底").equals("比赛中"),"Fallback isn't a stopped task");check(!fallback.compact().contains("unknown")&&fallback.compact().contains("左划兜底"),"Compact view uses human-readable route state");
         check(fallback.currentActivity("正在领取免费包").equals("正在领取免费包"),"Live reward activity overrides stale race stats in compact panel");
         check(fallback.currentActivity("正在领取每日奖励\nold map 58%").equals("正在领取每日奖励"),"Compact activity uses the latest workflow line only");
@@ -72,7 +75,7 @@ final class RewardChecks {
             return 0;
         },List.of("_legacyRewardSample","_sessionLegacyRewards","done"))){
             lua.load("bootstrap",Files.readString(assets.resolve("lua/bootstrap.lua")));
-            lua.load("fixture","LOCAL_ROOT='/synthetic';data={};ROUTES={};UIconfig={gamePkg='test'};utils={};run={};multiple1={};multiple2={};cup={};spCup={};dsCup={};dailyCup={};function test()localInit();assert(utils.collectRaceRewards==nil);done()end");
+            lua.load("fixture","LOCAL_ROOT='/synthetic';data={};ROUTES={};UIconfig={gamePkg='test'};utils={};run={};worldSeries={};masterSeries={};cup={};spCup={};dsCup={};dailyCup={};function test()localInit();assert(utils.collectRaceRewards==nil);done()end");
             lua.start("test");lua.step(0);
         }
     }
@@ -107,7 +110,7 @@ final class RewardChecks {
                 default:return 0;
             }
         },List.of("_multiplayerUi","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_fallbackBegin","_fallbackStep","_sessionOperation","tap","swipe","_hud","print","done"))){
-            lua.set("data",Map.of("项目","多人上","多人",0));lua.set("run",Map.of("data",Map.of("次数","1","多人选路","3")));
+            lua.set("data",Map.of("项目","世界系列赛","多人",0));lua.set("run",Map.of("data",Map.of("次数","1","多人选路","3")));
             lua.load("helpers","utils={defultCfg=function(v,d)return v or d end};run.nitro=function()end");lua.load("workflow",Files.readString(assets.resolve("lua/multiplayer_current.lua")));
             lua.load("entry","function test()currentMultiplayer.run();done()end");lua.start("test");
             try{for(int t=0;t<120&&!done[0];t++)lua.step(t*1000L);}catch(RuntimeException e){if(e.getMessage().contains("未完成结算"))stopped=true;else throw e;}

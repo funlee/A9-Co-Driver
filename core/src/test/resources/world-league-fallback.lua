@@ -10,7 +10,7 @@ local chosen={}
 local switches={}
 local fuelRead=scenario=='unknown' and -1 or 0
 
-data={['项目']='多人上'}
+data={['项目']='世界系列赛'}
 run={data={['次数']=1,['青铜用车']={2},['白银用车']={1},['黄金用车']={1}}}
 run.data['钻石用车']={1}
 if scenario=='skipBlank' then run.data['白银用车']={'0'} end

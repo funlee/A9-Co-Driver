@@ -5,8 +5,14 @@ vehicleGrid={}
 local function click(x,y) tap(719-math.floor(y),math.floor(x)) end
 local function has(text,part)
   local normalized=string.gsub(string.gsub(text,'[ \t\r\n]',''),'賽','赛')
-  normalized=string.gsub(normalized,'错矢机会','错失机会')
+  normalized=normalized:gsub('週','周'):gsub('師','师'):gsub('错矢机会','错失机会')
   return string.find(normalized,part,1,true)~=nil
+end
+local seriesNames={'世界系列赛','大师系列赛','周末系列赛'}
+local function otherSeries(text,target)
+  for _,name in ipairs(seriesNames) do
+    if name~=target and has(text,name) then return name end
+  end
 end
 local function word(screen,label,minY)
   for _,w in ipairs(screen.words or {}) do
@@ -352,13 +358,12 @@ function currentMultiplayer.run(resumingTutorial)
   local usedCars={}
   local lastPage=nil
   local mode='3'
-  local series=data['项目']=='多人上' and '世界系列赛' or '大师系列赛'
-  local other=data['项目']=='多人上' and '大师系列赛' or '世界系列赛'
-  local world=data['项目']=='多人上'
+  local series=data['项目']
+  local world=series=='世界系列赛'
   local autoReward=world and run.data['自选奖励']=='0'
   local rewardRules=run.data.worldRewardRules or {}
   local readSeriesScore=autoReward and #rewardRules>0
-  status('目标赛事：'..series..'（'..data['项目']..'）')
+  status('目标赛事：'..series)
   local disconnects=0;local total=completed;local unlockMisses=0;local milestoneMisses=0;local loginAttempts=0;local loginMissing=0;local serverErrors=0;local noOpponents=0
   local leagueChanged=false
   while total<count do
@@ -433,6 +438,7 @@ function currentMultiplayer.run(resumingTutorial)
     while true do
       local screen=_multiplayerUi(readSeriesScore,started or raced)
       local scene=screen.scene
+      local other=scene=='event' and otherSeries(screen.text,series)
       if scene=='event' and has(screen.text,series) then
         local league=screen.masterLeague
         if world then
@@ -739,7 +745,7 @@ function currentMultiplayer.run(resumingTutorial)
         if seriesBacks<3 then
           seriesBacks=seriesBacks+1
           status('当前不是目标系列，返回系列列表')
-          if has(screen.text,other) or scene=='cars' or scene=='car' then click(38,29) else keyPress('back') end
+          if other or scene=='cars' or scene=='car' then click(38,29) else keyPress('back') end
           sleep(1500)
         elseif homeFallbackAt then
           if tickCount()-returnHomeAt>45000 then error('返回主界面后未确认切页，保留当前任务') end
@@ -758,7 +764,12 @@ function currentMultiplayer.run(resumingTutorial)
       elseif scene=='series' then
         -- 大师系列赛周结算到期时，系列卡片会被「赛季结算·奖励已就绪」占据；
         -- 不领取奖励就无法进入该系列，需先点卡片上的领取再进系列。
-        local settlementClaim=word(screen,'领取',400)
+        local entry=word(screen,series)
+        if entry and otherSeries(entry.text,series) then entry=nil end
+        local settlementClaim
+        for _,w in ipairs(screen.words or {}) do
+          if entry and has(w.text,'领取') and w.y>=400 and math.abs(w.x-entry.x)<=100 then settlementClaim=w;break end
+        end
         if settlementClaim and not seriesPressedAt and
             (has(screen.text,'奖励已就绪') or has(screen.text,'赛季结算')) then
           status('领取赛季结算奖励')
@@ -766,10 +777,9 @@ function currentMultiplayer.run(resumingTutorial)
         elseif seriesPressedAt then
           if tickCount()-seriesPressedAt>30000 then error('点击赛事入口后未能确认切页，保留当前任务') end
         else
-          -- The tabs can expose both series labels while the cards are still sliding.
+          -- The tabs can expose multiple series labels while the cards are still sliding.
           -- Only tap once the target label holds its position across fresh captures.
           entryLeague=nil
-          local entry=word(screen,series)
           if entry and seriesEntry and screen.frameId and seriesFrame and screen.frameId>seriesFrame
               and math.abs(entry.x-seriesEntry.x)<=12 and math.abs(entry.y-seriesEntry.y)<=12 then
             if world and entryCandidate==screen.entryLeague then entryLeague=entryCandidate end
@@ -778,7 +788,7 @@ function currentMultiplayer.run(resumingTutorial)
           else seriesEntry=entry;seriesFrame=screen.frameId;entryCandidate=screen.entryLeague end
         end
       elseif scene=='event' then
-        if has(screen.text,other) then error('赛事校验失败：目标是'..series..'，当前是'..other..'；已停止，不会开始比赛') end
+        if other then error('赛事校验失败：目标是'..series..'，当前是'..other..'；已停止，不会开始比赛') end
         local start=word(screen,'开始',550)
         if start and (start.x<900 or start.text:gsub('%s','')~='开始') then start=nil end
         if eventPressedAt then
@@ -907,7 +917,7 @@ function currentMultiplayer.run(resumingTutorial)
           print('选车起点暂未确认，重新核验 '..originRetries..'/3');sleep(500)
         else
           local rankKey=reusePage and targetLeague or garage.rank or series
-          local list=run.data['多人下用车'] or {'1'}
+          local list=run.data['赛事用车'] or {'1'}
           if world then
             list=run.data[rankKey..'用车']
             if not list and rankKey=='青铜' then list={'1'} end

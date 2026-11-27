@@ -1,5 +1,7 @@
 package dev.funlee.a9;
 
+import dev.funlee.a9.core.MultiplayerUi;
+
 import android.app.*;
 import android.content.*;
 import android.os.*;
@@ -31,13 +33,29 @@ final class TaskEditingDeviceCheck {
         };
         try {
             store=new LocalStore(isolated);
+            if(mode.equals("series-editor")){
+                prepareEditorQueue();
+                checkSeriesOptions();
+                launchEditor(base);
+                checkSeriesEditors();
+                report.putString("result","PASS: all three default names, weekend settings, and saved series migration");
+                return;
+            }
             if(mode.equals("cup-editor")){
+                prepareEditorQueue();
                 launchEditor(base);
                 checkCupRewardForm();
                 report.putString("result","PASS: one cup task type and a persistent club rewards checkbox");
                 return;
             }
+            if(mode.equals("season-editor")){
+                launchEditor(base);
+                checkSeasonModeForm();
+                report.putString("result","PASS: season mode is required, defaults to domination, and migrates legacy mode and chapter settings");
+                return;
+            }
             if(mode.equals("garage-sort-editing")){
+                prepareEditorQueue();
                 launchEditor(base);
                 checkGarageSort();
                 report.putString("result","PASS: mutually exclusive garage sorting, clear, save and reopen in all six event editors");
@@ -45,18 +63,18 @@ final class TaskEditingDeviceCheck {
             }
             checkDefaults();
             check(store.config.getInt("raceTimeout")==LocalStore.DEFAULT_RACE_TIMEOUT_SECONDS,"Wrong initial race timeout");
-            check(store.config.getJSONObject("global").getBoolean("autoToken")&&store.config.getJSONObject("global").getBoolean("freePkg"),"Wrong initial global task options");
+            check(!store.config.getJSONObject("global").getBoolean("autoToken")&&!store.config.getJSONObject("global").getBoolean("freePkg"),"Wrong initial global task options");
             String initial=tasks().toString();reload();check(initial.equals(tasks().toString()),"Default identities did not persist");
-            check(store.config.getJSONObject("global").getBoolean("autoToken")&&store.config.getJSONObject("global").getBoolean("freePkg"),"Default global task options did not persist");
+            check(!store.config.getJSONObject("global").getBoolean("autoToken")&&!store.config.getJSONObject("global").getBoolean("freePkg"),"Default global task options did not persist");
             JSONObject initialConfig=new JSONObject(store.config.toString());
-            store.config=new JSONObject().put("global",new JSONObject().put("autoToken",false).put("freePkg",false));store.save();reload();checkDefaults();
-            check(!store.config.getJSONObject("global").getBoolean("autoToken")&&!store.config.getJSONObject("global").getBoolean("freePkg"),"Initialization overwrote explicit global options");
+            store.config=new JSONObject().put("global",new JSONObject().put("autoToken",true).put("freePkg",true));store.save();reload();checkDefaults();
+            check(store.config.getJSONObject("global").getBoolean("autoToken")&&store.config.getJSONObject("global").getBoolean("freePkg"),"Initialization overwrote explicit global options");
             store.config=new JSONObject(initialConfig.toString());store.config.remove("global");store.save();reload();
-            check(!store.config.has("global"),"Existing configuration adopted enabled reward defaults");
+            check(!store.config.has("global"),"Existing configuration adopted new-install reward preferences");
             store.config=initialConfig;store.save();reload();
             // An untouched legacy queue upgrades; a single edited or enabled slot preserves all 20.
             JSONArray legacy=new JSONArray();
-            for(int i=0;i<20;i++)legacy.put(new JSONObject().put("项目","多人上").put("enabled",false).put("data",store.defaults("多人上")));
+            for(int i=0;i<20;i++)legacy.put(new JSONObject().put("项目",MultiplayerUi.LEGACY_WORLD).put("enabled",false).put("data",store.defaults(MultiplayerUi.WORLD).put("项目名称",MultiplayerUi.LEGACY_WORLD)));
             store.config.put("projects",legacy);store.config.remove("taskQueueVersion");store.save();reload();checkDefaults();
             legacy.getJSONObject(9).getJSONObject("data").put("次数","7");
             store.config.put("projects",legacy);store.config.remove("taskQueueVersion");store.save();reload();
@@ -64,14 +82,16 @@ final class TaskEditingDeviceCheck {
             tasks().getJSONObject(9).getJSONObject("data").put("次数","1");store.save();reload();
             check(tasks().length()==20,"Modern queue was mistaken for legacy placeholders");
             store.resetProjects();
+            prepareEditorQueue();
             checkSeriesOptions();
             checkWorldLeagues();
-            store.config.put("accuracy",91).put("global",new JSONObject().put("autoToken",false).put("freePkg",false));store.save();
+            store.config.put("accuracy",91).put("global",new JSONObject().put("autoToken",true).put("freePkg",true));store.save();
             String route=store.routeKeys().get(0);store.saveRoute(route,"1,31");
             launchEditor(base);
             screenshot("default-queue.png");
             checkGarageSort();
             checkTaskRoutes();
+            checkSeasonModeForm();
             clickTask("世界系列赛");
             screenshot("world-editor-open.png");
             check(node("7. 世界系列赛")!=null,"World editor title missing");
@@ -83,13 +103,13 @@ final class TaskEditingDeviceCheck {
             for(String league:List.of("白金","翡翠","精英","宗师"))check(tasks().getJSONObject(WORLD).getJSONObject("data").getString(league+"用车").equals("2,4"),"New league vehicle settings did not persist: "+league);
             check(tasks().getJSONObject(WORLD).getJSONObject("data").getString("青铜用车").equals("2,3"),"World vehicle settings did not persist");
             clickTask("大师系列赛");
-            check(node("6. 大师系列赛")!=null&&node("多人下用车")!=null,"Master editor did not open vehicle settings");
-            input("多人下用车","2,4");click("保存");reload();bind();
-            check(tasks().getJSONObject(MASTER).getJSONObject("data").getString("多人下用车").equals("2,4"),"Master vehicle settings did not persist");
+            check(node("6. 大师系列赛")!=null&&node("赛事用车")!=null,"Master editor did not open vehicle settings");
+            input("赛事用车","2,4");click("保存");reload();bind();
+            check(tasks().getJSONObject(MASTER).getJSONObject("data").getString("赛事用车").equals("2,4"),"Master vehicle settings did not persist");
             checkCupRewardForm();
             clickMain("新增任务");click("取消");check(tasks().length()==7,"Cancelling type picker added a task");
-            clickMain("新增任务");click("杯赛");click("取消");check(tasks().length()==7,"Cancelling form added a task");
-            clickMain("新增任务");click("杯赛");input("任务名称","新增杯赛测试");input("比赛次数","0");click("保存");
+            clickMain("新增任务");click("每日赛事");click("取消");check(tasks().length()==7,"Cancelling form added a task");
+            clickMain("新增任务");click("每日赛事");input("任务名称","新增杯赛测试");input("比赛次数","0");click("保存");
             check(tasks().length()==7&&node("执行次数需为 1–10000")!=null,"Invalid task was saved");click("确定");
             input("比赛次数","3");click("保存");
             check(tasks().length()==8,"UI add failed");
@@ -102,7 +122,7 @@ final class TaskEditingDeviceCheck {
             for(int i=0;i<7;i++)clickMain("删除");reload();bind();
             check(tasks().length()==0&&((List<?>)store.luaConfig().get("projects")).isEmpty(),"Empty queue resurrected on reload");
             screenshot("empty-queue.png");
-            clickMain("新增任务");click("杯赛");click("保存");check(tasks().length()==1,"Cannot add to empty queue");
+            clickMain("新增任务");click("每日赛事");click("保存");check(tasks().length()==1,"Cannot add to empty queue");
             tasks().getJSONObject(0).put("enabled",true).getJSONObject("data").put("次数","12");store.save();bind();
             String beforeReset=tasks().toString();
             clickMain("重置编排");
@@ -111,40 +131,69 @@ final class TaskEditingDeviceCheck {
             screenshot("reset-confirmation.png");click("取消");reload();bind();
             check(tasks().toString().equals(beforeReset),"Cancelling reset changed saved tasks");
             clickMain("重置编排");click("确认重置");reload();bind();checkDefaults();
-            check(store.config.getInt("accuracy")==91&&!store.config.getJSONObject("global").getBoolean("autoToken")&&!store.config.getJSONObject("global").getBoolean("freePkg"),"Reset changed preferences");
+            check(store.config.getInt("accuracy")==91&&store.config.getJSONObject("global").getBoolean("autoToken")&&store.config.getJSONObject("global").getBoolean("freePkg"),"Reset changed preferences");
             check(store.routes.get(route).raw.equals("1,31"),"Reset changed custom route");
             String reset=tasks().toString();reload();check(reset.equals(tasks().toString()),"Reset did not persist");
             screenshot("reset-queue.png");
-            report.putString("result","PASS: direct edit details/cancel/save/reload preserves type/identity/flag; only new tasks choose type; seven defaults; legacy upgrade/custom queue preservation; add/cancel/validation; repeated mode identities; delete all and persist empty queue; add to empty queue; reset fields/order/flags; preferences and routes preserved; isolated preferences only");
+            report.putString("result","PASS: direct edit details/cancel/save/reload preserves type/identity/flag; only new tasks choose type; current defaults; legacy upgrade/custom queue preservation; add/cancel/validation; repeated mode identities; delete all and persist empty queue; add to empty queue; reset fields/order/flags; preferences and routes preserved; isolated preferences only");
         } finally {
             if(activity!=null)test.runOnMainSync(()->activity.finish());base.deleteSharedPreferences(preferences);
         }
     }
     private JSONArray tasks()throws Exception{return store.config.getJSONArray("projects");}
+    private void prepareEditorQueue()throws Exception {
+        JSONObject loot=tasks().getJSONObject(0).getJSONObject("data");
+        String[] modes={"车联","杯赛","特殊赛事","杯赛","特殊赛事","大师系列赛","世界系列赛"};
+        store.config.put("projects",new JSONArray());
+        for(int i=0;i<modes.length;i++){
+            JSONObject data=i==DAILY?loot:store.defaults(modes[i]);
+            if(i==SPECIAL)data.put("路线来源","0").put("已配置地图","旧金山尖峰时刻");
+            store.addProject(modes[i],data);
+            tasks().getJSONObject(i).put("enabled",true);
+        }
+        store.save();
+    }
     private void checkSeriesOptions()throws Exception {
-        List<String> retired=List.of("使用车组","车组选择","车组青铜用车","车组白银用车","车组黄金用车","车组铂金用车","车组钻石用车","车组传奇用车","多人上漂流","多人下漂流","传奇停跑","传奇分数","多人上掉分","掉分段位","掉分段位结束","多人选路");
+        List<String> retired=List.of("使用车组","车组选择","车组青铜用车","车组白银用车","车组黄金用车","车组铂金用车","车组钻石用车","车组传奇用车",MultiplayerUi.LEGACY_WORLD+"漂流",MultiplayerUi.LEGACY_MASTER+"漂流","传奇停跑","传奇分数",MultiplayerUi.LEGACY_WORLD+"掉分","掉分段位","掉分段位结束","多人选路");
         JSONObject original=new JSONObject(store.config.toString()),world=tasks().getJSONObject(WORLD),master=tasks().getJSONObject(MASTER);
         for(String key:retired){world.getJSONObject("data").put(key,"0");master.getJSONObject("data").put(key,"0");}
         world.getJSONObject("data").put("青铜用车","2,3").put("次数","7");world.put("enabled",true);
-        master.getJSONObject("data").put("多人下用车","2,4").put("次数","9");master.put("enabled",true);
+        master.getJSONObject("data").put("赛事用车","2,4").put("次数","9");master.put("enabled",true);
         JSONObject expected=new JSONObject(world.toString());for(String key:retired)expected.getJSONObject("data").remove(key);
         JSONObject expectedMaster=new JSONObject(master.toString());for(String key:retired)expectedMaster.getJSONObject("data").remove(key);
+        world.put("项目",MultiplayerUi.LEGACY_WORLD);world.getJSONObject("data").put("项目名称",MultiplayerUi.LEGACY_WORLD);
+        master.put("项目",MultiplayerUi.LEGACY_MASTER);
+        master.getJSONObject("data").put(MultiplayerUi.LEGACY_MASTER+"用车",master.getJSONObject("data").remove("赛事用车")).put("项目名称","我的试驾");
+        expectedMaster.getJSONObject("data").put("项目名称","我的试驾");
         JSONObject oldSession=new JSONObject(store.config.toString());String cupBefore=tasks().getJSONObject(CUP).toString();store.save();reload();
         check(tasks().getJSONObject(WORLD).toString().equals(expected.toString()),"World migration changed retained configuration or left retired options");
-        check(tasks().getJSONObject(MASTER).toString().equals(expectedMaster.toString()),"Master migration changed retained configuration or left retired options");
+        check(LocalStore.javaValue(tasks().getJSONObject(MASTER)).equals(LocalStore.javaValue(expectedMaster)),"Master migration changed retained configuration or left retired options");
         check(tasks().getJSONObject(CUP).toString().equals(cupBefore),"Series migration changed cup configuration");
         store.config=oldSession;check(store.migrateConfig(),"Old resume configuration was not migrated");
         check(tasks().getJSONObject(WORLD).toString().equals(expected.toString()),"Resume migration retained world options");
-        check(tasks().getJSONObject(MASTER).toString().equals(expectedMaster.toString()),"Resume migration retained master options");
-        for(String mode:List.of("多人上","多人下")){
-            JSONArray spec=store.forms.getJSONArray(mode);
+        check(LocalStore.javaValue(tasks().getJSONObject(MASTER)).equals(LocalStore.javaValue(expectedMaster)),"Resume migration retained master options");
+        for(String mode:MultiplayerUi.SERIES){
+            JSONArray spec=store.formFields(mode);
             for(int i=0;i<spec.length();i++)check(!retired.contains(spec.getJSONObject(i).getString("key")),"Series editor still exposes retired option");
         }
         store.config=original;store.save();
     }
+    private void checkSeriesEditors()throws Exception {
+        for(String mode:MultiplayerUi.SERIES){
+            clickMain("新增任务");click(mode);
+            AccessibilityNodeInfo name=editable(ui.getRootInActiveWindow(),"任务名称");
+            check(name!=null&&mode.contentEquals(name.getText()),"Incorrect new task name for "+mode);
+            if(!MultiplayerUi.WEEKEND.equals(mode)){click("取消");continue;}
+            input("赛事用车","2,4");click("保存");reload();bind();
+            JSONObject added=tasks().getJSONObject(tasks().length()-1);
+            check(mode.equals(added.getString("项目"))&&added.getJSONObject("data").getString("赛事用车").equals("2,4"),"Weekend car order was not saved");
+            JSONObject expected=store.defaults(MultiplayerUi.MASTER).put("项目名称",mode).put("赛事用车","2,4");
+            check(LocalStore.javaValue(expected).equals(LocalStore.javaValue(added.getJSONObject("data"))),"Weekend settings differ from master settings");
+        }
+    }
     private void checkWorldLeagues()throws Exception {
         List<String> leagues=List.of("青铜","白银","黄金","白金","翡翠","钻石","精英","宗师","传奇");
-        List<String> fields=new ArrayList<>();JSONArray spec=store.forms.getJSONArray("多人上");
+        List<String> fields=new ArrayList<>();JSONArray spec=store.forms.getJSONArray("世界系列赛");
         for(int i=0;i<spec.length();i++) {
             String key=spec.getJSONObject(i).getString("key");if(key.endsWith("用车"))fields.add(key.substring(0,key.length()-2));
         }
@@ -167,10 +216,10 @@ final class TaskEditingDeviceCheck {
         store.migrateConfig();check(cars.getString("白金用车").isEmpty()&&!cars.has("铂金用车"),"Explicit current choice must win over legacy choice");
         check(!store.migrateConfig(),"League migration must be idempotent");
         store.config=new JSONObject(original.toString());store.save();
-        // A real untouched six-league queue still qualifies for the five-task migration.
-        JSONObject oldDefaults=store.defaults("多人上");oldDefaults.put("铂金用车",oldDefaults.remove("白金用车"));
+        // An untouched six-league queue still qualifies for default initialization.
+        JSONObject oldDefaults=store.defaults("世界系列赛");oldDefaults.put("铂金用车",oldDefaults.remove("白金用车"));
         for(String added:List.of("翡翠","精英","宗师"))oldDefaults.remove(added+"用车");
-        JSONArray legacy=new JSONArray();for(int i=0;i<20;i++)legacy.put(new JSONObject().put("项目","多人上").put("enabled",false).put("data",new JSONObject(oldDefaults.toString())));
+        JSONArray legacy=new JSONArray();for(int i=0;i<20;i++)legacy.put(new JSONObject().put("项目","世界系列赛").put("enabled",false).put("data",new JSONObject(oldDefaults.toString())));
         store.config.put("projects",legacy);store.config.remove("taskQueueVersion");store.save();reload();checkDefaults();
         store.config=original;store.save();
     }
@@ -181,7 +230,7 @@ final class TaskEditingDeviceCheck {
     private void checkCupRewardForm()throws Exception {
         String originalTask=tasks().getJSONObject(DAILY).toString();
         clickTask("狼崽");
-        check(node("选择项目类型")==null&&node("4. 杯赛")!=null&&node("保存")!=null,"Existing task did not open its details directly");
+        check(node("选择项目类型")==null&&node("4. 每日赛事")!=null&&node("保存")!=null,"Existing task did not open its details directly");
         check(node("每日只执行一次")==null&&node("完成本任务后，当天后续循环自动跳过")==null,"Retired daily-once control is visible");
         String clubReward="领取俱乐部奖励（仅每日战利品）";
         input("比赛次数","9");
@@ -200,10 +249,10 @@ final class TaskEditingDeviceCheck {
         clickTask("狼崽");input("比赛次数","4");input("任务名称","test战利品");scrollToControl(clubReward);click(clubReward);click("保存");reload();bind();
         test.runOnMainSync(()->{
             View root=activity.getWindow().getDecorView(),title=findText(root,"test战利品");
-            check(title!=null&&findText(root,"test战利品 · 杯赛")==null,"Custom title still includes task type");
-            View tag=findText((View)title.getParent(),"杯赛");
+            check(title!=null&&findText(root,"test战利品 · 每日赛事")==null,"Custom title still includes task type");
+            View tag=findText((View)title.getParent(),"每日赛事");
             check(tag!=null&&tag.getTop()+((View)tag.getParent()).getTop()>=title.getBottom(),"Type tag is not below title");
-            for(String label:List.of("世界赛","大师赛","杯赛","特赛"))check(findText(root,label)!=null,"Missing type tag "+label);
+            for(String label:List.of("世界赛","大师赛","每日赛事","赛季赛事"))check(findText(root,label)!=null,"Missing type tag "+label);
         });
         screenshot("custom-task-name.png");
         JSONObject edited=tasks().getJSONObject(DAILY),original=new JSONObject(originalTask);
@@ -211,11 +260,64 @@ final class TaskEditingDeviceCheck {
                 &&edited.getJSONObject("data").getString("是否领取俱乐部奖励").isEmpty()
                 &&edited.getString("taskId").equals(original.getString("taskId"))&&edited.getBoolean("enabled")==original.getBoolean("enabled"),"Edit lost fields/type/identity/flag on reload");
         clickMain("新增任务");
-        check(node("选择项目类型")!=null&&node("每日战利品")==null,"New tasks must use the unified type picker");
-        click("杯赛");
+        check(node("选择项目类型")!=null&&node("每日赛事")!=null&&node("赛季赛事")!=null
+                &&node("每日战利品")==null&&node("杯赛")==null&&node("特殊赛事")==null,"Task picker uses the new type labels");
+        click("每日赛事");
         scrollToControl(clubReward);
         check(!node(clubReward).isChecked(),"New cup has enabled club rewards");
         click("取消");
+    }
+    private void checkSeasonModeForm()throws Exception {
+        JSONObject original=new JSONObject(store.config.toString());
+        int index=tasks().length();
+        String classic="经典特赛",dynasty="称霸特赛",chapter="称霸特赛章节";
+        clickMain("新增任务");click("赛季赛事");
+        check(node("按赛季赛事序号选择要运行的赛事")!=null&&node("赛事模式")!=null,"Season editor is missing guidance or mode options");
+        checkSeasonMode(classic,dynasty,chapter,true);
+        screenshot("season-mode-domination.png");
+
+        click(classic);
+        checkSeasonMode(classic,dynasty,chapter,false);
+        click(classic);
+        checkSeasonMode(classic,dynasty,chapter,false);
+        screenshot("season-mode-classic.png");
+        click(dynasty);
+        checkSeasonMode(classic,dynasty,chapter,true);
+        input(chapter,"0");click("保存");
+        check(node("称霸特赛章节请填写游戏显示的正整数")!=null&&tasks().length()==index,"Invalid chapter was saved");
+        click("确定");input(chapter,"3");click("保存");reload();bind();
+
+        JSONObject data=tasks().getJSONObject(index).getJSONObject("data");
+        check(dynasty.equals(data.getString("赛事模式"))&&!data.has("称霸模式")&&"3".equals(data.getString("称霸位置")),"Domination mode or chapter did not persist");
+        openTaskForm(index);checkSeasonMode(classic,dynasty,chapter,true);
+        click(classic);click("保存");reload();bind();
+        data=tasks().getJSONObject(index).getJSONObject("data");
+        check(classic.equals(data.getString("赛事模式"))&&"3".equals(data.getString("称霸位置")),"Choosing classic changed the saved chapter");
+        openTaskForm(index);checkSeasonMode(classic,dynasty,chapter,false);click("取消");
+
+        data.remove("赛事模式");
+        data.put("称霸模式","0");
+        JSONObject savedSession=new JSONObject(store.config.toString());
+        store.save();reload();bind();
+        JSONObject migrated=tasks().getJSONObject(index).getJSONObject("data");
+        check(dynasty.equals(migrated.getString("赛事模式"))&&!migrated.has("称霸模式")
+                &&"3".equals(migrated.getString("称霸位置")),"Legacy domination mode or chapter did not migrate");
+        openTaskForm(index);checkSeasonMode(classic,dynasty,chapter,true);click("取消");
+        store.config=savedSession;
+        check(store.migrateConfig()&&!store.migrateConfig()
+                &&LocalStore.javaValue(migrated).equals(LocalStore.javaValue(tasks().getJSONObject(index).getJSONObject("data"))),
+                "Saved session did not migrate to the same mode");
+        migrated=tasks().getJSONObject(index).getJSONObject("data");
+        migrated.remove("赛事模式");migrated.put("称霸模式","");
+        check(store.migrateConfig()&&classic.equals(migrated.getString("赛事模式"))&&!migrated.has("称霸模式"),
+                "Legacy classic mode did not migrate");
+        store.config=original;store.save();bind();
+    }
+    private void checkSeasonMode(String classic,String dynasty,String chapter,boolean domination){
+        AccessibilityNodeInfo classicOption=node(classic),dynastyOption=node(dynasty);
+        check(classicOption!=null&&dynastyOption!=null&&classicOption.isChecked()==!domination
+                &&dynastyOption.isChecked()==domination,"Season mode must have exactly one selected option");
+        check((editable(ui.getRootInActiveWindow(),chapter)!=null)==domination,"Chapter is visible only in domination mode");
     }
     private void checkGarageSort()throws Exception {
         JSONObject original=new JSONObject(store.config.toString());
@@ -266,6 +368,7 @@ final class TaskEditingDeviceCheck {
         store.config=new JSONObject(original.toString());store.save();bind();
         for(int index:new int[]{DAILY,CUP,SPECIAL}) {
             openTaskForm(index);
+            check(node((index+1)+". "+(index==SPECIAL?"赛季赛事":"每日赛事"))!=null,"Task editor uses the new type label");
             scrollToControl("路线来源");
             check(node(index==SPECIAL?"选择已配置地图":"自动识别地图")!=null,"Wrong default route source in editor");
             if(index!=SPECIAL){click("路线来源");click("选择已配置地图");}
@@ -304,17 +407,15 @@ final class TaskEditingDeviceCheck {
     }
     private void reload()throws Exception{store=new LocalStore(isolated);}
     private void checkDefaults()throws Exception {
-        String[] modes={"车联","杯赛","特殊赛事","杯赛","特殊赛事","多人下","多人上"};String[] counts={"2","2","2","3","3","3","3"};Set<String> ids=new HashSet<>();
         JSONArray template=new JSONArray(store.asset("data/default-projects.json"));
-        check(tasks().length()==7,"Expected seven tasks");
-        for(int i=0;i<modes.length;i++) {
-            JSONObject task=tasks().getJSONObject(i);
-            check(task.getString("项目").equals(modes[i])&&task.getBoolean("enabled"),"Wrong default mode/flag at "+i);
-            check(task.getJSONObject("data").getString("次数").equals(counts[i]),"Wrong saved default count");
-            check(LocalStore.javaValue(task.getJSONObject("data")).equals(LocalStore.javaValue(template.getJSONObject(i).getJSONObject("data"))),"Default fields not restored");
-            if(LocalStore.hasTaskRoute(task.getString("项目")))store.validateTaskRoute(task.getJSONObject("data"));
-            check(!task.getString("taskId").isEmpty()&&ids.add(task.getString("taskId")),"Missing/duplicate identity");
-        }
+        check(template.length()==1&&tasks().length()==1,"Expected one default task");
+        JSONObject task=tasks().getJSONObject(0),data=task.getJSONObject("data");
+        check(task.getString("项目").equals("杯赛")&&task.getBoolean("enabled"),"Wrong default mode/flag");
+        check(data.getString("项目名称").equals("狼崽")&&data.getString("杯赛位置").equals("2")
+                &&data.getString("次数").equals("1")&&data.getString("是否领取俱乐部奖励").equals("0"),"Wrong default cup options");
+        check(LocalStore.javaValue(data).equals(LocalStore.javaValue(template.getJSONObject(0).getJSONObject("data"))),"Default fields not restored");
+        store.validateTaskRoute(data);
+        check(!task.getString("taskId").isEmpty(),"Missing default task identity");
     }
     private void bind(){test.runOnMainSync(()->{
         try{Field field=MainActivity.class.getDeclaredField("store");field.setAccessible(true);field.set(activity,store);Method render=MainActivity.class.getDeclaredMethod("render");render.setAccessible(true);render.invoke(activity);}

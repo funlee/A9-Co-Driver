@@ -16,12 +16,12 @@ final class PanelLayoutCheck {
         test.runOnMainSync(()->{
             try {
                 Context context=new ContextThemeWrapper(test.getTargetContext(),R.style.AppTheme);
-                TaskStats stats=new TaskStats();stats.project("多人下");stats.cycle(1);stats.projectTarget(20);
+                TaskStats stats=new TaskStats();stats.project("大师系列赛");stats.cycle(1);stats.projectTarget(20);
                 stats.begin("季风秘境幽林飞瀑",false);stats.result(2);stats.returned();
                 for(String mode:new String[]{"杯赛","每日战利品","特殊赛事"}) {
                     stats.project(mode);stats.begin("示例地图",false);stats.legacyCompleted();
                 }
-                stats.project("多人下");stats.begin("季风秘境幽林飞瀑",false);stats.progress(58,18,39);stats.operation("N · 氮气");stats.elapsed(17*60000L);
+                stats.project("大师系列赛");stats.begin("季风秘境幽林飞瀑",false);stats.progress(58,18,39);stats.operation("N · 氮气");stats.elapsed(17*60000L);
                 TextView heading=new TextView(context);Button pause=new Button(context),stop=new Button(context);
                 pause.setText("暂停");stop.setText("停止");
                 TaskPanelView panel=TaskPanelView.create(context,heading,pause,stop);

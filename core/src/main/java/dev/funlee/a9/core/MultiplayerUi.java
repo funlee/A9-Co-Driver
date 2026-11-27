@@ -8,9 +8,19 @@ public final class MultiplayerUi {
     public static boolean raceEnded(String scene) {
         return "result".equals(scene)||"raceDisconnected".equals(scene)||"raceCancelled".equals(scene);
     }
+    public static final String WORLD="世界系列赛", MASTER="大师系列赛", WEEKEND="周末系列赛";
+    public static final List<String> SERIES=List.of(WORLD,MASTER,WEEKEND);
+    // Serialized identifiers from older configurations and session counters.
+    public static final String LEGACY_WORLD="多人上", LEGACY_MASTER="多人下";
+    public static String migrateMode(String mode) {
+        if(LEGACY_WORLD.equals(mode))return WORLD;
+        if(LEGACY_MASTER.equals(mode))return MASTER;
+        return mode;
+    }
+    public static boolean usesSeriesCars(String mode) {return MASTER.equals(mode)||WEEKEND.equals(mode);}
     public static String displayMode(String mode) {
-        if("多人上".equals(mode))return "世界系列赛";
-        if("多人下".equals(mode))return "大师系列赛";
+        if("杯赛".equals(mode)||"每日战利品".equals(mode))return "每日赛事";
+        if("特殊赛事".equals(mode))return "赛季赛事";
         return mode;
     }
     public static boolean limitedSalePromo(String text) {
@@ -61,7 +71,7 @@ public final class MultiplayerUi {
         return menu.isEmpty()||(menu.equals("home")&&scene.equals("series"))?scene:menu;
     }
     public static String classify(String text) {
-        String t=MapMatcher.normalize(text).replace('賽','赛').replace('擇','择').toUpperCase(java.util.Locale.ROOT);
+        String t=MapMatcher.normalize(text).replace('賽','赛').replace('擇','择').replace('師','师').replace('週','周').toUpperCase(java.util.Locale.ROOT);
         if(MainMenuUi.exitDialog(text))return "exitGame";
         if(VehicleUnlockGuard.prompt(text))return "vehicleUnlock";
         if(ProfileUnlockUi.prompt(text))return "profileUnlock";
@@ -88,7 +98,7 @@ public final class MultiplayerUi {
         if(VehicleUnlockGuard.lockedDetail(text))return "lockedCar";
         if(VehicleUnlockGuard.pendingDetail(text))return "car";
         if(t.contains("TOUCHDRIVE")&&(t.contains("升级")||t.contains("升級")||t.contains("性能分"))&&(t.contains("开始")||t.contains("跳过")))return "car";
-        if(t.contains("世界系列赛")&&t.contains("大师系列赛"))return "series";
+        if(SERIES.stream().filter(t::contains).count()>=2)return "series";
         if(t.contains("开始")&&((t.contains("排行榜")&&t.contains("里程碑"))||
                 (t.contains("系列赛")&&(t.contains("排行榜")||t.contains("里程碑")))))return "event";
         if(t.contains("单人模式")&&(t.contains("多人游戏")||

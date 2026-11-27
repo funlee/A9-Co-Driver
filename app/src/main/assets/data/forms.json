@@ -1,9 +1,9 @@
 {
-  "多人上": [
+  "世界系列赛": [
     {
       "key": "项目名称",
       "type": "EditText",
-      "value": "多人上",
+      "value": "世界系列赛",
       "options": []
     },
     {
@@ -87,11 +87,11 @@
       ]
     }
   ],
-  "多人下": [
+  "大师系列赛": [
     {
       "key": "项目名称",
       "type": "EditText",
-      "value": "多人下",
+      "value": "大师系列赛",
       "options": []
     },
     {
@@ -101,7 +101,7 @@
       "options": []
     },
     {
-      "key": "多人下用车",
+      "key": "赛事用车",
       "type": "EditText",
       "value": "1,2,3,4",
       "options": []
@@ -221,21 +221,22 @@
       "options": []
     },
     {
-      "key": "次数",
+      "key": "赛事模式",
+      "type": "RadioGroup",
+      "value": "称霸特赛",
+      "options": [
+        "经典特赛",
+        "称霸特赛"
+      ]
+    },
+    {
+      "key": "称霸位置",
       "type": "EditText",
       "value": "1",
       "options": []
     },
     {
-      "key": "称霸模式",
-      "type": "CheckBoxGroup",
-      "value": "",
-      "options": [
-        "称霸模式，章节:"
-      ]
-    },
-    {
-      "key": "称霸位置",
+      "key": "次数",
       "type": "EditText",
       "value": "1",
       "options": []

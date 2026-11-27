@@ -5,7 +5,7 @@ final class ActivityHintChecks {
         ActivityHintPolicy hints=new ActivityHintPolicy();
         CoreChecks.check(ActivityHintPolicy.fromHud("请手动进入比赛，等待比赛画面").equals("请手动进入比赛，等待比赛画面"),
                 "Manual driving prompts the user to enter a race");
-        String project=ActivityHintPolicy.fromHud("项目 1：多人上\n0%");
+        String project=ActivityHintPolicy.fromHud("项目 1：世界系列赛\n0%");
         CoreChecks.check(project.equals("项目 1：世界系列赛"),"Project hint uses the visible event name");
         hints.offer(project);
         CoreChecks.check(hints.take(100).equals(project),"First operation is visible immediately");

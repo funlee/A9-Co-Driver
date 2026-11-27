@@ -26,7 +26,7 @@ final class TaskQueueDeviceCheck {
         };
         try {
             store=new LocalStore(isolated);JSONArray tasks=store.config.getJSONArray("projects");
-            while(tasks.length()<20)store.addProject("多人上",store.defaults("多人上"));
+            while(tasks.length()<20)store.addProject("世界系列赛",store.defaults("世界系列赛"));
             List<String> originals=new ArrayList<>();
             for(int i=0;i<20;i++){
                 JSONObject task=tasks.getJSONObject(i);task.put("enabled",i%3==0);

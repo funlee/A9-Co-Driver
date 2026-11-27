@@ -56,16 +56,16 @@ public final class CoreChecks {
         check(ResultRank.fromLines("你的排名 你的用时 获胜者",List.of("你的排名","第1"),true)==1,"Read own footer rank, not winner banner");
         check(ResultRank.fromLines("你的排名 你的用时",List.of("第2","第6"),true)==0,"Conflicting crop ranks rejected");
         check(ResultRank.fromLines("获胜者 你的用时",List.of("第1"),true)==0,"Footer requires own rank label");
-        TaskStats rankStats=new TaskStats();rankStats.project("多人上");rankStats.cycle(1);rankStats.projectTarget(30);
+        TaskStats rankStats=new TaskStats();rankStats.project("世界系列赛");rankStats.cycle(1);rankStats.projectTarget(30);
         rankStats.result(1);check(rankStats.finished()==0,"Old result before race is ignored");
         rankStats.begin("测试地图",false);rankStats.result();rankStats.result(2);rankStats.result(2);rankStats.returned();
         check(rankStats.finished()==1&&rankStats.rankedCount()==1&&rankStats.topThreeCount()==1,"Late reward rank upgrades an unranked result exactly once");
         rankStats.begin("",true);rankStats.result(6);rankStats.returned();
         rankStats.begin("",true);rankStats.result();rankStats.returned();
         check(rankStats.panel("").contains("50.0%（1/2）")&&!rankStats.panel("").contains("名次待确认"),"Unknown ranks excluded with visible coverage");
-        rankStats.project("多人下");rankStats.projectTarget(20);rankStats.begin("",false);rankStats.result(1);rankStats.result(6);rankStats.result(1);rankStats.returned();
+        rankStats.project("大师系列赛");rankStats.projectTarget(20);rankStats.begin("",false);rankStats.result(1);rankStats.result(6);rankStats.result(1);rankStats.returned();
         check(rankStats.rankedCount()==2&&rankStats.topThreeCount()==1&&!rankStats.panel("").contains("名次待确认"),"Conflicting ranks invalidate result, never inflate top-three rate");
-        rankStats.cycle(2);check(rankStats.count("多人上")==3&&rankStats.count("多人下")==1,"Counters survive project and cycle transitions");
+        rankStats.cycle(2);check(rankStats.count("世界系列赛")==3&&rankStats.count("大师系列赛")==1,"Counters survive project and cycle transitions");
         rankStats.project("杯赛");rankStats.legacyCompleted();rankStats.project("特殊赛事");rankStats.legacyCompleted();
         check(rankStats.count("杯赛")==1&&rankStats.count("特殊赛事")==1&&rankStats.rankedCount()==2,"Other workflows do not enter multiplayer denominator");
         check(new TaskStats().panel("").contains("前三名率 —（0/0）"),"Fresh task has no invented rate");
@@ -110,7 +110,8 @@ public final class CoreChecks {
         check(MultiplayerUi.classify("每日 赛事 20,128 多 C30,753 游戏 我的 俱乐部 单人 模式").equals("home"),"Home tabs survive interleaved OCR and missing 人");
         check(MultiplayerUi.classify("每日赛事 游戏 开始").equals("unknown"),"Partial navigation cannot authorize home input");
         check(MultiplayerUi.classify("比赛奖励 你的用时 01:57.098 总金币 继续").equals("result"),"Race reward is evidence of a completed race");
-        check(MultiplayerUi.displayMode("多人上").equals("世界系列赛")&&MultiplayerUi.displayMode("多人下").equals("大师系列赛"),"Legacy multiplayer modes retain their explicit series mapping");
+        check(MultiplayerUi.classify("大师系列赛 周末系列賽 对决 单人模式 多人游戏").equals("series"),"Two visible series identify the new selector");
+        check(MultiplayerUi.classify("幽灵系列赛 周末系列赛 排行榜 里程碑 开始").equals("event"),"Weekend lobby is distinct from selector");
         if(args.length>1){
         for(String fixture:List.of("promo-pink-close.png","promo-white-close.png","reward-small-close.png","event-no-close.png")) {
             java.awt.image.BufferedImage crop=javax.imageio.ImageIO.read(Paths.get(args[1]).resolve(fixture).toFile());
@@ -157,7 +158,7 @@ public final class CoreChecks {
         check(eternalCity.unique()&&eternalCity.candidates.get(0).internal.equals("罗马永恒之城"),"Observed traditional OCR spelling selects the Eternal City route");
         MapMatcher.Match auckland=matcher.match("狂野赛车场狂野賽道1圈");
         check(auckland.unique()&&auckland.candidates.get(0).internal.equals("奥克兰奥克兰赛道"),"Observed traditional race-track OCR selects the configured Auckland route");
-        TaskStats stats=new TaskStats();stats.target(5);stats.project("多人上");stats.begin(matcher.displayName("喜马拉雅山冰封路径"),false);
+        TaskStats stats=new TaskStats();stats.target(5);stats.project("世界系列赛");stats.begin(matcher.displayName("喜马拉雅山冰封路径"),false);
         stats.progress(50,12,39);stats.progress(50,12,39);stats.result();stats.result();
         check(stats.finished()==1&&stats.returnedCount()==0&&stats.totalActions()==12,"Results count once even while a reward popup blocks returning");
         stats.returned();stats.returned();stats.begin("",true);stats.elapsed(65000);
@@ -304,14 +305,15 @@ public final class CoreChecks {
         System.out.println("PASS "+checks+" checks; routes: "+valid+" executable / "+invalid+" flagged; Lua source compiled with native Lua 5.3");
     }
     private static void multiplayerSeriesGuard(Path assets) throws Exception {
-        for(String mode:List.of("多人上","多人下")) {
-            String target=mode.equals("多人上")?"世界系列赛":"大师系列赛";
-            String wrong=mode.equals("多人上")?"大师系列赛":"世界系列赛";
+        Map<String,Integer> centers=Map.of(MultiplayerUi.WORLD,211,MultiplayerUi.MASTER,497,MultiplayerUi.WEEKEND,782);
+        for(String mode:MultiplayerUi.SERIES)for(String wrong:MultiplayerUi.SERIES){
+            if(wrong.equals(mode))continue;
             List<String> taps=new ArrayList<>();int[] frames={0};boolean rejected=false;
             try(LuaRuntime r=new LuaRuntime((name,l)->{
                 if(name.equals("_multiplayerUi")) {
-                    Object screen=frames[0]++<2?Map.of("scene","series","text","世界系列赛 大师系列赛","words",List.of(
-                        Map.of("text","世界系列赛","x",350,"y",450),Map.of("text","大师系列赛","x",640,"y",450))):
+                    Object screen=frames[0]++<2?Map.of("scene","series","text","世界系列赛 大师系列赛 周末系列赛 对决","words",List.of(
+                        Map.of("text","世界系列赛","x",211,"y",455),Map.of("text","大师系列赛","x",497,"y",455),
+                        Map.of("text","周末系列赛","x",782,"y",455))):
                         Map.of("scene","event","text",wrong+" 排行榜 里程碑 开始","words",List.of(Map.of("text","开始","x",1100,"y",650)));
                     LuaRuntime.push(l,MultiplayerGarageChecks.fixture(screen));return 1;
                 }
@@ -324,8 +326,8 @@ public final class CoreChecks {
                 r.start("currentMultiplayer.run");
                 try{for(int i=0;i<20;i++)r.step(i*1000L);}catch(RuntimeException e){rejected=e.getMessage().contains("赛事校验失败");}
             }
-            check(taps.equals(List.of("269,"+(mode.equals("多人上")?350:640))),mode+" taps only the matching series card, never wrong-event Start");
-            check(rejected,target+" rejects the other event before selecting cars");
+            check(taps.equals(List.of("264,"+centers.get(mode))),mode+" taps only the matching series card, never wrong-event Start");
+            check(rejected,mode+" rejects the other event before selecting cars");
         }
     }
     private static void multiplayerCompletionGuard(Path assets) throws Exception {
@@ -370,7 +372,7 @@ public final class CoreChecks {
                 if(name.equals("_routeDisplay")){l.push(l.toString(1));return 1;}
                 return 0;
             },List.of("_multiplayerUi","tap","swipe","_hud","print","cmpColor","record","markRoute","_sessionOperation","_fallbackBegin","_fallbackStep","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_routeDisplay"))) {
-                r.set("data",Map.of("项目","多人上","多人",0));r.set("run",Map.of("data",Map.of("次数",includeResult?"2":"1","多人选路","0","自选奖励","0")));
+                r.set("data",Map.of("项目","世界系列赛","多人",0));r.set("run",Map.of("data",Map.of("次数",includeResult?"2":"1","多人选路","0","自选奖励","0")));
                 r.load("helpers","function rnd(a,b) return a end;utils={defultCfg=function(v,d) return v or d end,getMapName=function() end,newAutoDriver=function() markRoute() end};run.nitro=function() end");
                 r.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));
                 r.load("entry","function testRun() currentMultiplayer.run();record() end");r.start("testRun");
@@ -397,8 +399,8 @@ public final class CoreChecks {
         for(int i=1;i+1<lines.size();i+=2)routes.put(lines.get(i),Route.parse(lines.get(i),lines.get(i+1)));
         List<String> names=new ArrayList<>();for(MapMatcher.Rule rule:matcher.rules)if(!routes.get(rule.internal).valid())names.add(rule.display);
         names.add("热带天堂环岛赛车");names.add("神山垭口冰封路径");
-        for(String mode:List.of("多人上","多人下")) {
-            String series=mode.equals("多人上")?"世界系列赛":"大师系列赛";
+        for(String mode:MultiplayerUi.SERIES) {
+            String series=mode;
             List<Object> screens=new ArrayList<>();List<String> keys=new ArrayList<>();
             for(String name:names){
                 MapMatcher.Match match=matcher.match(name+" 1圈");check(match.unique(),"Fallback scenario matches actual CN title: "+name);
@@ -445,7 +447,7 @@ public final class CoreChecks {
         }
     }
     private static void sharedDriverFallback(Path assets)throws Exception{
-        for(String mode:List.of("多人上","多人下","杯赛","特殊赛事","车联","每日战利品"))for(String raw:List.of("","878,21,2,22","0,21")){
+        for(String mode:List.of("世界系列赛","大师系列赛","杯赛","特殊赛事","车联","每日战利品"))for(String raw:List.of("","878,21,2,22","0,21")){
             int[] began={0},ended={0};
             try(LuaRuntime lua=new LuaRuntime((name,l)->{
                 if(name.equals("_validateRoute")){l.push(Route.parse(l.toString(1),l.toString(2)).valid());return 1;}
@@ -458,7 +460,7 @@ public final class CoreChecks {
                 lua.set("LOCAL_ROOT","/tmp/a9-shared-driver");lua.set("ROUTES",Map.of("sample",raw));lua.set("UIconfig",Map.of("gamePkg","sample.game"));
                 lua.load("bootstrap",Files.readString(assets.resolve("lua/bootstrap.lua")));
                 lua.set("mode",mode);
-                lua.load("fixture","data={['项目']=mode,['氮气漂流']=true};run={data={['杯赛两圈赛制']='0',['特殊赛事两圈赛制']='0'}};utils={waitStart=function()return 1 end};multiple1={};multiple2={};cup={};spCup={};dsCup={};dailyCup={};function test()localInit();utils.getMapName('sample');utils.newAutoDriver()end");
+                lua.load("fixture","data={['项目']=mode,['氮气漂流']=true};run={data={['杯赛两圈赛制']='0',['特殊赛事两圈赛制']='0'}};utils={waitStart=function()return 1 end};worldSeries={};masterSeries={};cup={};spCup={};dsCup={};dailyCup={};function test()localInit();utils.getMapName('sample');utils.newAutoDriver()end");
                 lua.start("test");lua.step(0);
             }
             check(began[0]==1&&ended[0]==1,"Shared manual/legacy Lua driver delegates absent and invalid scripts to host fallback and releases it");
@@ -494,7 +496,7 @@ public final class CoreChecks {
                 if(name.equals("tap")&&frame[0]>=4){long x=l.toInteger(2),y=719-l.toInteger(1);chosen[0]=(x>1150?4:x>600?2:0)+(y>400?2:1);}
                 return 0;
             },List.of("_multiplayerUi","_sessionProject","tap","swipe","_hud","print"))) {
-                r.set("data",Map.of("项目","多人下","多人",0));r.set("run",Map.of("data",Map.of("次数","10","多人下用车",List.of("1","2","3","4","5","6"))));
+                r.set("data",Map.of("项目","大师系列赛","多人",0));r.set("run",Map.of("data",Map.of("次数","10","赛事用车",List.of("1","2","3","4","5","6"))));
                 r.load("helpers","utils={defultCfg=function(v,d) return v or d end}");
                 r.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));r.start("currentMultiplayer.run");
                 try{for(int i=0;i<30&&chosen[0]==0;i++)r.step(i*2000L);}
@@ -524,7 +526,7 @@ public final class CoreChecks {
                 if(name.equals("tap"))taps.add(l.toInteger(1)+","+l.toInteger(2));
                 return 0;
             },List.of("_multiplayerUi","_sessionProject","tap","swipe","_hud","print"))) {
-                r.set("data",Map.of("项目","多人上","多人",0));r.set("run",Map.of("data",Map.of("次数","30")));
+                r.set("data",Map.of("项目","世界系列赛","多人",0));r.set("run",Map.of("data",Map.of("次数","30")));
                 r.load("helpers","utils={defultCfg=function(v,d) return v or d end}");r.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));r.start("currentMultiplayer.run");
                 try{for(int n=0;n<8&&taps.isEmpty();n++)r.step(n*2000L);}catch(RuntimeException e){if(!e.getMessage().contains("车辆提示未能确认稍后查看"))throw e;stopped=true;}
             }
@@ -541,7 +543,7 @@ public final class CoreChecks {
                 return 0;
             },List.of("recordProject","_sessionCycle","_finished","_hud","print"))) {
                 Map<String,Object> config=new HashMap<>(Map.of("routeOnly","","projects",List.of(
-                    Map.of("项目","多人上","data",Map.of("次数","30")),Map.of("项目","多人下","data",Map.of("次数","20")),Map.of("项目","杯赛","data",Map.of("次数","99"))),"ActiveProj",List.of(true,true,false)));
+                    Map.of("项目","世界系列赛","data",Map.of("次数","30")),Map.of("项目","大师系列赛","data",Map.of("次数","20")),Map.of("项目","杯赛","data",Map.of("次数","99"))),"ActiveProj",List.of(true,true,false)));
                 if(!legacyRepeat.equals("absent"))config.put("repeatProjects",Boolean.parseBoolean(legacyRepeat));
                 config.put("maxCycles",1);config.put("maxRaces",1);
                 r.set("UIconfig",config);
@@ -549,7 +551,7 @@ public final class CoreChecks {
                 r.load("stubs","data={};run={};utils={backToMain=function()end};function localInit() end;function monitor() sleep(999999) end;currentMultiplayer={run=function() recordProject(data['项目'],run.data['次数']);sleep(5) end}");
                 r.start("main");for(int n=0;n<30&&runs.size()<4&&!finished[0];n++)r.step(n*1000L);
             }
-            check(runs.equals(List.of("多人上:30","多人下:20","多人上:30","多人下:20")),"Queue always loops in full 30+20 order and skips disabled project, legacy repeat="+legacyRepeat);
+            check(runs.equals(List.of("世界系列赛:30","大师系列赛:20","世界系列赛:30","大师系列赛:20")),"Queue always loops in full 30+20 order and skips disabled project, legacy repeat="+legacyRepeat);
             check(cycles.equals(List.of(1L,2L))&&!finished[0],"Cycle restarts after both projects finish without an opt-in, legacy repeat="+legacyRepeat);
         }
     }
@@ -557,16 +559,17 @@ public final class CoreChecks {
         try(LuaRuntime lua=new LuaRuntime((n,l)->0,List.of())) {
             lua.load("workflows",Files.readString(assets.resolve("lua/workflows.lua")));
             lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));
+            lua.set("oldWorld",MultiplayerUi.LEGACY_WORLD);lua.set("oldMaster",MultiplayerUi.LEGACY_MASTER);
             lua.load("retired world options","utils={defultCfg=function(v,d)return v or d end};"+
-                "data={['项目']='多人上',['氮气漂流']=true};run.data={['次数']='0',['使用车组']='0',['多人上漂流']='0',['传奇停跑']='0',['多人上掉分']='0'};"+
+                "data={['项目']='世界系列赛',['氮气漂流']=true};run.data={['次数']='0',['使用车组']='0',[oldWorld..'漂流']='0',['传奇停跑']='0',[oldWorld..'掉分']='0'};"+
                 "run.nitro();assert(not data['氮气漂流']);function _sessionProject()return 0 end;function _hud()end;function print()end;"+
-                "currentMultiplayer.run();data['项目']='多人下';run.data['多人下漂流']='0';run.nitro();assert(not data['氮气漂流']);currentMultiplayer.run();data['项目']='杯赛';run.data={['杯赛漂流']='0'};run.nitro();assert(not data['氮气漂流'])");
+                "currentMultiplayer.run();data['项目']='大师系列赛';run.data[oldMaster..'漂流']='0';run.nitro();assert(not data['氮气漂流']);currentMultiplayer.run();data['项目']='杯赛';run.data={['杯赛漂流']='0'};run.nitro();assert(not data['氮气漂流'])");
             check(true,"Both series and cup ignore retired drift settings");
         }
     }
     private static void workflowSmoke(Path assets) throws Exception {
-        String[] modules={"bootstrap","shared","utilities","workflows","multiplayer_up","multiplayer_down","cup","special","club","daily"};
-        String[] modes={"multiple1","multiple2","cup","spCup","dsCup"};
+        String[] modules={"bootstrap","shared","utilities","workflows","multiplayer_world","multiplayer_master","cup","special","club","daily"};
+        String[] modes={"worldSeries","masterSeries","cup","spCup","dsCup"};
         List<String> apis=List.of("getDisplaySize","getWorkPath","keepCapture","releaseCapture","tap","swipe","touchDown","touchMove","touchUp","cmpColorEx","cmpColor","findColor","findMultiColor","getPixelColor","getDisplayRotate","keyPress","print","toast","_hud","record");
         Map<String,Object> cfg=new HashMap<>();
         for(String k:List.of("clearPrize","checkAuto","freePkg","coinPkg","autoToken","Coupons","spPrize","onceAD","coinAD","cupTicketAD","spCupTicketAD","dsTicketAD","dsCupAD","starWay"))cfg.put(k,"");

@@ -5,7 +5,7 @@ ROOT=pathlib.Path(__file__).resolve().parents[1]
 RUNTIME_ASSETS = {
     'data/routes.txt', 'data/map-rules.tsv', 'data/progress.lib', 'data/forms.json', 'data/default-projects.json', 'data/provenance.json',
     'lua/bootstrap.lua', 'lua/shared.lua', 'lua/utilities.lua', 'lua/rewards.lua', 'lua/workflows.lua',
-    'lua/multiplayer_up.lua', 'lua/multiplayer_down.lua', 'lua/multiplayer_current.lua',
+    'lua/multiplayer_world.lua', 'lua/multiplayer_master.lua', 'lua/multiplayer_current.lua',
     'lua/cup.lua', 'lua/special.lua', 'lua/club.lua', 'lua/daily.lua',
 }
 ALLOWED_ASSETS = {'app/src/main/assets/' + name for name in RUNTIME_ASSETS | {

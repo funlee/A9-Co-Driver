@@ -12,7 +12,7 @@ final class TaskRouteChecks {
         },List.of("_validateRoute","_routeDisplay"))) {
             lua.load("bootstrap",Files.readString(assets.resolve("lua/bootstrap.lua")));
             lua.load(module,Files.readString(assets.resolve("lua/"+module+".lua")));
-            lua.load("setup","data={};run={data={}};utils={};ROUTES={chosen='0,21'};LOCAL_ROOT='/tmp/test';UIconfig={gamePkg='test'};multiple1={};multiple2={};dsCup={};cup=cup or {};spCup=spCup or {};dailyCup=dailyCup or {};localInit();"+
+            lua.load("setup","data={};run={data={}};utils={};ROUTES={chosen='0,21'};LOCAL_ROOT='/tmp/test';UIconfig={gamePkg='test'};worldSeries={};masterSeries={};dsCup={};cup=cup or {};spCup=spCup or {};dailyCup=dailyCup or {};localInit();"+
                 "starts=0;utils.startConfiguredRace=function()starts=starts+1;return 0 end;function _dailyTaskStatus()return '' end;"+
                 "workflow="+(module.equals("cup")?"cup":"spCup")+";"+
                 "run.data={['路线来源']='0',['已配置地图']='chosen',['杯赛选路']='1',['特殊赛事选路']='2'};"+
@@ -34,7 +34,7 @@ final class TaskRouteChecks {
             lua.load("bootstrap",Files.readString(assets.resolve("lua/bootstrap.lua")));
             lua.load("cup",Files.readString(assets.resolve("lua/cup.lua")));
             lua.load("daily",Files.readString(assets.resolve("lua/daily.lua")));
-            lua.load("auto setup","data={['项目']='杯赛'};run={dailyLoot="+daily+",data={['路线来源']='2',['跑法代码']='99,22',['已配置地图']='other'}};utils={};ROUTES={chosen='0,21'};LOCAL_ROOT='/tmp/test';UIconfig={gamePkg='test'};multiple1={};multiple2={};dsCup={};cup=cup or {};spCup={};dailyCup=dailyCup or {};localInit();"+
+            lua.load("auto setup","data={['项目']='杯赛'};run={dailyLoot="+daily+",data={['路线来源']='2',['跑法代码']='99,22',['已配置地图']='other'}};utils={};ROUTES={chosen='0,21'};LOCAL_ROOT='/tmp/test';UIconfig={gamePkg='test'};worldSeries={};masterSeries={};dsCup={};cup=cup or {};spCup={};dailyCup=dailyCup or {};localInit();"+
                 "workflow="+(daily?"dailyCup":"cup")+";function print()end;function keepCapture()end;function releaseCapture()end;function _dailyTaskStatus()return '' end;"+
                 "local stage=0;function cmpColorEx(pattern)if string.find(pattern,'664|436',1,true) then return stage==0 and 1 or 0 end;return stage==2 and 1 or 0 end;"+
                 "utils.localOCR=function()return 'chosen' end;reads=0;function _soloEventUi()reads=reads+1;return reads<3 and {scene='loading',route='chosen'} or {scene='race'} end;"+

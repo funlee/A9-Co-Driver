@@ -17,9 +17,9 @@ local forcedOverscroll=scenario=='wideCar10Overscroll' or scenario=='standardCar
 local firstSwipes=nil
 local fullPageReads=0
 local filterCalls=0
-data={['项目']=master and '多人下' or '多人上',['多人']=0}
+data={['项目']=master and '大师系列赛' or '世界系列赛',['多人']=0}
 run={data={['次数']=repeatRace and 2 or 1,['用车模式']='1'}}
-if master then run.data['多人下用车']={27,28,5} else run.data['青铜用车']={27,28,5} end
+if master then run.data['赛事用车']={27,28,5} else run.data['青铜用车']={27,28,5} end
 if scenario=='reversePage' then run.data['青铜用车']={28,5} end
 if wideCar10 then run.data['青铜用车']={10} end
 if standardCar9 then run.data['青铜用车']={9,5,1,8,2} end

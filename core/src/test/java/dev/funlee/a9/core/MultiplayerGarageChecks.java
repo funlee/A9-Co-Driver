@@ -208,16 +208,16 @@ final class MultiplayerGarageChecks {
             for(int dx=10;dx<=50;dx++)for(int dy=190;dy<=209;dy++)masterGrid[(left+dx)*720+719-top-dy]=badge;
         }
         var masterFrame=new PixelFrame(720,1280,masterGrid);
-        var masterPage=MultiplayerGarage.slots(masterFrame,List.of(word("小白",141,409)),"",16.0/9,true);
+        var masterPage=MultiplayerGarage.slots(masterFrame,List.of(word("小白",141,409)),"",16.0/9,MultiplayerUi.MASTER);
         List<?> masterCards=(List<?>)masterPage.get("cards");
         require(Boolean.TRUE.equals(masterPage.get("start"))&&masterCards.size()==4,
                 "Master rank rail and white trial-card borders on the blue gutter establish the first car");checks++;
         require(((Map<?,?>)masterCards.get(0)).get("availability").equals("empty")&&
                 ((Map<?,?>)masterCards.get(1)).get("availability").equals("ready"),
                 "Master empty car 1 and fueled car 2 keep their configured ordinals");checks++;
-        require(Boolean.FALSE.equals(MultiplayerGarage.slots(masterFrame,List.of(),"",16.0/9,true).get("start")),
+        require(Boolean.FALSE.equals(MultiplayerGarage.slots(masterFrame,List.of(),"",16.0/9,MultiplayerUi.MASTER).get("start")),
                 "White borders alone cannot establish Master garage origin");checks++;
-        var bronzePage=MultiplayerGarage.slots(masterFrame,List.of(word("青铜",141,421)),"",16.0/9,false);
+        var bronzePage=MultiplayerGarage.slots(masterFrame,List.of(word("青铜",141,421)),"",16.0/9,MultiplayerUi.WORLD);
         require(Boolean.TRUE.equals(bronzePage.get("start"))&&bronzePage.get("left").equals(211)&&
                 ((List<?>)bronzePage.get("cards")).size()==4,
                 "Standard World garage can also have white borders on the blue gutter");checks++;
@@ -333,7 +333,7 @@ final class MultiplayerGarageChecks {
                 if(name.equals("tap")){int x=(int)l.toInteger(2),y=719-(int)l.toInteger(1);if(x==1100&&y==650){if(cardTaps[0]==0)events[0]++;else{startTaps[0]++;finished[0]=true;}}if(x==410&&y==305)cardTaps[0]++;}
                 if(name.equals("cmpColor")){l.push(1);return 1;}return 0;
             },List.of("_multiplayerUi","_sessionProject","tap","swipe","print","_hud","cmpColor"))){
-                lua.set("data",Map.of("项目","多人上"));lua.set("run",Map.of("data",Map.of("次数",100,"青铜用车",List.of("1"))));
+                lua.set("data",Map.of("项目","世界系列赛"));lua.set("run",Map.of("data",Map.of("次数",100,"青铜用车",List.of("1"))));
                 lua.load("helpers","utils={defultCfg=function(v,d)return v or d end}");lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));lua.start("currentMultiplayer.run");
                 try{for(int i=0;i<160&&!finished[0];i++)lua.step(i*1000L);}catch(RuntimeException e){failure[0]=e.getMessage();}
             }
@@ -359,8 +359,8 @@ final class MultiplayerGarageChecks {
             if(name.equals("swipe"))throw new AssertionError("Verified master origin needs no drag");
             return 0;
         },List.of("_multiplayerUi","_sessionProject","tap","swipe","print","_hud"))){
-            lua.set("data",Map.of("项目","多人下"));
-            lua.set("run",Map.of("data",Map.of("次数",1,"多人下用车",List.of(1,2,3,4))));
+            lua.set("data",Map.of("项目","大师系列赛"));
+            lua.set("run",Map.of("data",Map.of("次数",1,"赛事用车",List.of(1,2,3,4))));
             lua.load("helpers","utils={defultCfg=function(v,d)return v or d end}");
             lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));
             lua.start("currentMultiplayer.run");
@@ -406,7 +406,7 @@ final class MultiplayerGarageChecks {
                 }
                 if(name.equals("cmpColor")){l.push(1);return 1;}return 0;
             },List.of("_multiplayerUi","_sessionProject","tap","swipe","print","_hud","cmpColor"))) {
-                lua.set("data",Map.of("项目","多人上"));lua.set("run",Map.of("data",Map.of("次数",1,league+"用车",List.of("2"))));
+                lua.set("data",Map.of("项目","世界系列赛"));lua.set("run",Map.of("data",Map.of("次数",1,league+"用车",List.of("2"))));
                 lua.load("helpers","utils={defultCfg=function(v,d)return v or d end}");
                 lua.load("current",Files.readString(assets.resolve("lua/multiplayer_current.lua")));lua.start("currentMultiplayer.run");
                 for(int i=0;i<100&&started[0]==0;i++)lua.step(i*1000L);

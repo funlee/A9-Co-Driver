@@ -1,6 +1,6 @@
 local phase='series'
 local frame,returns,notices=0,0,0
-data={['项目']='多人上'}
+data={['项目']='世界系列赛'}
 run={data={['次数']=1}}
 utils={defultCfg=function(v,d)return v or d end}
 function utils.backToMain()

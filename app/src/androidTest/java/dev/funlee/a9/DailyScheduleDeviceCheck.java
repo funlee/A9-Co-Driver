@@ -1,5 +1,7 @@
 package dev.funlee.a9;
 
+import dev.funlee.a9.core.MultiplayerUi;
+
 import android.app.Instrumentation;
 import android.content.*;
 import android.os.Bundle;
@@ -31,20 +33,22 @@ final class DailyScheduleDeviceCheck {
                     ||!retained.toString().equals(retainedBefore)||fixture.getJSONArray("projects").length()!=2
                     ||first.removeRetiredProjects(fixture))throw new AssertionError("Retired task migration changed queue or active tasks");
             if(first.forms.has("生涯")||java.util.Arrays.asList(LocalStore.MODES).contains("生涯"))throw new AssertionError("Retired mode remains configurable");
-            JSONObject daily=first.config.getJSONArray("projects").getJSONObject(3);
+            JSONObject daily=first.config.getJSONArray("projects").getJSONObject(0);
+            JSONObject cup=new JSONObject().put("项目","杯赛").put("taskId","ordinary-cup").put("enabled",true)
+                    .put("data",first.defaults("杯赛"));
+            first.config.put("projects",new JSONArray().put(cup).put(daily));
             daily.put("项目","每日战利品").put("taskId",key).put("enabled",false);
             daily.getJSONObject("data").put("每日只执行一次","0").put("杯赛漂流","0").put("杯赛两圈赛制","0")
                     .put("次数","5").put("杯赛位置","8").put("杯赛用车","2,1").put("路线来源","1").put("跑法代码","0,21");
             JSONObject expectedDaily=new JSONObject(daily.toString()).put("项目","杯赛");
             for(String field:java.util.List.of("每日只执行一次","杯赛漂流","杯赛两圈赛制"))expectedDaily.getJSONObject("data").remove(field);
-            JSONObject cup=first.config.getJSONArray("projects").getJSONObject(1);
             cup.getJSONObject("data").put("每日战利品","0").put("杯赛漂流","0").put("杯赛两圈赛制","0");JSONObject expectedCup=new JSONObject(cup.toString());expectedCup.getJSONObject("data").remove("每日战利品");expectedCup.getJSONObject("data").remove("杯赛漂流");expectedCup.getJSONObject("data").remove("杯赛两圈赛制");String cupBefore=expectedCup.toString();first.save();
             history.edit().putString(key,LocalDate.now().toString()).commit();
             LocalStore recreated=new LocalStore(context);
-            JSONObject migrated=recreated.config.getJSONArray("projects").getJSONObject(3);
+            JSONObject migrated=recreated.config.getJSONArray("projects").getJSONObject(1);
             if(!LocalStore.javaValue(expectedDaily).equals(LocalStore.javaValue(migrated)))
                 throw new AssertionError("Merged task lost its identity, enabled state, order, or settings");
-            if(!cupBefore.equals(recreated.config.getJSONArray("projects").getJSONObject(1).toString()))throw new AssertionError("Cup cleanup changed retained settings");
+            if(!cupBefore.equals(recreated.config.getJSONArray("projects").getJSONObject(0).toString()))throw new AssertionError("Cup cleanup changed retained settings");
             if(recreated.forms.has("每日战利品")||java.util.Arrays.asList(LocalStore.MODES).contains("每日战利品"))
                 throw new AssertionError("Daily loot remains a separate task type");
             JSONArray cupForm=recreated.forms.getJSONArray("杯赛");boolean hasClubReward=false;
@@ -71,14 +75,14 @@ final class DailyScheduleDeviceCheck {
     }
     private static void checkAllDrivingOptions(Context context)throws Exception {
         LocalStore store=new LocalStore(context);
-        var retired=java.util.List.of("杯赛漂流","杯赛两圈赛制","特殊赛事漂流","特殊赛事两圈赛制","多人上漂流","多人下漂流");
+        var retired=java.util.List.of("杯赛漂流","杯赛两圈赛制","特殊赛事漂流","特殊赛事两圈赛制",MultiplayerUi.LEGACY_WORLD+"漂流",MultiplayerUi.LEGACY_MASTER+"漂流");
         JSONArray tasks=new JSONArray(),expected=new JSONArray();
         for(String mode:LocalStore.MODES) {
             JSONObject data=store.defaults(mode).put("次数","7");
             JSONObject task=new JSONObject().put("项目",mode).put("taskId",mode).put("enabled",true).put("data",data);
             expected.put(new JSONObject(task.toString()));
             for(String key:retired)data.put(key,"0");tasks.put(task);
-            JSONArray form=store.forms.getJSONArray(mode);
+            JSONArray form=store.formFields(mode);
             for(int i=0;i<form.length();i++)if(retired.contains(form.getJSONObject(i).getString("key")))throw new AssertionError("Retired driving field visible: "+mode);
         }
         store.config.put("projects",tasks);JSONObject snapshot=new JSONObject(store.config.toString());store.save();

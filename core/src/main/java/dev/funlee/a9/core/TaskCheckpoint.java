@@ -30,7 +30,7 @@ public final class TaskCheckpoint {
         rewardWork=true;
     }
     public void completed(int newlyFinished){completed=Math.min(target,completed+Math.max(0,newlyFinished));}
-    /** @return true when the recorded rank conflicted with the previous read (race excluded from stats). */
+    /** @return true when the recorded rank conflicted with the previous read (rank excluded from the top-three rate). */
     public boolean recordResult(TaskStats stats,int position){
         int before=stats.finished();
         boolean conflict=stats.result(position);

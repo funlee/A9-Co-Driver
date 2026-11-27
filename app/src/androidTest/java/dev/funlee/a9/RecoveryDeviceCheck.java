@@ -36,7 +36,7 @@ public final class RecoveryDeviceCheck extends Instrumentation {
             else if(mode.equals("task-queue"))TaskQueueDeviceCheck.run(this,report);
             else if(mode.equals("queue-retry")||mode.equals("queue-notices"))QueueRetryDeviceCheck.run(this,report,mode.equals("queue-notices"));
             else if(mode.equals("blueprint-gift"))QueueRetryDeviceCheck.blueprintGift(this,report);
-            else if(mode.equals("task-editing")||mode.equals("garage-sort-editing")||mode.equals("cup-editor"))
+            else if(mode.equals("task-editing")||mode.equals("garage-sort-editing")||mode.equals("cup-editor")||mode.equals("season-editor")||mode.equals("series-editor"))
                 TaskEditingDeviceCheck.run(this,report,mode);
             else if(mode.equals("account-login"))accountLogin(report);
             else if(mode.equals("screenshots"))screenshots(report);

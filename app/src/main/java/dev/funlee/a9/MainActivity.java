@@ -224,10 +224,9 @@ public final class MainActivity extends Activity {
     private String modeName(String mode){return MultiplayerUi.displayMode(mode);}
     private String taskTypeTag(String mode){
         switch(mode){
-            case "杯赛":return "杯赛";
-            case "特殊赛事":return "特赛";
-            case "多人下":return "大师赛";
-            case "多人上":return "世界赛";
+            case MultiplayerUi.WEEKEND:return "周末赛";
+            case MultiplayerUi.MASTER:return "大师赛";
+            case MultiplayerUi.WORLD:return "世界赛";
             case "车联":return "车联赛";
             default:return modeName(mode);
         }
@@ -290,15 +289,16 @@ public final class MainActivity extends Activity {
         }).setNegativeButton("取消",null).create());
     }
     private void form(int index,String mode,JSONObject data) throws Exception {
-        LinearLayout fields=dialogFields();JSONArray spec=store.forms.getJSONArray(mode);Map<String,View> views=new LinkedHashMap<>();
-        if(mode.equals("多人上"))fields.addView(label("比赛时自动识别地图并执行“地图配置”中的跑法；识别失败或缺少有效跑法时左划兜底。",DETAIL));
-        if(mode.equals("多人上"))fields.addView(label("优先使用当前段位配置的车辆。该段未配置或配置车全部无油时，逐级尝试较低段位的配置。序号按各段车库从左到右、每列从上到下计算，支持每次用一辆。",DETAIL));
-        if(mode.equals("多人下"))fields.addView(label("按配置的车辆序号选车。每列先上后下，再从左往右累计，跨屏时核验车辆位置，支持每次用一辆。",DETAIL));
-        if(mode.equals("杯赛"))fields.addView(label("按每日赛事序号选择杯赛。识别到每日战利品时，00:00–00:30 自动跳过。",DETAIL));
+        LinearLayout fields=dialogFields();JSONArray spec=store.formFields(mode);Map<String,View> views=new LinkedHashMap<>();
+        if(mode.equals(MultiplayerUi.WORLD))fields.addView(label("比赛时自动识别地图并执行“地图配置”中的跑法；识别失败或缺少有效跑法时左划兜底。",DETAIL));
+        if(mode.equals(MultiplayerUi.WORLD))fields.addView(label("优先使用当前段位配置的车辆。该段未配置或配置车全部无油时，逐级尝试较低段位的配置。序号按各段车库从左到右、每列从上到下计算，支持每次用一辆。",DETAIL));
+        if(MultiplayerUi.usesSeriesCars(mode))fields.addView(label("按配置的车辆序号选车。每列先上后下，再从左往右累计，跨屏时核验车辆位置，支持每次用一辆。",DETAIL));
+        if(mode.equals("杯赛"))fields.addView(label("按每日赛事序号选择要运行的赛事。",DETAIL));
+        if(mode.equals("特殊赛事"))fields.addView(label("按赛季赛事序号选择要运行的赛事",DETAIL));
         if(mode.equals("车联"))fields.addView(label("低星工具车不建议使用辅助驾驶完成比赛，车联任务只会采用左划跑法完成比赛",DETAIL));
         for(int i=0;i<spec.length();i++){
             JSONObject f=spec.getJSONObject(i);String key=f.getString("key"),type=f.getString("type");JSONArray options=f.getJSONArray("options");
-            if(key.equals("称霸位置"))continue; // Rendered alongside the 称霸模式 checkbox.
+            if(key.equals("称霸位置"))continue; // Rendered below the 赛事模式 options.
             if(type.equals("CheckBox")){
                 boolean clubReward=key.equals("是否领取俱乐部奖励");
                 if(clubReward)fields.addView(heading("其他",BODY));
@@ -307,29 +307,50 @@ public final class MainActivity extends Activity {
                 fields.addView(box);views.put(key,box);
             }
             else if(type.equals("TaskRoute")){taskRouteFields(fields,views,data,mode);}
-            else if(key.equals("称霸模式")){
-                CheckBox enabled=checkBox("称霸模式");
-                enabled.setChecked("0".equals(data.optString(key)));
-                fields.addView(enabled);
-                views.put(key,enabled);
+            else if(key.equals("赛事模式")){
+                fields.addView(heading(key,BODY));
+                RadioGroup modes=new RadioGroup(this);
+                modes.setOrientation(RadioGroup.HORIZONTAL);
+                for(int j=0;j<options.length();j++){
+                    RadioButton choice=new RadioButton(this);
+                    choice.setId(View.generateViewId());
+                    String option=options.getString(j);
+                    choice.setText(option);
+                    typography(choice,BODY,false);
+                    choice.setTextColor(INK);
+                    choice.setMinHeight(dp(TOUCH_HEIGHT));
+                    choice.setButtonTintList(ColorStateList.valueOf(ACCENT));
+                    choice.setTag(option);
+                    modes.addView(choice,new RadioGroup.LayoutParams(0,-2,1));
+                }
+                int classic=modes.getChildAt(0).getId(),dynasty=modes.getChildAt(1).getId();
+                modes.check("称霸特赛".equals(data.optString(key))?dynasty:classic);
+                fields.addView(modes);
+                views.put(key,modes);
 
                 LinearLayout chapterFields=column();
-                String title="称霸模式章节";
+                String title="称霸特赛章节";
                 chapterFields.addView(heading(title,BODY));
                 EditText chapter=edit(data.optString("称霸位置","1"));
                 chapter.setContentDescription(title);
+                chapter.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
                 chapterFields.addView(chapter);
                 fields.addView(chapterFields);
                 views.put("称霸位置",chapter);
-                chapterFields.setVisibility(enabled.isChecked()?View.VISIBLE:View.GONE);
-                enabled.setOnCheckedChangeListener((view,checked)->chapterFields.setVisibility(checked?View.VISIBLE:View.GONE));
+                chapterFields.setVisibility(modes.getCheckedRadioButtonId()==dynasty?View.VISIBLE:View.GONE);
+                modes.setOnCheckedChangeListener((group,checkedId)->chapterFields.setVisibility(checkedId==dynasty?View.VISIBLE:View.GONE));
             }
             else if(type.equals("EditText")){
                 boolean eventPosition=key.equals("杯赛位置"),seasonPosition=key.equals("车手联会位置")||key.equals("特殊赛事位置");String title=eventPosition?"每日赛事序号":key.equals("项目名称")?"任务名称":key.equals("次数")?"比赛次数":seasonPosition?"赛季赛事序号":key;
+                if(key.equals("杯赛用车"))title="每日赛事用车";
+                if(key.equals("特殊赛事阶段"))title="赛季赛事阶段";
                 if(eventPosition)fields.addView(helpHeading(title,this::showDailyPositionHelp));
                 else if(seasonPosition)fields.addView(helpHeading(title,this::showSeasonPositionHelp));
                 else fields.addView(heading(title,BODY));
-                EditText e=edit(data.optString(key));e.setContentDescription(title);if(eventPosition){e.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_SIGNED);e.setOnFocusChangeListener((v,hasFocus)->{if(!hasFocus)sanitizeCupPosition((EditText)v);});}fields.addView(e);views.put(key,e);
+                String value=data.optString(key);
+                if(key.equals("项目名称")&&(mode.equals("杯赛")||mode.equals("特殊赛事"))&&value.equals(mode))
+                    value=modeName(mode);
+                EditText e=edit(value);e.setContentDescription(title);if(eventPosition){e.setInputType(android.text.InputType.TYPE_CLASS_NUMBER|android.text.InputType.TYPE_NUMBER_FLAG_SIGNED);e.setOnFocusChangeListener((v,hasFocus)->{if(!hasFocus)sanitizeCupPosition((EditText)v);});}fields.addView(e);views.put(key,e);
             }
             else if(type.equals("CheckBoxGroup")){
                 boolean garageFilter=key.equals("选车筛选");
@@ -366,8 +387,8 @@ public final class MainActivity extends Activity {
                 fields.addView(spinner);views.put(key,spinner);
             }
         }
-        if(mode.equals("多人上"))worldRewardFields(fields,views,data);
-        if(mode.equals("多人下"))fields.addView(label("比赛时自动识别地图并执行“地图配置”中的跑法；识别失败或缺少有效跑法时左划兜底。",DETAIL));
+        if(mode.equals(MultiplayerUi.WORLD))worldRewardFields(fields,views,data);
+        if(MultiplayerUi.usesSeriesCars(mode))fields.addView(label("比赛时自动识别地图并执行“地图配置”中的跑法；识别失败或缺少有效跑法时左划兜底。",DETAIL));
         AlertDialog dialog=new AlertDialog.Builder(this).setTitle((index<0?"新增任务 · ":(index+1)+". ")+MultiplayerUi.displayMode(mode)).setView(scroll(fields)).setNegativeButton("取消",null).setPositiveButton("保存",null).create();
         dialog.setOnShowListener(v->dialog.getButton(-1).setOnClickListener(b->{
             try{
@@ -375,25 +396,31 @@ public final class MainActivity extends Activity {
                     String value="";View view=e.getValue();
                     if(view instanceof EditText)value=((EditText)view).getText().toString().trim();
                     else if(view instanceof CheckBox)value=((CheckBox)view).isChecked()?"0":"";
+                    else if(view instanceof RadioGroup){
+                        RadioGroup modes=(RadioGroup)view;
+                        RadioButton choice=modes.findViewById(modes.getCheckedRadioButtonId());
+                        if(choice==null)throw new IllegalArgumentException("请选择赛事模式");
+                        value=(String)choice.getTag();
+                    }
                     else if(view instanceof Button)value=String.valueOf(view.getTag());
                     else if(view instanceof Spinner){int position=((Spinner)view).getSelectedItemPosition();value=e.getKey().equals("路线来源")?((List<String>)view.getTag()).get(position):String.valueOf(position);}
                     else if(view instanceof ViewGroup){ViewGroup checks=(ViewGroup)view;List<String> selected=new ArrayList<>();for(int j=0;j<checks.getChildCount();j++){CheckBox cb=(CheckBox)checks.getChildAt(j);if(cb.isChecked())selected.add(String.valueOf(cb.getTag()));}value=String.join(",",selected);}
                     data.put(e.getKey(),value);
                 }
                 int times=Integer.parseInt(data.optString("次数","1"));if(times<1||times>10000)throw new IllegalArgumentException("执行次数需为 1–10000");
-                if(data.has("杯赛位置")){try{int position=Integer.parseInt(data.getString("杯赛位置"));if(position==0)throw new NumberFormatException();if(position<0){data.put("杯赛位置",String.valueOf(-position));View field=views.get("杯赛位置");if(field instanceof EditText)((EditText)field).setText(String.valueOf(-position));Toast.makeText(this,"杯赛位置不支持负数，已自动改为正数",Toast.LENGTH_SHORT).show();}}catch(NumberFormatException e){throw new IllegalArgumentException("赛事位置必须为非零整数");}}
+                if(data.has("杯赛位置")){try{int position=Integer.parseInt(data.getString("杯赛位置"));if(position==0)throw new NumberFormatException();if(position<0){data.put("杯赛位置",String.valueOf(-position));View field=views.get("杯赛位置");if(field instanceof EditText)((EditText)field).setText(String.valueOf(-position));Toast.makeText(this,"每日赛事序号不支持负数，已自动改为正数",Toast.LENGTH_SHORT).show();}}catch(NumberFormatException e){throw new IllegalArgumentException("赛事位置必须为非零整数");}}
                 if(mode.equals("特殊赛事")){
-                    if(!data.optString("称霸模式").isEmpty()&&!data.optString("称霸位置").matches("[1-9][0-9]*"))
-                        throw new IllegalArgumentException("称霸模式章节请填写游戏显示的正整数");
+                    if("称霸特赛".equals(data.optString("赛事模式"))&&!data.optString("称霸位置").matches("[1-9][0-9]*"))
+                        throw new IllegalArgumentException("称霸特赛章节请填写游戏显示的正整数");
                     if(!data.optString("特殊赛事阶段").matches("[1-9][0-9]*"))
-                        throw new IllegalArgumentException("特殊赛事阶段请填写游戏显示的正整数");
+                        throw new IllegalArgumentException("赛季赛事阶段请填写游戏显示的正整数");
                     if("1".equals(data.optString("路线来源"))&&data.optString("跑法代码").isEmpty())
                         throw new IllegalArgumentException("请填写跑法代码，或选择自动识别地图");
                     if("0".equals(data.optString("路线来源"))&&data.optString("已配置地图").isEmpty())
                         throw new IllegalArgumentException("请选择已配置地图，或选择自动识别地图");
                 }
                 if(LocalStore.hasTaskRoute(mode))store.validateTaskRoute(data);
-                if(mode.equals("多人上")&&"0".equals(data.optString("自选奖励")))DynamicRewards.rules(data.optString("自选奖励规则"));
+                if(mode.equals(MultiplayerUi.WORLD)&&"0".equals(data.optString("自选奖励")))DynamicRewards.rules(data.optString("自选奖励规则"));
                 if(index<0)store.addProject(mode,data);
                 else{JSONObject p=store.config.getJSONArray("projects").getJSONObject(index);p.put("项目",mode);p.put("data",data);store.save();}
                 dialog.dismiss();render();
@@ -1077,7 +1104,7 @@ public final class MainActivity extends Activity {
         String raw=field.getText().toString().trim();
         if(raw.startsWith("-")){
             field.setText(raw.substring(1));
-            Toast.makeText(this,"杯赛位置不支持负数，已自动改为正数",Toast.LENGTH_SHORT).show();
+            Toast.makeText(this,"每日赛事序号不支持负数，已自动改为正数",Toast.LENGTH_SHORT).show();
         }
     }
     @Override protected void onResume(){super.onResume();if(store!=null&&body!=null&&(tab==PREFERENCES||tab==SETTINGS))render();SessionState.listener=this::updateSession;SessionState.changed();}

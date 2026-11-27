@@ -7,8 +7,8 @@ android {
         applicationId 'dev.funlee.a9local'
         minSdk 26
         targetSdk 35
-        versionCode 144
-        versionName '1.0.31'
+        versionCode 145
+        versionName '1.1.0'
         testInstrumentationRunner 'dev.funlee.a9.RecoveryDeviceCheck'
     }
     // Optional local screenshots only. All runtime resources are in the repository.
@@ -17,7 +17,7 @@ android {
     }
     def required = ['data/routes.txt','data/map-rules.tsv','data/progress.lib','data/forms.json',
                     'data/default-projects.json','data/provenance.json','lua/bootstrap.lua','lua/shared.lua','lua/utilities.lua',
-                    'lua/rewards.lua','lua/workflows.lua','lua/multiplayer_up.lua','lua/multiplayer_down.lua',
+                    'lua/rewards.lua','lua/workflows.lua','lua/multiplayer_world.lua','lua/multiplayer_master.lua',
                     'lua/multiplayer_current.lua','lua/cup.lua','lua/special.lua','lua/club.lua',
                     'lua/daily.lua']
     required.each { path ->

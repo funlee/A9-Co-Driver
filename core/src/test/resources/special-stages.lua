@@ -3,7 +3,7 @@ data={}
 -- 配置阶段6 时卡片已在可视区，必须直接选中而不是等「阶段1」出现。
 local chapterTwo=scenario=='chapter-two'
 local target=chapterTwo and 6 or scenario=='third' and 3 or 1
-run={data={['特殊赛事位置']='2',['称霸模式']='0',['称霸位置']=chapterTwo and '2' or '1',['特殊赛事阶段']=tostring(target)}}
+run={data={['特殊赛事位置']='2',['赛事模式']='称霸特赛',['称霸位置']=chapterTwo and '2' or '1',['特殊赛事阶段']=tostring(target)}}
 local frame,drags,forward,transient=0,0,0,0
 local chapterSelected,stageSelected=false,false
 

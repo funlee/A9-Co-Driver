@@ -2,6 +2,10 @@ dsCup = {}
 -- 这辆车打不了当前危险等级（性能分不够）时，本轮车联的最高可选等级。
 -- 性能分是车的固定属性，所以降下来后整个任务期间都保留，不再回高难度。
 local maxLevel
+function dsCup.resetDifficulty()
+  maxLevel = nil
+  data['车联等级'] = nil
+end
 -- 退回章节面板：只需要退到能看见章节卡的那一层，退过了会直接回主界面。
 local function backToPanel()
   for i = 1, 3 do
@@ -57,12 +61,7 @@ dsCup.operation = {
   {
     config.dsCupInfo,
     function()
-      data["信息"] = "即将进入车库"
-      for j = 1, 10 do
-        tap(96, 1224)
-        sleep(200)
-      end
-      -- 每次选任务都先回到章节横条的最左起点，再从起点逐张章节卡按当前进度选任务。
+      data["信息"] = "选择车联任务"
       local chosen = utils.spChoose(maxLevel)
       -- 危险值不足：关掉弹窗并按确定条件跳过本项目，不让它变成「回主重试」。
       if chosen == 'noTicket' then return dsCup.operation[6][2]() end

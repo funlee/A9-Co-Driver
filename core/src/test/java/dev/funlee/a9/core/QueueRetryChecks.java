@@ -128,7 +128,7 @@ final class QueueRetryChecks {
     }
 
     private void play(String bootstrap, String fixture) {
-        List<Map<String, Object>> projects = List.of(project("特殊赛事", 3), project("多人上", 2),
+        List<Map<String, Object>> projects = List.of(project("特殊赛事", 3), project("世界系列赛", 2),
                 project("杯赛", 80), project("车联", 1));
         Map<String, Object> config = Map.of("routeOnly", "", "projects", projects,
                 "ActiveProj", List.of(true, true, false, true));

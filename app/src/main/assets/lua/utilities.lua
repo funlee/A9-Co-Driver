@@ -253,7 +253,7 @@ function utils.specialMissionContinue(screen)
   return findUiWord(screen,{['继续']=true,['继绩']=true},900,1265,570,710)
 end
 function utils.specialStageList(screen)
-  if run.data['称霸模式']~='0' or screen.scene~='unknown' then return false end
+  if run.data['赛事模式']~='称霸特赛' or screen.scene~='unknown' then return false end
   for _,word in ipairs(screen.words or {}) do
     if word.x<=370 and word.text:gsub('[ \t\r\n]',''):match('^章节%d+$') then return true end
   end
@@ -386,9 +386,12 @@ function utils.backToMain(strict,acceptCupList)
         or text:find('健康游戏忠告',1,true) or text:find('适龄提示',1,true))
     if strict and screen.scene=='loading' then loading=true end
     if not loading and tickCount()>=navigationDeadline then attempts=attempts+1 end
-    local seriesMenu=text:gsub('賽','赛')
-    local onMultiplayerTab=screen.scene=='unknown' and seriesMenu:find('世界系列赛',1,true)
-      and seriesMenu:find('大师系列赛',1,true) and seriesMenu:find('对决',1,true)
+    local seriesMenu=text:gsub('賽','赛'):gsub('師','师'):gsub('週','周')
+    local titles=0
+    for _,name in ipairs({'世界系列赛','大师系列赛','周末系列赛'}) do
+      if seriesMenu:find(name,1,true) then titles=titles+1 end
+    end
+    local onMultiplayerTab=screen.scene=='unknown' and titles>=2 and seriesMenu:find('对决',1,true)
     local fresh=screen.frameId and screen.frameId>lastFrame
     local evidence=screen.homeEvidence or 0
     if loading or screen.dismissPopup or screen.returnOverlay or screen.legacyPopup
@@ -2925,7 +2928,7 @@ function utils.selectSpecialStage(screen)
     sleep(3000)
   end
   keepCapture()
-  if run.data["称霸模式"] == "0" then
+  if run.data["赛事模式"] == "称霸特赛" then
     local chapter=tonumber(run.data["称霸位置"]) or 1
     local function numberedWord(screen,label,number,minX,maxX,minY,maxY)
       for _,word in ipairs(screen.words or {}) do
@@ -3130,7 +3133,7 @@ function utils.carClubPage(pattern)
   return utils.carClubTaskPage(_soloEventUi())
 end
 --- 把章节横条拉回最左起点：向右滑到画面连续两次都不再变化为止，不靠固定次数。
--- utils.carClubAtOrigin 标记横条在起点：此时 spChoose 不做横向微调；club.lua 向后翻章节时清除。
+-- 首次进入、或从当前位置向后找不到目标而需要补查左侧时使用。
 -- 一次滑动只走 850px（约 1.85 张卡），所以位置越靠右需要的次数越多；40 次够 70 张卡以上。
 -- 走满次数仍在动就报错保留当前任务，绝不会在没确认起点的情况下开始选章节。
 function utils.carClubToOrigin()
@@ -3245,6 +3248,8 @@ end
 -- 开始/继续按钮：先用文字定位，找不到再退回原来的固定坐标。
 -- allowSide 为真才允许点「开始任务」：主线分支点到它就是配了主线却跑支线。
 function utils.startRaceTaps(allowSide)
+  -- 结算会自动定位到当前章节，即使上一局是在起点选中的。
+  utils.carClubAtOrigin = false
   local patterns = allowSide and { "开始任务", "開始任務", "继续", "繼續" } or { "继续", "繼續" }
   local rows = utils.textWordsIn(60, 700, 640, 1279, patterns)
   local sx, sy = 116, 1100
@@ -3278,6 +3283,17 @@ function utils.carClubCards(screen)
   return cards
 end
 
+-- 卡片左下的 SP 解锁条件前有粉色挂锁。检查锁梁、锁体和钥匙孔，
+-- 兼容 OCR 只读出 SP 数字、未读出解锁时间的情况。
+local function clubChapterLocked(card)
+  local pink = '9333F1-302030'
+  local points = '1|0|'..pink..'|0|9|'..pink..'|-6|-2|'..pink..'|-6|11|'..pink
+      ..'|-6|4|171717-302830'
+  local x = math.floor(card.x)
+  local lock = findMultiColor(97, math.max(0,x-105), 107, x, pink, points, 0, 1)
+  return lock ~= -1
+end
+
 -- 开赛页上「这辆车的性能分进不了当前难度」的提示。车联按危险等级卡性能分，点开始会一直没反应。
 function utils.carScoreShort(screen)
   local text = tostring(screen and screen.text or '')
@@ -3286,7 +3302,7 @@ function utils.carScoreShort(screen)
       or text:find('性能分未达标', 1, true) ~= nil or text:find('性能分达不到', 1, true) ~= nil
 end
 
--- 车手联会选任务：先把章节横条拉回最左起点，再从起点向右逐张看章节卡，取当前进度该做的任务。
+-- 车手联会选任务：从当前显示的章节向右找，续跑未命中时再从起点补查。
 -- 章节卡上「a/b」且 a<b 说明这条线还在进行；带「特别任务」的卡可以打特别任务。
 -- 主线 = 点开章节卡后面板里带「危险等级」的任务行（按「危险等级」配置选行）；支线 = 面板里的特别任务（「开始任务」）。
 -- 顺序按「先支线后主线」：先把整条横条的支线扫一遍，扫完没有可做的支线，才回起点扫主线。
@@ -3351,12 +3367,15 @@ function utils.spChoose(maxLevel)
   end
   -- 面板类型按排列形式判定（等价于原版用固定色块区分主线/支线，但不依赖配色）：
   -- 主线面板是难度行列表（列表区每行一条「危险等级 N」，在右侧列表区），支线面板只有一条任务（目标 + 底部一个按钮）。
-  -- 所以先数难度行：有行就是主线；一行都没有，再看是不是支线的目标文字或单个开始/继续按钮。
+  -- 特别任务面板底部也有「危险等级」。优先看右侧专属标题或开始任务按钮。
   local function panelShape(words)
     local side, rows = nil, {}
     for _,word in ipairs(words) do
       local label=clean(word)
-      -- 支线面板左栏也印着「危险等级」，但它贴在左边缘；只有右侧列表区的才是主线任务行。
+      if word.x>450 and ((label:find("开始任务",1,true) and word.y>490)
+          or label:find("赢取额外车联包",1,true) or label:find("赢取額外車聯包",1,true)) then
+        return word, {}
+      end
       if label:find("危险等级",1,true) and word.x>450 and word.y<640 then
         rows[#rows+1]=word
       end
@@ -3498,13 +3517,18 @@ function utils.spChoose(maxLevel)
       end
     end
   end
-  -- 不是降档退回的面板，就先把横条拉回最左起点再从头看。
-  if not utils.carClubAtOrigin then utils.carClubToOrigin() end
+  if utils.carClubAtOrigin == nil then
+    utils.carClubToOrigin()
+  elseif not utils.carClubAtOrigin and stages[1] then
+    -- 先从结算后的当前位置向右找首选分支。走到底仍未命中，再回起点补查左侧。
+    table.insert(stages, 1, stages[1])
+    print('车联：从当前章节继续选任务')
+  end
   for index, stage in ipairs(stages) do
-    -- 支线扫到横条末尾再回起点找主线；没翻过屏就说明本来就在起点。
+    -- 后续扫描从起点开始，确保整条横条的支线都查过才切到主线。
     if index > 1 and not utils.carClubAtOrigin then utils.carClubToOrigin() end
     -- step 是读屏次数预算：翻一屏算一次，面板收起后重读同一屏也占一次。
-    local lastKey
+    local lastKey, lastAlignment
     for step = 1, 60 do
       local screen, cards
       for attempt = 1, 3 do
@@ -3561,10 +3585,14 @@ function utils.spChoose(maxLevel)
       print("车联第 " .. step .. " 屏（" .. stage .. "）：卡片 " .. table.concat(names, ","))
       -- 从左到右看这一屏的卡：某张卡的这一支被判掉后继续看同屏右侧的卡，不整屏放弃。
       local opened = false
+      local locked = 0
       for _,card in ipairs(ordered) do
         local name = card.name ~= '' and card.name or ('y' .. math.floor(card.y))
         local mark = name .. '#' .. stage
-        if not skipped[mark] then
+        if findMultiColor and clubChapterLocked(card) then
+          locked = locked + 1
+          print('车联章节未解锁：' .. name)
+        elseif not skipped[mark] then
           local words = cardWords(screen, card)
           local mainLeft, sideLeft, special, hasProgress, hasDigits = cardProgress(words)
           -- a/b 只做初筛省一次开卡，真正算数的是点开后的面板。
@@ -3581,16 +3609,41 @@ function utils.spChoose(maxLevel)
             tostring(sideLeft) .. (special and " 有标签" or "") .. (hasProgress and "" or " 无进度") ..
             (hasDigits and "" or " 无数字") .. (open and " → 开卡" or " → 跳过"))
           if not open then
-            skipped[mark] = true
+            -- 右边缘的卡可能只露出了标题，下次滑到完整位置时再确认进度。
+            if card.x + 350 <= 1280 then skipped[mark] = true end
             if not hasProgress then
               local texts = {}
               for _,w in ipairs(words) do texts[#texts+1] = clean(w) .. '@' .. math.floor(w.x) .. ',' .. math.floor(w.y) end
               print("车联卡区文字（" .. name .. "）：" .. table.concat(texts, " | "))
             end
+          elseif card.x > 300 and lastAlignment ~= mark..'@'..math.floor(card.x/24) then
+            -- 面板在章节卡右侧横向展开。在右边缘开卡时，开赛按钮可能完全在屏外。
+            lastAlignment = mark..'@'..math.floor(card.x/24)
+            local distance = math.min(800, math.floor(card.x-180))
+            swipe(299, 1050, 299, 1050-distance, 520, 200)
+            utils.carClubAtOrigin = false
+            sleep(1000)
+            opened = true
+            break
           else
-            tap(719 - (card.y + 100), math.min(card.x + 150, 1200))
-            local side, rows, panelWords = nil, {}, {}
+            -- 展开面板时左侧仍显示章节卡；再点一次会收起，随后只能读到横条。
+            local inlineWords = {}
+            local right = 1280
+            for _,other in ipairs(cards) do
+              if other.x>card.x then right=math.min(right,other.x-85) end
+            end
+            for _,word in ipairs(screen.words or {}) do
+              if word.x>card.x+350 and word.x<right and word.y>=215 then
+                inlineWords[#inlineWords+1]=word
+              end
+            end
+            local side, rows = panelShape(inlineWords)
+            local panelWords = inlineWords
+            if not side and #rows == 0 then
+              tap(719 - (card.y + 100), math.min(card.x + 150, 1200))
+            end
             for read = 1, 2 do
+              if side or #rows > 0 then break end
               sleep(read == 1 and 1300 or 1500)
               local panel = _soloEventUi()
               if hazardDialog(panel) then
@@ -3667,13 +3720,17 @@ function utils.spChoose(maxLevel)
       local signature = table.concat(key, '|')
       if opened then
         -- 面板刚收起，同一屏重新读一遍再继续，不算翻屏。
+      elseif locked >= 2 and locked == #cards then
+        print('当前整屏车联章节均有锁，结束本分支扫描')
+        break
       elseif lastKey == signature then
         break  -- 横条翻到底，不再前进
       else
         lastKey = signature
         -- 这一屏没有本阶段要做的任务：按住拖动向后翻一屏（不甩动），避免跳过章节卡
         utils.carClubAtOrigin = false
-        utils.mySwipe(119, 760, 119, 330)
+        -- 在卡片中部用同一根手指拖动、停稳再松开，避免松手后补点触发开始任务。
+        swipe(299, 760, 299, 330, 460, 180)
         sleep(1300)
       end
     end

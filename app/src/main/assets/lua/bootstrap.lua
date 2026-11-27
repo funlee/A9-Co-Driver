@@ -173,6 +173,7 @@ if keepCapture and _popupUi then
   end
 end
 
+local multiplayerSeries={['世界系列赛']=true,['大师系列赛']=true,['周末系列赛']=true}
 function localInit()
   data['线路集合']=ROUTES
   data['配置路径']=LOCAL_ROOT..'/local-config.json'
@@ -226,7 +227,7 @@ function localInit()
     while true do
       local done,progress,info,confirmedSettlement,popup=_driverStep()
       if popup then
-        if data['项目']=='多人上' or data['项目']=='多人下' then _multiplayerUi(false,false) else _soloEventUi() end
+        if multiplayerSeries[data['项目']] then _multiplayerUi(false,false) else _soloEventUi() end
       end
       if progress>=0 then
         data['路程']=progress
@@ -239,7 +240,7 @@ function localInit()
     end
     _driverEnd();data['路程']=0;data['多人地图']='';return settlement and 'settlement' or 1
   end
-  run.list={['多人上']=multiple1.operation,['多人下']=multiple2.operation,['杯赛']=cup.operation,
+  run.list={['世界系列赛']=worldSeries.operation,['大师系列赛']=masterSeries.operation,['杯赛']=cup.operation,
     ['特殊赛事']=spCup.operation,['车联']=dsCup.operation}
   run.carDetails={['杯赛']=function()return cup.operation[5][2]()end,['特殊赛事']=function()return spCup.operation[5][2]()end,
     ['车联']=function()return dsCup.operation[4][2]()end}
@@ -280,9 +281,9 @@ local skipReasons={
   dailyExpired='赛事仅剩奖励页',
   cupClaimOnly='配置位置仅可领取奖励，已保留奖励',
   cupListObscured='待领奖励提示持续遮挡赛事位置，已保留奖励',
-  cupPositionUnavailable='无法定位配置的赛事位置，请检查杯赛位置',
+  cupPositionUnavailable='无法定位配置的赛事位置，请检查每日赛事序号',
   cupEntryUnconfirmed='已点击赛事入口，但未能确认进入赛事详情',
-  cupPositionInvalid='杯赛位置必须为非零整数，请检查任务配置',
+  cupPositionInvalid='每日赛事序号必须为非零整数，请检查任务配置',
   fuelEmpty='配置车辆均无油或暂不可用',
   vehicleLocked='配置车辆尚未解锁',
   vehicleUnavailable='没有可用车辆',
@@ -314,7 +315,7 @@ function main()
   if resume.needsHome then
     queueRecovering=true
     local cfg=UIconfig.projects[resume.index]
-    local task=resume.rewardWork and '本轮领奖' or string.format('项目 %d · %s',resume.index,cfg['项目'])
+    local task=resume.rewardWork and '本轮领奖' or string.format('项目 %d · %s',resume.index,cfg['项目显示名'] or cfg['项目'])
     local repeated=resume.failures>=2
     local cause=resume.lastFailure or ''
     if resume.homeRestarted then
@@ -352,11 +353,12 @@ function main()
       local cfg=UIconfig.projects[i]
       if cycle>resume.cycle or i>=resume.index then
         local completed=_queueEnter and _queueEnter(cycle,i,tonumber(cfg.data['次数']) or 1) or 0
-        print('第 '..cycle..' 轮，开始项目 '..i..'：'..cfg['项目']..'，目标 '..tostring(cfg.data['次数'])..' 局')
+        local displayName=cfg['项目显示名'] or cfg['项目']
+        print('第 '..cycle..' 轮，开始项目 '..i..'：'..displayName..'，目标 '..tostring(cfg.data['次数'])..' 局')
         run.index=i;run.data=cfg.data;data['项目']=cfg['项目'];data['心跳时间']=os.time()
-        data['信息']=string.format('项目 %d：%s',i,data['项目']);_hud(data['信息'])
+        data['信息']=string.format('项目 %d：%s',i,displayName);_hud(data['信息'])
         local outcome=nil
-        if data['项目']=='多人上' or data['项目']=='多人下' then
+        if multiplayerSeries[data['项目']] then
           -- Task boundaries return to a shared entry point; multiplayer need not interpret cup pages.
           local restoring=resume.restored and cycle==resume.cycle and i==resume.index
           local tutorial=restoring and spCup and spCup.tutorialButton(_soloEventUi())
@@ -387,9 +389,9 @@ function main()
         end
         local reason=skipReasons[outcome]
         if reason then
-          taskNotice('本轮跳过项目 '..i..' · '..data['项目']..'\n'..reason)
+          taskNotice('本轮跳过项目 '..i..' · '..displayName..'\n'..reason)
         else
-          print('第 '..cycle..' 轮，项目 '..i..' 已完成：'..data['项目'])
+          print('第 '..cycle..' 轮，项目 '..i..' 已完成：'..displayName)
         end
         if _queueDone then _queueDone() end
         run.data={}

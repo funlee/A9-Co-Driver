@@ -98,7 +98,7 @@ final class RewardMenuChecks {
             "function _sessionProject() end",
             "utils={backToMain=function() end, checkAuto=function() end, initCar=function() end}",
             "UIconfig={routeOnly='',ActiveProj={true,false,true},projects={",
-            "    {['项目']='多人上',data={['次数']='3'}},",
+            "    {['项目']='世界系列赛',data={['次数']='3'}},",
             "    {['项目']='杯赛',data={['次数']='5'}},",
             "    {['项目']='特殊赛事',data={['次数']='2'}}",
             "}}",

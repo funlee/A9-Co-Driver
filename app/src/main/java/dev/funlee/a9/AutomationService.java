@@ -132,7 +132,7 @@ public final class AutomationService extends Service {
                     try(LuaRuntime lua=new LuaRuntime(host,AndroidHost.FUNCTIONS)) {
                         runtime=lua;lua.set("LOCAL_ROOT",host.workPath());lua.set("UIconfig",store.luaConfig());
                         Map<String,Object> routes=new LinkedHashMap<>();for(Route route:store.routes.values())routes.put(route.name,route.raw);lua.set("ROUTES",routes);
-                        for(String name:List.of("bootstrap","shared","utilities","rewards","workflows","multiplayer_up","multiplayer_down","multiplayer_current","cup","special","club","daily"))
+                        for(String name:List.of("bootstrap","shared","utilities","rewards","workflows","multiplayer_world","multiplayer_master","multiplayer_current","cup","special","club","daily"))
                             lua.load(name,store.asset("lua/"+name+".lua"));
                         lua.start("main");
                         SessionState.status(SessionState.stats.restartCount()>0?"已恢复，继续剩余任务":"任务已启动");

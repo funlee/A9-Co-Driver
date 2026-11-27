@@ -138,6 +138,7 @@ function dailyCup.settle(label,readScreen)
   if _racePanel then _racePanel(false) end
   data["信息"]=label.."结算中"
   local special=label=='特殊赛事'
+  local club=label=='车联'
   local daily=label=='每日战利品' or (label=='杯赛' and run and run.dailyLoot)
   local started=tickCount();local rewardSince=nil;local seen=false;local eventFrames=0;local eventSince=nil;local lastEvent=nil
   local returnedScene,returnedFrame
@@ -166,14 +167,18 @@ function dailyCup.settle(label,readScreen)
   end
   while tickCount()-started<90000 do
     local screen=readScreen();local scene=screen.scene
-    -- The same lobby label can be missed after settlement. Keep the color fallback.
-    if (label=='每日战利品' or label=='杯赛') and scene=='unknown' and not screen.closeX then
-      keepCapture()
-      if cmpColorEx(config.cupInfo,1)==1 then scene='event' end
+    if scene=='unknown' and not screen.closeX then
+      -- 危险等级也会出现在任务面板上，回到章节横条才能确认车联结算结束。
+      if club and utils.carClubTaskPage(screen) and #utils.carClubCards(screen)>0 then
+        scene='clubTaskPage'
+      elseif label=='每日战利品' or label=='杯赛' then
+        keepCapture()
+        if cmpColorEx(config.cupInfo,1)==1 then scene='event' end
+      end
     end
-    if scene=="event" or scene=="car" or (special and scene=='specialRanking')
+    if scene=="event" or scene=="car" or scene=='clubTaskPage' or (special and scene=='specialRanking')
         or (daily and scene=='dailyRewardOnly') then
-      if special and scene~=returnedScene then eventFrames=0;eventSince=nil end
+      if (special or club) and scene~=returnedScene then eventFrames=0;eventSince=nil end
       if not screen.frameId or screen.frameId~=returnedFrame then eventFrames=eventFrames+1 end
       returnedScene=scene;returnedFrame=screen.frameId
       eventSince=eventSince or tickCount()
@@ -182,7 +187,7 @@ function dailyCup.settle(label,readScreen)
       local grace=special and scene=='specialRanking' and screen.frameId and 1500 or 3000
       if seen and eventFrames>=2 and tickCount()-eventSince>=grace then print(label.."结算完成，已返回赛事");return 0 end
     else
-      if scene~="unknown" or screen.closeX or not lastEvent then
+      if club or scene~="unknown" or screen.closeX or not lastEvent then
         eventFrames=0;eventSince=nil
       end
     end

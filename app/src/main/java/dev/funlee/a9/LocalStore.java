@@ -9,16 +9,16 @@ import dev.funlee.a9.core.*;
 
 public final class LocalStore {
     static final int DEFAULT_RACE_TIMEOUT_SECONDS = 480;
-    public static final String[] MODES={"多人上","多人下","杯赛","特殊赛事","车联"};
+    public static final String[] MODES={MultiplayerUi.WORLD,MultiplayerUi.MASTER,MultiplayerUi.WEEKEND,"杯赛","特殊赛事","车联"};
     private static final String[] RETIRED_GLOBAL_OPTIONS={
         "coinAD","cupTicketAD","spCupTicketAD","dsTicketAD","onceAD","dsCupAD","AdTime","coinADNum",
         "coinPkg","Coupons","clearPrize","spPrize","spPos"
     };
     private static final String[] RETIRED_PROJECT_OPTIONS={"广告修车","代币买票","买票次数","每日只执行一次"};
-    private static final String[] RETIRED_DRIVING_OPTIONS={"杯赛漂流","杯赛两圈赛制","特殊赛事漂流","特殊赛事两圈赛制","多人上漂流","多人下漂流"};
+    private static final String[] RETIRED_DRIVING_OPTIONS={"杯赛漂流","杯赛两圈赛制","特殊赛事漂流","特殊赛事两圈赛制",MultiplayerUi.LEGACY_WORLD+"漂流",MultiplayerUi.LEGACY_MASTER+"漂流"};
     private static final String[] RETIRED_SERIES_OPTIONS={
         "使用车组","车组选择","车组青铜用车","车组白银用车","车组黄金用车","车组铂金用车","车组钻石用车","车组传奇用车",
-        "多人上漂流","多人下漂流","传奇停跑","传奇分数","多人上掉分","掉分段位","掉分段位结束","多人选路"
+        MultiplayerUi.LEGACY_WORLD+"漂流",MultiplayerUi.LEGACY_MASTER+"漂流","传奇停跑","传奇分数",MultiplayerUi.LEGACY_WORLD+"掉分","掉分段位","掉分段位结束","多人选路"
     };
     public final Context context;
     public final MapMatcher matcher;
@@ -47,12 +47,13 @@ public final class LocalStore {
         config=new JSONObject(context.getSharedPreferences("local",0).getString("config","{}"));
         boolean queueMigrated=config.optInt("taskQueueVersion",0)<1;
         boolean isNewConfig=!config.has("projects");
+        boolean seriesMigrated=queueMigrated&&migrateSeriesTasks(config.optJSONArray("projects"));
         boolean initialized=isNewConfig||(queueMigrated&&isUntouchedLegacyQueue());
         if(initialized)config.put("projects",defaultProjects());
-        if(isNewConfig&&!config.has("global"))config.put("global",new JSONObject().put("autoToken",true).put("freePkg",true));
+        if(isNewConfig&&!config.has("global"))config.put("global",new JSONObject().put("autoToken",false).put("freePkg",false));
         if(queueMigrated)config.put("taskQueueVersion",1);
         // Persist identity separately from editable task fields and queue position.
-        boolean migrated=migrateConfig()||initialized||queueMigrated;Set<String> ids=new HashSet<>();
+        boolean migrated=migrateConfig()||seriesMigrated||initialized||queueMigrated;Set<String> ids=new HashSet<>();
         JSONArray tasks=config.getJSONArray("projects");
         for(int i=0;i<tasks.length();i++) {
             JSONObject task=tasks.getJSONObject(i);String id=task.optString("taskId");
@@ -71,6 +72,7 @@ public final class LocalStore {
     boolean migrateConfig() throws JSONException {
         boolean changed=removeOptions(config.optJSONObject("global"),RETIRED_GLOBAL_OPTIONS);
         JSONArray tasks=config.optJSONArray("projects");
+        changed|=migrateSeriesTasks(tasks);
         if(tasks!=null)for(int i=0;i<tasks.length();i++){
             JSONObject task=tasks.getJSONObject(i);
             if("每日战利品".equals(task.optString("项目"))) {
@@ -83,14 +85,42 @@ public final class LocalStore {
             if("车联".equals(task.optString("项目"))&&task.optJSONObject("data")!=null)
                 changed|=task.getJSONObject("data").remove("车手联会选路")!=null
                         |task.getJSONObject("data").remove("杯赛线路5")!=null;
-            if(hasTaskRoute(task.optString("项目")))changed|=migrateTaskRoute(task.optString("项目"),task.optJSONObject("data"));
-            if("多人上".equals(task.optString("项目")))
+            JSONObject data=task.optJSONObject("data");
+            if("特殊赛事".equals(task.optString("项目"))&&data!=null) {
+                if(!data.has("赛事模式")) {
+                    data.put("赛事模式","0".equals(data.optString("称霸模式"))?"称霸特赛":"经典特赛");
+                    changed=true;
+                }
+                changed|=data.remove("称霸模式")!=null;
+            }
+            if(hasTaskRoute(task.optString("项目")))changed|=migrateTaskRoute(task.optString("项目"),data);
+            if(MultiplayerUi.WORLD.equals(task.optString("项目")))
                 changed|=migrateWorldCars(task.optJSONObject("data"));
             changed|=removeOptions(task.optJSONObject("data"),RETIRED_DRIVING_OPTIONS);
-            if("多人上".equals(task.optString("项目"))||"多人下".equals(task.optString("项目")))
+            if(MultiplayerUi.SERIES.contains(task.optString("项目")))
                 changed|=removeOptions(task.optJSONObject("data"),RETIRED_SERIES_OPTIONS);
         }
         return removeRetiredProjects(config)||changed;
+    }
+    private static boolean migrateSeriesTasks(JSONArray tasks) throws JSONException {
+        boolean changed=false;
+        for(int i=0;tasks!=null&&i<tasks.length();i++){
+            JSONObject task=tasks.getJSONObject(i);
+            String saved=task.optString("项目"), mode=MultiplayerUi.migrateMode(saved);
+            if(!mode.equals(saved)){task.put("项目",mode);changed=true;}
+            JSONObject data=task.optJSONObject("data");
+            if(data==null||!MultiplayerUi.SERIES.contains(mode))continue;
+            String name=data.optString("项目名称");
+            if(mode.equals(MultiplayerUi.migrateMode(name))&&!mode.equals(name)){
+                data.put("项目名称",mode);changed=true;
+            }
+            String oldCars=MultiplayerUi.LEGACY_MASTER+"用车";
+            if(MultiplayerUi.MASTER.equals(mode)&&data.has(oldCars)){
+                if(!data.has("赛事用车"))data.put("赛事用车",data.get(oldCars));
+                data.remove(oldCars);changed=true;
+            }
+        }
+        return changed;
     }
     public static boolean hasTaskRoute(String mode) {
         return "杯赛".equals(mode)||"特殊赛事".equals(mode);
@@ -147,7 +177,7 @@ public final class LocalStore {
             if(!settings.has("白金用车"))settings.put("白金用车",settings.get("铂金用车"));
             settings.remove("铂金用车");changed=true;
         }
-        JSONArray spec=forms.getJSONArray("多人上");
+        JSONArray spec=forms.getJSONArray(MultiplayerUi.WORLD);
         for(int i=0;i<spec.length();i++) {
             JSONObject field=spec.getJSONObject(i);String key=field.getString("key");
             if((key.endsWith("用车")||key.equals("选车筛选"))&&!settings.has(key)) {
@@ -184,10 +214,14 @@ public final class LocalStore {
             byte[] b=new byte[8192]; int n; while((n=in.read(b))!=-1)out.write(b,0,n); return out.toString("UTF-8");
         }
     }
+    public JSONArray formFields(String mode) throws JSONException {
+        return forms.getJSONArray(MultiplayerUi.usesSeriesCars(mode)?MultiplayerUi.MASTER:mode);
+    }
     public JSONObject defaults(String mode) throws JSONException {
-        JSONObject o=new JSONObject(); JSONArray f=forms.getJSONArray(mode);
+        JSONObject o=new JSONObject(); JSONArray f=formFields(mode);
         for(int i=0;i<f.length();i++) { JSONObject x=f.getJSONObject(i);o.put(x.getString("key"),x.getString("value")); }
         if(hasTaskRoute(mode))o.put("已配置地图","").put("跑法代码","").put("路线配置版本",1);
+        if(MultiplayerUi.SERIES.contains(mode))o.put("项目名称",mode);
         o.put("次数","1");
         // Standard modes infer map names; cup-like modes use a user-selected route or OCR.
         return o;
@@ -320,8 +354,9 @@ public final class LocalStore {
         JSONArray a=config.getJSONArray("projects");
         for(int i=0;i<a.length();i++) {
             JSONObject p=a.getJSONObject(i); Map<String,Object> item=(Map<String,Object>)javaValue(p);
+            item.put("项目显示名",MultiplayerUi.displayMode(p.optString("项目")));
             Map<String,Object> d=(Map<String,Object>)item.get("data");
-            if("多人上".equals(p.optString("项目"))&&"0".equals(d.get("自选奖励"))) {
+            if(MultiplayerUi.WORLD.equals(p.optString("项目"))&&"0".equals(d.get("自选奖励"))) {
                 List<Object> rewardRules=new ArrayList<>();
                 DynamicRewards.rules(String.valueOf(d.getOrDefault("自选奖励规则",""))).forEach((score,position)->
                         rewardRules.add(Map.of("score",score,"position",position)));

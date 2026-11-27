@@ -6,7 +6,7 @@ local selected,started,settled,completed,claims,notices=0,0,0,0,0,0
 data={['杯赛']=0}
 UIconfig={routeOnly='',ActiveProj={true,true},projects={
   {['项目']='杯赛',data={['次数']='5',['杯赛位置']='5',['是否领取俱乐部奖励']=claim and '0' or ''}},
-  {['项目']='多人下',data={['次数']='1'}}}}
+  {['项目']='大师系列赛',data={['次数']='1'}}}}
 function localInit()end
 function monitor()end
 function _hud()end

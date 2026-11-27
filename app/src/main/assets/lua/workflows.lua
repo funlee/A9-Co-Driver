@@ -2,10 +2,13 @@ run = {}
 run.data = {}
 run.index = 1
 run.dataList = {
-  ["多人上"] = function()
+  ["世界系列赛"] = function()
     data["多人"] = data["多人"] + 1
   end,
-  ["多人下"] = function()
+  ["周末系列赛"] = function()
+    data["多人"] = data["多人"] + 1
+  end,
+  ["大师系列赛"] = function()
     data["多人"] = data["多人"] + 1
   end,
   ["杯赛"] = function()
@@ -38,6 +41,7 @@ function run.main()
 end
 function run.project()
   run.nitro()
+  if data['项目']=='车联' then dsCup.resetDifficulty() end
   if _usedCarEntries then
     for _,entry in ipairs(_usedCarEntries()) do
       data['用车次数'][string.format('car%d',entry)]=1
