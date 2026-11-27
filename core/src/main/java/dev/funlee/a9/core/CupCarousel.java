@@ -5,6 +5,42 @@ import java.util.*;
 /** Full event cards in the normalized 720 x 1280 capture; excludes the unlock footer. */
 public final class CupCarousel {
     private CupCarousel(){}
+    /** Measures actual horizontal travel from overlapping card artwork, including partial or zero travel at an end. */
+    public static final class ScrollTracker {
+        private int[][] previous;
+
+        public Integer observe(PixelFrame frame, int direction) {
+            int[][] current = new int[5][1280];
+            for (int row = 0; row < current.length; row++) {
+                for (int x = 0; x < 1280; x++) current[row][x] = frame.pixel(719 - (545 + row * 20), x);
+            }
+            int[][] before = previous;
+            previous = current;
+            if (direction == 0 || before == null) return 0;
+            double[] scores = new double[801];
+            int best = 0;
+            for (int distance = 0; distance < scores.length; distance++) {
+                int difference = 0, samples = 0;
+                for (int x = 70; x + distance <= 1210; x += 11) {
+                    int from = direction > 0 ? x + distance : x;
+                    int to = direction > 0 ? x : x + distance;
+                    for (int row = 0; row < current.length; row++) {
+                        int a = before[row][from], b = current[row][to];
+                        difference += Math.abs((a >> 16 & 255) - (b >> 16 & 255))
+                                + Math.abs((a >> 8 & 255) - (b >> 8 & 255)) + Math.abs((a & 255) - (b & 255));
+                        samples += 3;
+                    }
+                }
+                scores[distance] = (double) difference / samples;
+                if (scores[distance] < scores[best]) best = distance;
+            }
+            if (scores[best] > 25) return null;
+            for (int i = 0; i < scores.length; i++) {
+                if (Math.abs(i - best) > 15 && scores[i] < scores[best] + 5) return null;
+            }
+            return direction > 0 ? best : -best;
+        }
+    }
     public static List<Map<String,Object>> cards(PixelFrame frame){
         return cards(frame,false);
     }

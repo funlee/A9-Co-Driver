@@ -21,7 +21,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             "cmpColorEx","cmpColor","getPixelColor","findColor","findMultiColor","findPic","snapShot","rotateImage",
             "getDisplaySize","getDisplayRotate","getWorkPath","getSdPath","getPackageName","getInstalledApk","frontAppName","runApp","stopApp","keyPress",
             "setScreenScale","setControlBarPos","rnd","toast","print","colorToRGB","_jsonEncode","_jsonDecode","_textOcr","_textWords","_digit","_mapMatch","_recoverEventStart","_requestGameRestart","_specialEventList","_recoveryUi","_popupUi","_legacyPopupProbe","_legacyPopupDismiss","_soloGarageScore","_soloDetailScore",
-            "_validateRoute","_driverBegin","_driverStep","_driverEnd","_racePanel","_hud","_taskNotice","_finished","_multiplayerUi","_rewardUi","_fallbackBegin","_fallbackStep","_sessionCycle","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_sessionLegacyCompleted","_sessionLegacyPrepare","_sessionLegacyMap","_sessionOperation","_routeDisplay","_cupCards","_cupClaimState","_dailyEventUi","_soloEventUi","_soloGarageUi","_garageFilterState","_garageFilterPrepare","_dailyTaskStatus","_queueResume","_queueRewardsDone","_queueEnter","_queueDone","_queueBeginRewards","_queueHomeConfirmed","_requirePlayerAction");
+            "_validateRoute","_driverBegin","_driverStep","_driverEnd","_racePanel","_hud","_taskNotice","_finished","_multiplayerUi","_rewardUi","_fallbackBegin","_fallbackStep","_sessionCycle","_sessionProject","_sessionRaceBegin","_sessionRaceResult","_sessionRaceReturned","_sessionLegacyCompleted","_sessionLegacyPrepare","_sessionLegacyMap","_sessionOperation","_routeDisplay","_cupCards","_cupScrollDelta","_cupClaimState","_dailyEventUi","_soloEventUi","_soloGarageUi","_garageFilterState","_garageFilterPrepare","_dailyTaskStatus","_queueResume","_queueRewardsDone","_queueEnter","_queueDone","_queueBeginRewards","_queueHomeConfirmed","_requirePlayerAction");
     private final Context context;
     private final LocalStore store;
     private final CaptureSession capture;
@@ -42,6 +42,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     private GameViewport viewport;
     public volatile boolean finished;
     public long clock;
+    private final CupCarousel.ScrollTracker cupScroll = new CupCarousel.ScrollTracker();
     private final TaskCheckpoint checkpoint=new TaskCheckpoint();
     private boolean restoredQueue;
     private final MatchmakingWatchdog matching=new MatchmakingWatchdog();
@@ -830,6 +831,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                     if(CupCarousel.claimSpotlight(current))return result(l,"spotlight");
                     return result(l,!l.isNoneOrNil(1)&&CupCarousel.claimOnlyAt(current,n(l,1))?"claimOnly":"");
                 }
+                case "_cupScrollDelta":return result(l,cupScroll.observe(frame(),n(l,1)));
                 case "_cupCards":{
                     Map<String,Object> popup=popupOverPixelMenu();
                     return popup.isEmpty()?result(l,CupCarousel.cards(frame(),wideViewport())):result(l,popup);

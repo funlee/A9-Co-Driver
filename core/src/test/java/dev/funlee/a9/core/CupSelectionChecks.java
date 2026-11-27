@@ -5,6 +5,14 @@ import java.util.*;
 
 /** Exercises the real cup selector with stale on-disk identity and menu movement. */
 final class CupSelectionChecks {
+    private static PixelFrame scrollFrame(int offset) {
+        int[] pixels=new int[720*1280];
+        for(int row=0;row<5;row++)for(int x=0;x<1280;x++){
+            long hash=(x+offset+row*10007L)*2654435761L;
+            pixels[x*720+719-(545+row*20)]=(int)(hash^(hash>>>17));
+        }
+        return new PixelFrame(720,1280,pixels);
+    }
     static int run(Path assets)throws Exception{
         int[] pixels=new int[720*1280];
         // Border positions recorded at the right end: a clipped card, D/C/B/A/S,
@@ -117,10 +125,15 @@ final class CupSelectionChecks {
             "for _,c in ipairs(_cupCards())do if c.selected then return 0,16,c.center end end end return -1,-1,-1 end;"+
             "utils.findCup=function(...)finds=finds+1;keepCapture();if cached and (not stale or selected==2) then return {16,120+180*(selected-1),350,212} end;return {-1,-1,-1,-1} end;";
         List<String> cases=List.of(
-            "selected=1;local entered=false;utf8.left=function(s)return s end;"+
-                "function _soloEventUi()return {scene=entered and 'event' or 'cupList'}end;"+
-                "function tap(x,y)assert(not entered,'checked list coordinates on event detail');if x==119 then entered=true end end;"+
-                "assert(utils.chooseCup('5')==1 and entered,'detail with previously visible first card was skipped')",
+            "local entered=false;local offset=0;local delta=0;local picked=1;utf8.left=function(s)return s end;"+
+                "function swipe(x,a,y,b) local old=offset;offset=math.max(0,math.min(4*186,offset+a-b));delta=offset-old end;"+
+                "function _cupScrollDelta(d)return d==0 and 0 or delta end;"+
+                "function _cupCards()local t={};for i=1,10 do local x=151+(i-1)*186-offset;"+
+                "if x>70 and x<1200 then t[#t+1]={center=x,selected=i==picked} end end;return t end;"+
+                "function _soloEventUi()return {scene=entered and 'event' or 'cupList'} end;"+
+                "function tap(x,y)assert(not entered);for _,c in ipairs(_cupCards()) do if c.center==y then "+
+                "local i=1+(y+offset-151)/186;if x==65 then assert(i==10 and picked==10);entered=true else picked=i end;return end end;error('not a card') end;"+
+                "assert(utils.chooseCup('10')==1 and entered,'wrong card at the right stop')",
             "assert(utils.chooseCup('3')==1);assert(selected==3,'stale identity overrides configured third cup');assert(removed==1 and #snapshots==1 and snapshots[1]==3);assert(finds==0,'new task searched old cache')",
             "utils.chooseCup('3');utils.chooseCup('3');assert(removed==1 and #snapshots==1 and selected==3,'same task lost its selected event')",
             "utils.chooseCup('3');utils.chooseCup('4');assert(removed==2 and #snapshots==2 and snapshots[2]==4 and selected==4,'position change reused wrong cached event')",
@@ -177,7 +190,17 @@ final class CupSelectionChecks {
                 "error('tap outside real cards')end;"+
                 "assert(utils.chooseCup('13')==1 and selected==13 and entered==1,'short swipes shifted the configured thirteenth event')"
         );
-        int checked=14;
+        CupCarousel.ScrollTracker tracker=new CupCarousel.ScrollTracker();
+        tracker.observe(scrollFrame(0),0);
+        if(!Integer.valueOf(528).equals(tracker.observe(scrollFrame(528),1))
+                || !Integer.valueOf(317).equals(tracker.observe(scrollFrame(845),1))
+                || !Integer.valueOf(0).equals(tracker.observe(scrollFrame(845),1))
+                || !Integer.valueOf(-520).equals(tracker.observe(scrollFrame(325),-1)))
+            throw new AssertionError("Cup scroll distance must follow the artwork, including a clamped last drag");
+        tracker.observe(new PixelFrame(720,1280,new int[720*1280]),0);
+        if(tracker.observe(new PixelFrame(720,1280,new int[720*1280]),1)!=null)
+            throw new AssertionError("An ambiguous image cannot establish a card position");
+        int checked=16;
         for(String script:cases){
             cleanCupCache();
             try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){

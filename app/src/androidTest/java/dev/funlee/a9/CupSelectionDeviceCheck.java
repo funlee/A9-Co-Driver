@@ -23,6 +23,7 @@ final class CupSelectionDeviceCheck implements LuaRuntime.Host {
     private TouchService touch;
     private String game;
     private String expectedTitle;
+    private final CupCarousel.ScrollTracker scroll = new CupCarousel.ScrollTracker();
     private Bitmap frame;
     private PixelFrame pixels;
     private File root;
@@ -30,7 +31,7 @@ final class CupSelectionDeviceCheck implements LuaRuntime.Host {
     CupSelectionDeviceCheck(Instrumentation test){this.test=test;ui=test.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES);}
     void run(int position,String expectedTitle,Bundle report)throws Exception{
         if(SessionState.running)throw new IllegalStateException("Stop the current task before checking cup selection");
-        if(position==0||position>6||position< -30)throw new IllegalArgumentException("Device check supports positions 1–6 and -1–-30");
+        if(position==0||position>30||position< -30)throw new IllegalArgumentException("Device check supports positions 1–30 and -1–-30");
         if(expectedTitle.isBlank())throw new IllegalArgumentException("Supply cupTitle to verify the actual event, not only tap coordinates");
         this.expectedTitle=expectedTitle;
         this.position=position;LocalStore store=new LocalStore(test.getTargetContext());rotation=store.config.optInt("rotation",90);
@@ -44,7 +45,9 @@ final class CupSelectionDeviceCheck implements LuaRuntime.Host {
             while(TouchService.instance==null&&SystemClock.elapsedRealtime()<ready)Thread.sleep(100);
             touch=TouchService.instance;if(touch==null)throw new IllegalStateException("Accessibility service unavailable");
             touch.configure(width,height,rotation);touch.arm(game);
-            try(LuaRuntime lua=new LuaRuntime(this,List.of("keepCapture","releaseCapture","tap","swipe","findColor","findPic","snapShot","print","toast","done","_cupCards"))){
+            List<String> functions=new ArrayList<>(List.of("keepCapture","releaseCapture","tap","swipe","findColor","findPic","snapShot","print","toast","done","_cupCards"));
+            if(position>0)functions.addAll(List.of("_soloEventUi","_cupScrollDelta"));
+            try(LuaRuntime lua=new LuaRuntime(this,functions)){
                 lua.set("LOCAL_ROOT",root.getAbsolutePath());lua.set("run",Map.of("index",3,"data",Map.of("杯赛位置",String.valueOf(position))));lua.set("data",Map.of());
                 lua.load("bootstrap",store.asset("lua/bootstrap.lua"));lua.load("utilities",store.asset("lua/utilities.lua"));
                 lua.load("selection-only","function selectionOnly()done(utils.chooseCup('"+position+"'))end");lua.start("selectionOnly");
@@ -53,7 +56,7 @@ final class CupSelectionDeviceCheck implements LuaRuntime.Host {
                 if(alive)throw new AssertionError("Cup selector timed out");
             }
             Thread.sleep(1000);
-            if(result!=1||snapshots!=1||targetTaps<1)throw new AssertionError("result="+result+", snapshots="+snapshots+", targetTaps="+targetTaps);
+            if(result!=1||(position<0&&snapshots!=1)||targetTaps<1)throw new AssertionError("result="+result+", snapshots="+snapshots+", targetTaps="+targetTaps);
             verifyTitle(true);
             File screenshot=new File(test.getTargetContext().getExternalFilesDir(null),"cup-selection-after.png");
             Bitmap actual=ui.takeScreenshot();if(actual==null)throw new AssertionError("No screenshot");
@@ -72,7 +75,7 @@ final class CupSelectionDeviceCheck implements LuaRuntime.Host {
                 Bitmap enlarged=Bitmap.createScaledBitmap(header,header.getWidth()*2,header.getHeight()*2,true);
                 try{title=Tasks.await(ocr.process(InputImage.fromBitmap(enlarged,0)),15,TimeUnit.SECONDS).getText().replaceAll("\\s+","");}
                 finally{enlarged.recycle();header.recycle();screen.recycle();}
-                if(MapMatcher.normalize(title).contains(MapMatcher.normalize(expectedTitle))&&(!detail||title.contains("单人奖励")))return;
+                if(MapMatcher.normalize(title.replace('級','级')).contains(MapMatcher.normalize(expectedTitle.replace('級','级')))&&(!detail||title.contains("单人奖励")))return;
                 Thread.sleep(700);
             }
             throw new AssertionError("Wrong event "+(detail?"detail":"selection")+": expected "+expectedTitle+", visible "+title);
@@ -103,6 +106,12 @@ final class CupSelectionDeviceCheck implements LuaRuntime.Host {
         try{
             switch(name){
                 case "keepCapture":capture();return 0;
+                case "_cupScrollDelta":LuaRuntime.push(lua,scroll.observe(pixels,number(lua,1)));return 1;
+                case "_soloEventUi":{
+                    // Geometry-only test host: exercise the production selected-card fallback
+                    // when OCR does not supply an Enter button. Title checks use independent OCR.
+                    LuaRuntime.push(lua,Map.of("scene",targetTaps>0?"event":"cupList"));return 1;
+                }
                 case "_cupCards":{
                     var cards=CupCarousel.cards(pixels);
                     android.util.Log.i("A9CupCheck","cards "+cards+" capture="+width+"x"+height+" rotation="+rotation);
@@ -111,7 +120,7 @@ final class CupSelectionDeviceCheck implements LuaRuntime.Host {
                 }
                 case "releaseCapture":return 0;
                 case "tap":{
-                    int x=number(lua,1),y=number(lua,2);if(x==100&&(position<0||y==(position==1?150:120+180*(position-1))))targetTaps++;
+                    int x=number(lua,1),y=number(lua,2);if(position>0 && x==65){verifyTitle(false);targetTaps++;}if(x==100&&position<0)targetTaps++;
                     android.util.Log.i("A9CupCheck","tap "+x+","+y);
                     tap(x,y);return 0;
                 }

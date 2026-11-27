@@ -2350,96 +2350,76 @@ function utils.chooseCup(num,wide,configuredOnly)
       return nil, '当前不在赛事列表页（'..pageScene..'）'
     end
     if not anchored then
-      -- 新版「探索赛事」列表：卡片是彩色票券，CupCarousel 只认得出一部分，点卡片
-      -- 只把这张卡选中，要点卡下沿的「进入」才真进赛事。只有慢速拖动（900ms）不会
-      -- 被系统取消，位移约等于拖动距离-19 且不吸附，所以拖 224px 正好一格（卡距 186）。
-      -- 实测拖 224px 实际走 205px（位移 = 拖动-19），比卡距 186 多 19，每步都在偏移。
-      -- 所以 DRAG 取 186（期望位移一格），下面的 drag 内部再补上这 19px 的损耗。
-      local X0, DRAG, PITCH = 151, 186, 186
-      local PX = 259              -- 竖向 x：横屏卡片图区 y≈460
-      -- 第 6 个参数让触点在终点停 300ms 再抬起：不带这个停顿，拖动会被游戏当成
-      -- 快速滑动吞掉，列表只挪动了实际距离的三分之一。
-      -- span 是期望的位移量（正值 = 列表向末尾滚）。补 19px 损耗时必须取绝对值，
-      -- 否则负向偏移不足 19px 时会被算成反向拖动，校正等于没做。
-      local function drag(span)
-        local px = math.abs(span) + 19
-        if span > 0 then swipe(PX, 1150, PX, 1150 - px, 700, 300)
-        else swipe(PX, 200, PX, 200 + px, 700, 300) end
-        sleep(600)
+      -- Establish the left boundary, then track the target in screen coordinates.
+      -- The final drag can travel less than one card, or stop moving altogether.
+      local function observe(direction)
+        keepCapture()
+        local delta = _cupScrollDelta(direction)
+        local cards = _cupCards() or {}
+        releaseCapture()
+        return delta, cards
       end
-      local function seen()
-        local t = {}
-        for _, card in ipairs(readCards()) do t[#t+1] = math.floor(card.center) end
-        return table.concat(t, ',')
+      local function drag(direction)
+        local from, to = 1050, 510
+        if direction < 0 then from, to = to, from end
+        swipe(194, from, 194, to, 900)
+        sleep(1);sleep(900)
+        return observe(direction)
       end
-      -- 逐格拖是开环的，卡宽或惯性一变就会整体偏半格。CupCarousel 常漏掉最左那张，
-      -- 报出来的第一张可能是第 2、3 张，所以只看「中心对卡距取模」的偏移量：不管它是
-      -- 第几张，偏移为 0 就说明整排卡正好落在格子上。
-      local function measure()
-        for attempt = 1, 3 do
-          local cards = readCards()
-          if #cards > 0 then
-            local first = math.huge
-            for _, card in ipairs(cards) do if card.center < first then first = card.center end end
-            return first
-          end
-          sleep(500) -- 惯性滚动中的帧经常一张也认不出
+      local function nearest(cards, x)
+        local best
+        for _,card in ipairs(cards) do
+          if math.abs(card.center-x) < 55 and (not best or math.abs(card.center-x)<math.abs(best.center-x)) then best=card end
         end
+        return best
       end
-      -- 每拖一格都读卡片会读到惯性中的中间帧，校正方向互相抵消，越校越乱；改成一次
-      -- 拖到位、末尾校正。识别噪声在 ±12 像素，单轮校正常常停在二三十像素的残差上，
-      -- 所以最多校两轮，收敛不了就按当前对齐走——半格以内不影响点中目标卡。
-      local function align()
-        for round = 1, 2 do
-          local first = measure()
-          if not first then print('杯赛校正：本帧未识别到卡片'); return end
-          local off = (first - X0) % PITCH
-          if off > PITCH / 2 then off = off - PITCH end
-          if math.abs(off) <= 25 then
-            print('杯赛列表首卡中心 '..math.floor(first)..'，已对齐')
-            return
-          end
-          drag(off)
-          sleep(1000)
-          local again = measure()
-          local left = '?'
-          if again then
-            local rest = (again - X0) % PITCH
-            if rest > PITCH / 2 then rest = rest - PITCH end
-            left = tostring(math.floor(rest))
-          end
-          print('杯赛位置校正 '..math.floor(off)..' 像素（第 '..round..' 轮），首卡中心 '
-            ..math.floor(first)..'，残留 '..left)
+      observe(0)
+      local cards, stable
+      for attempt=1,32 do
+        local delta
+        delta,cards=drag(-1)
+        if not delta then return nil,'无法核对杯赛列表向左滚动的距离' end
+        if math.abs(delta)<=3 then
+          if stable then break end
+          stable=true
+        else
+          stable=false
         end
+        if attempt==32 then return nil,'无法确认杯赛列表左端' end
       end
-      -- 先退回最左端：多余的拖动到边界就回弹，不会反向，也不会误进赛事。
-      for i = 1, 5 do drag(-950) end
-      sleep(800)
-      print('杯赛列表已回到最左端，卡片 '..seen())
-      align()
-      -- 中间不做逐格校正：单步位移 186 像素与卡距等长，不会累计偏差，只在收尾统一对齐。
-      for i = 2, target do drag(DRAG) end
-      sleep(1200)
-      print('杯赛列表已拖到第 '..target..' 位，卡片 '..seen())
-      align()
-      -- 拖动刚结束列表还在惯性滚动，这时点击会被游戏吞掉，先等它停稳。
-      sleep(1500)
-      -- 第一次点击只是把这张卡选中：左侧说明面板换成该赛事，卡下沿浮出「进入」。
-      tap(189, X0)
-      sleep(1800)
-      -- 「进入」按文字坐标点，比写死像素稳；找不到才退回实测的固定位置。
+      -- The selected card is slightly enlarged. Snap the estimated slot back to a
+      -- real card before tapping, and never substitute the last visible card.
+      local first = nearest(cards,151)
+      local x = (first and first.center or 151) + (target-1)*186
+      while x>1180 do
+        local delta
+        delta,cards=drag(1)
+        if not delta then return nil,'无法核对杯赛列表向右滚动的距离' end
+        x=x-delta
+        if delta<=3 then break end
+      end
+      local card = nearest(cards,x)
+      if not card then return nil,'当前列表未找到第 '..target..' 张赛事卡' end
+      local blocked = cupEntryGuard(card.center)
+      if blocked then return nil,nil,blocked end
+      print('杯赛第 '..target..' 张卡实际中心 '..card.center)
+      if not card.selected then tap(189,card.center);sleep(1);sleep(1500) end
       local picked = _soloEventUi()
+      if picked and picked.scene=='event' then return 'entered' end
       local enter
-      for _, word in ipairs((picked and picked.words) or {}) do
-        local label = tostring(word.text or ''):gsub('%s', '')
-        if label == '进入' and word.x and word.x < 300 then enter = word; break end
+      for _,word in ipairs((picked and picked.words) or {}) do
+        if tostring(word.text):gsub('%s','')=='进入' and word.x and word.y and word.y>570 and word.y<710 then
+          enter=word;break
+        end
       end
-      if enter and enter.y and enter.y < 719 then
-        tap(719 - math.floor(enter.y), math.floor(enter.x))
-        print('杯赛：已点击选中卡上的「进入」')
+      keepCapture();local selectedCards=_cupCards() or {};releaseCapture()
+      local selected=nearest(selectedCards,card.center)
+      if enter and math.abs(enter.x-card.center)<90 then
+        tap(719-math.floor(enter.y), math.floor(enter.x))
+      elseif selected and selected.selected then
+        tap(65,selected.center)
       else
-        tap(119, 110)
-        print('杯赛：未识别到「进入」按钮，按固定坐标点击')
+        return nil,'未确认第 '..target..' 张赛事卡的进入按钮'
       end
       sleep(2500)
       local scene = _soloEventUi()
@@ -2509,7 +2489,7 @@ function utils.chooseCup(num,wide,configuredOnly)
     keepCapture()
     local firstCard = (_cupCards() or {})[1]
     releaseCapture()
-    if not firstCard or firstCard.center > 210 then
+    if not _soloEventUi and (not firstCard or firstCard.center > 210) then
       for i = 1, 6 do
         swipe(199, 200, 199, 1000, 260)
       end
@@ -2519,7 +2499,7 @@ function utils.chooseCup(num,wide,configuredOnly)
     if not awaitCupList() then return 'cupListObscured' end
     -- 锚定第 1 张：只有它没被选中时才点，点已选中的卡会直接进入赛事。
     -- 读不到卡片清单（新版列表）时不锚定：这里的点击会直接进赛事。
-    if firstCard and not utils.cupSelectedAt(150) then
+    if not _soloEventUi and firstCard and not utils.cupSelectedAt(150) then
       tap(219, 150)
       sleep(1);sleep(1500)
       if not awaitCupList() then return 'cupListObscured' end
@@ -2530,8 +2510,9 @@ function utils.chooseCup(num,wide,configuredOnly)
     -- 逐张点选到配置位置。以前是按固定次数滑动再点固定坐标，滑动被遮罩吃掉
     -- 一部分位移时就整体少走（配置 13 实际停在 11）；首次没有参考图时这种错位
     -- 还会被当成「新杯赛」存成参考图，之后每轮都稳定错。
-    if num > 1 or not firstCard then
-      local center, why = stepToCup(num)
+    if _soloEventUi or num > 1 or not firstCard then
+      local center, why, blocked = stepToCup(num)
+      if blocked then return blocked end
       if not center then return unavailable(why) end
       if center == 'entered' then return 1 end
       xy = {100, center}
