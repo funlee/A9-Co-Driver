@@ -99,12 +99,12 @@ final class CupSelectionChecks {
         }
         for(int x=562;x<=717;x++)for(int y=654;y<=684;y++)spotlight[x*720+719-y]=0xffffe923;
         PixelFrame unlabeled=new PixelFrame(720,1280,spotlight);
-        if(CupCarousel.claimSpotlight(unlabeled)||CupCarousel.claimOnlyAt(unlabeled,639))
+        if(CupCarousel.claimSpotlight(unlabeled)||CupCarousel.claimButtonAt(unlabeled,639))
             throw new AssertionError("A gold card without a claim label cannot identify a reward");
         for(int x=626;x<=651;x++)for(int y=664;y<=678;y++)
             if(x%5<=2)spotlight[x*720+719-y]=0xffa47823;
         PixelFrame claim=new PixelFrame(720,1280,spotlight);
-        if(!CupCarousel.claimSpotlight(claim)||!CupCarousel.claimOnlyAt(claim,639)||CupCarousel.claimOnlyAt(claim,803))
+        if(!CupCarousel.claimSpotlight(claim)||!CupCarousel.claimButtonAt(claim,639)||CupCarousel.claimButtonAt(claim,803))
             throw new AssertionError("Claim spotlight applies only to the highlighted card");
         for(int x=881;x<=889;x++)for(int y=394;y<=438;y++)spotlight[x*720+719-y]=0;
         if(CupCarousel.claimSpotlight(new PixelFrame(720,1280,spotlight)))
@@ -144,9 +144,6 @@ final class CupSelectionChecks {
                 "function _cupCards()return {{center=155,selected=picked==1},{center=310,selected=picked==2},{center=465,selected=picked==3}}end;"+
                 "function tap(x,y)assert(not hint and y==465 and x==115);if picked==3 then entered=entered+1 end;picked=3 end;"+
                 "assert(utils.chooseCup('3',true)==1 and entered==1 and swipes>=7,'reward hint changed configured event number')",
-            "function _cupClaimState(x)return x==310 and 'claimOnly' or '' end;"+
-                "function _cupCards()return {{center=155},{center=310,selected=true}}end;"+
-                "function tap()error('must not enter a claim-only card')end;assert(utils.chooseCup('2',true)=='cupClaimOnly')",
             "assert(utils.chooseCup('0')=='cupPositionInvalid' and #taps==0 and removed==0,'zero position emits input')",
             "assert(utils.chooseCup('no')=='cupPositionInvalid' and #taps==0 and removed==0,'invalid text silently chooses position two')",
             "assert(utils.chooseCup('2.5')=='cupPositionInvalid' and #taps==0,'fractional position emits input')",
@@ -220,7 +217,7 @@ final class CupSelectionChecks {
         try(var input=CupSelectionChecks.class.getResourceAsStream("/daily-event-entry.lua")){
             dailyEntry=new String(Objects.requireNonNull(input).readAllBytes(),java.nio.charset.StandardCharsets.UTF_8);
         }
-        for(String scenario:List.of("delayed","retry","direct","covered-border","missing","unknown","stale","wrong-card")){
+        for(String scenario:List.of("delayed","retry","direct","covered-border","claim-button","missing","unknown","stale","wrong-card")){
             cleanCupCache();
             try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
                 for(String module:List.of("bootstrap","utilities","cup","workflows"))

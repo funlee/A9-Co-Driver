@@ -5,6 +5,7 @@ run.index=1
 run.data={['次数']='10',['杯赛位置']=scenario=='missing' and '8' or '2'}
 local frame,shift,picked,entries,afterEntry=0,0,1,0,0
 local inGarage=false
+local obscuredBorder=scenario=='covered-border' or scenario=='claim-button'
 local function cards()
   local visible={}
   for i=1,3 do visible[i]={center=151+(i-1)*186-shift,selected=i==picked} end
@@ -14,7 +15,7 @@ function keepCapture()end
 function releaseCapture()end
 function _cupCards()
   local visible=cards()
-  if scenario=='covered-border' and picked==2 then visible[2].selected=false end
+  if obscuredBorder and picked==2 then visible[2].selected=false end
   return visible
 end
 function _cupScrollDelta(direction)return direction and 0 or shift end
@@ -31,11 +32,12 @@ function _soloEventUi()
     if scenario=='delayed' and afterEntry==2 then return {scene='unknown',frameId=frame} end
   end
   local direct=scenario=='direct' and picked==2
-  if direct or (scenario=='covered-border' and entries==1) or (scenario=='delayed' and afterEntry>=4) or (scenario=='retry' and entries==2) then
+  if direct or (obscuredBorder and entries==1) or (scenario=='delayed' and afterEntry>=4) or (scenario=='retry' and entries==2) then
     return {scene='event',dailyLoot=true,frameId=frame,text='每日车辆战利品 单人奖励 俱乐部奖励 比赛',
         words={{text='比赛',x=1150,y=660}}}
   end
-  return {scene='cupList',frameId=frame,words={{text='进入',x=cards()[picked].center,y=655}}}
+  local label=scenario=='claim-button' and '领取' or '进入'
+  return {scene='cupList',frameId=frame,words={{text=label,x=cards()[picked].center,y=655}}}
 end
 function tap(x,y)
   if x==189 then

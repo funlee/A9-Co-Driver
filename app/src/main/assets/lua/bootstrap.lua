@@ -279,7 +279,6 @@ end
 local skipReasons={
   dailyQuietHours='每日战利品在 00:00–00:30 暂停执行',
   dailyExpired='赛事仅剩奖励页',
-  cupClaimOnly='配置位置仅可领取奖励，已保留奖励',
   cupListObscured='待领奖励提示持续遮挡赛事位置，已保留奖励',
   cupPositionUnavailable='无法定位配置的赛事位置，请检查每日赛事序号',
   cupEntryUnconfirmed='已点击赛事入口，但未能确认进入赛事详情',

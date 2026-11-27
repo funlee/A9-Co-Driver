@@ -153,8 +153,7 @@ public final class ModalPopup {
             return close == null ? Map.of() : Map.of("x", close[0], "y", close[1], "label", "每日目标关闭");
         }
         if (newcomerGift(textOnScreen)) return giftClaim(frame, words, false);
-        if (clubPage(textOnScreen, words)) return null;
-        if (panel == null) return null;
+        if (panel == null || clubPage(frame, textOnScreen, words)) return null;
         StringBuilder text = new StringBuilder();
         List<Map<String, Object>> later = new ArrayList<>();
         List<Map<String, Object>> next = new ArrayList<>();
@@ -195,13 +194,32 @@ public final class ModalPopup {
     }
 
     /** 车联赛事页由 club.lua 自己驱动，这里只负责识别并交还控制权。 */
-    private static boolean clubPage(String textOnScreen, List<?> words) {
+    private static boolean clubPage(PixelFrame frame, String textOnScreen, List<?> words) {
         if (clubPage(textOnScreen)) return true;
         int taskLabels = 0;
+        int left = 1280, right = -1;
         for (Object value : words) {
-            if (normalize(((Map<?, ?>) value).get("text").toString()).equals("任务")) taskLabels++;
+            Map<?, ?> word = (Map<?, ?>) value;
+            if (!normalize(word.get("text").toString()).equals("任务")) continue;
+            taskLabels++;
+            int x = ((Number) word.get("x")).intValue(), y = ((Number) word.get("y")).intValue();
+            // At some scroll positions only two chapter labels are fully visible.
+            // Both cards must retain their undimmed top and bottom borders.
+            if (y > 230 && y < 330 && chapterBorder(frame, x, 205, 240) && chapterBorder(frame, x, 652, 682)) {
+                left = Math.min(left, x);
+                right = Math.max(right, x);
+            }
         }
-        return taskLabels >= 3;
+        return taskLabels >= 3 || right - left >= 140;
+    }
+
+    private static boolean chapterBorder(PixelFrame frame, int center, int top, int bottom) {
+        for (int y = top; y <= bottom; y++) {
+            int hits = 0;
+            for (int x = center - 24; x <= center + 24; x += 4) if (white(pixel(frame, x, y))) hits++;
+            if (hits >= 10) return true;
+        }
+        return false;
     }
     /** The club event pages carry their own chapter list, so only their text identifies them. */
     public static boolean clubPage(String textOnScreen) {

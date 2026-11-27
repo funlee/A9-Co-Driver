@@ -7,8 +7,8 @@ android {
         applicationId 'dev.funlee.a9local'
         minSdk 26
         targetSdk 35
-        versionCode 145
-        versionName '1.1.0'
+        versionCode 146
+        versionName '1.1.1'
         testInstrumentationRunner 'dev.funlee.a9.RecoveryDeviceCheck'
     }
     // Optional local screenshots only. All runtime resources are in the repository.

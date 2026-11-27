@@ -538,6 +538,20 @@ final class OrchestrationRecoveryChecks {
             "function keepCapture()error('Special reward navigation must precede legacy actions')end",
             "function test()assert(run.project()==0 and completed==3 and data['特赛']==3 and continued==3 and selected==1);done=true end"));
         script(assets,List.of("utilities"),String.join("\n",
+            "data={['项目']='特殊赛事'};run={data={['特殊赛事阶段']='2',['特殊赛事用车']={1,2}}}",
+            "local scene,landing='car','car';local backs,continues,garageSelections=0,0,0;local result=1",
+            "function keepCapture()end;function cmpColorEx()return 0 end;function print()end",
+            "function _soloEventUi()return {scene=scene,stageLabel='阶段2',words={{text='继续',x=1100,y=650}}}end",
+            "function keyPress(key)assert(key=='back' and scene=='car');backs=backs+1;scene='missionRewards' end",
+            "function tap(x,y)assert(x==69 and y==1100 and scene=='missionRewards');continues=continues+1;scene=landing end",
+            "utils.chooseCarCup=function(cars)assert(scene=='cars' and #cars==2);garageSelections=garageSelections+1;scene='car';return true end",
+            "utils.startRace=function()assert(scene=='car');return result,_soloEventUi() end",
+            "function test()",
+            "utils.selectNextTaskCar=true;assert(utils.startConfiguredRace()==1 and backs==1 and continues==1 and garageSelections==0)",
+            "result='fuelEmpty';utils.selectNextTaskCar=true;assert(utils.startConfiguredRace()=='fuelEmpty' and backs==2 and continues==2)",
+            "result=1;landing='cars';utils.selectNextTaskCar=true;assert(utils.startConfiguredRace()==1 and garageSelections==1)",
+            "done=true end"));
+        script(assets,List.of("utilities"),String.join("\n",
             "data={};local backs=0;local last=-4000;local taps=0;function toast()end",
             "function _soloEventUi()return {scene=backs>=3 and 'home' or 'unknown'}end",
             "function keepCapture()end;function releaseCapture()end;function cmpColorEx()return 0 end",
@@ -551,7 +565,7 @@ final class OrchestrationRecoveryChecks {
             "function _soloEventUi()return {scene=phase,dailyLoot=phase=='event',text='每日车辆战利品'}end",
             "run.carDetails={['杯赛']=function()return 'fuelEmpty' end};cup={openRaceGarage=function()assert(run.dailyLoot);phase='car';return true end}",
             "function test()assert(run.project()=='fuelEmpty' and chosen);done=true end"));
-        for(String outcome:List.of("cupListObscured","cupPositionUnavailable","cupEntryUnconfirmed","cupPositionInvalid","cupClaimOnly","garageEmpty","noTicket","-1")){
+        for(String outcome:List.of("cupListObscured","cupPositionUnavailable","cupEntryUnconfirmed","cupPositionInvalid","garageEmpty","noTicket","-1")){
             script(assets,List.of("bootstrap"),String.join("\n",
                 "data={};local notices,finished=0,0;function localInit()end;function monitor()end;function print()end;function _hud()end",
                 "UIconfig={routeOnly='',ActiveProj={true,true},projects={{['项目']='杯赛',data={['次数']='3',['杯赛位置']='5'}},{['项目']='大师系列赛',data={['次数']='1'}}}}",

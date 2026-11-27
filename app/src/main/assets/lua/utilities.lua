@@ -270,7 +270,7 @@ function utils.continueSpecialMission(screen)
     local fresh=_soloEventUi()
     if fresh.scene=='car' or fresh.scene=='cars' or fresh.scene=='noTicket' or fresh.scene=='race'
         or fresh.scene~=screen.scene and utils.specialMissionContinue(fresh)
-        or spCup and spCup.tutorialButton(fresh) then return true end
+        or spCup and spCup.tutorialButton(fresh) then return true,fresh end
   until tickCount()>=deadline
   error('特殊赛事点击阶段后未确认切页，保留当前任务')
 end
@@ -1755,11 +1755,13 @@ function utils.taskCars()
   local key=data['项目']=='特殊赛事' and '特殊赛事用车' or data['项目']=='车联' and '车手联会用车' or '杯赛用车'
   return utils.defultCfg(run.data[key],{1})
 end
-function utils.backToGarage()
+function utils.backToGarage(allowSpecialStage)
   keyPress('back');sleep(1200)
   for i=1,20 do
     keepCapture()
-    if _soloEventUi and _soloEventUi().scene=='cars' then return end
+    local screen=_soloEventUi and _soloEventUi()
+    if screen and screen.scene=='cars' then return end
+    if allowSpecialStage and screen and utils.specialMissionContinue(screen) then return screen end
     if cmpColorEx('666|86|2E2E2E-101010,666|120|373737-101010,574|140|5400CF-201030',1)==1 or
         cmpColorEx('574|130|FFFFFF-101010,688|1076|6B6B6B-101010,692|1246|ECDF00-101010',1)==1 then return end
     sleep(300)
@@ -1944,23 +1946,40 @@ function utils.chooseCarCup(carList)
   end
   error('未能确认配置车辆可用，保留当前任务')
 end
+local function reselectConfiguredCar(cars)
+  local stage=utils.backToGarage(data['项目']=='特殊赛事')
+  if stage then
+    -- A fixed-vehicle stage returns to its rewards page when leaving car details.
+    local _,destination=utils.continueSpecialMission(stage)
+    if destination.scene=='car' then return nil,true end
+    if destination.scene=='noTicket' then return 'noTicket' end
+    if destination.scene~='cars' then return 2 end
+  end
+  return utils.chooseCarCup(cars)
+end
 function utils.startConfiguredRace()
   local cars=utils.taskCars()
   local verifyDaily=run.dailyLoot and _soloGarageUi and vehicleGrid
+  local directCar=false
   if (utils.selectNextTaskCar and #cars>1) or (verifyDaily and not utils.verifiedDailyCar) then
-    utils.backToGarage()
-    local selected=utils.chooseCarCup(cars)
-    if type(selected)=='string' then return selected end
+    local selected
+    selected,directCar=reselectConfiguredCar(cars)
+    if type(selected)=='string' or selected==2 then return selected end
   end
   utils.selectNextTaskCar=false
   for attempt=1,#cars+1 do
     local result,screen=utils.startRace()
     if result~='fuelEmpty' and result~='vehicleLocked' then return result end
     -- Some special events open the only vehicle directly, without a selection page.
-    if #cars==1 then print('配置车辆不可出赛，跳过本轮任务');return result end
-    if not screen or screen.scene~='cars' then utils.backToGarage() end
-    local selected=utils.chooseCarCup(cars)
-    if type(selected)=='string' then return selected end
+    if #cars==1 or directCar then print('配置车辆不可出赛，跳过本轮任务');return result end
+    local selected
+    if screen and screen.scene=='cars' then
+      selected=utils.chooseCarCup(cars)
+    else
+      selected,directCar=reselectConfiguredCar(cars)
+      if directCar then return result end
+    end
+    if type(selected)=='string' or selected==2 then return selected end
   end
   error('选车后燃油状态反复变化，保留当前任务')
 end
@@ -2161,10 +2180,10 @@ local function scrollCupCarouselToEnd(leftwards)
   return previous, false
 end
 -- The spotlight dims the other cards. Count positions only after the carousel is readable.
-local function cupClaimState(center)
+local function cupClaimState()
   if not _cupClaimState then return '' end
   keepCapture()
-  local state=_cupClaimState(center)
+  local state=_cupClaimState()
   releaseCapture()
   return state
 end
@@ -2173,13 +2192,6 @@ local function awaitCupList()
     if cupClaimState()~='spotlight' then return true end
     sleep(400)
   end
-end
-local function cupEntryGuard(center,useCurrentFrame)
-  local state
-  if useCurrentFrame then state=_cupClaimState and _cupClaimState(center)
-  else state=cupClaimState(center) end
-  if state=='claimOnly' then return 'cupClaimOnly' end
-  if state=='spotlight' then return 'cupListObscured' end
 end
 -- The last drag measured the target on a known list frame. Read the highlight,
 -- entry button and scroll displacement from the same new frame as the OCR.
@@ -2200,7 +2212,8 @@ local function selectedCupEntry(screen,card,allowBorder)
   -- match the button itself to the tracked position, not to a neighboring card.
   local x=center or expected
   local radius=center and 85 or 54
-  local button=findUiWord(screen,{['进入']=true},x-radius,x+radius,570,710)
+  -- A pending reward can label the same event entrance "领取" while races are still available.
+  local button=findUiWord(screen,{['进入']=true,['领取']=true},x-radius,x+radius,570,710)
   if button then return center or button.x,button end
   if list and allowBorder then return center end
 end
@@ -2232,8 +2245,7 @@ local function enterDailyEventCard(position,card)
         center,button=selectedCupEntry(screen,card,taps==0)
       end
       if center and previousCenter and math.abs(center-previousCenter)<=3 then
-        local blocked=cupEntryGuard(center,true)
-        if blocked then return nil,nil,blocked end
+        if _cupClaimState and _cupClaimState()=='spotlight' then return nil,nil,'cupListObscured' end
         if button then tapUiWord(button) else tap(65,center) end
         taps=taps+1
         lastTap=tickCount()
@@ -2326,8 +2338,7 @@ function utils.chooseCup(num,wide,configuredOnly)
       center=waitWideCupSelected(nextCard)
       if not center then return unavailable('无法确认已选中杯赛位置 '..step) end
     end
-    local blocked=cupEntryGuard(center)
-    if blocked then return blocked end
+    if cupClaimState()=='spotlight' then return 'cupListObscured' end
     tap(115,center)
     return 1
   end
@@ -2490,8 +2501,7 @@ function utils.chooseCup(num,wide,configuredOnly)
       end
       local card = nearest(cards,x)
       if not card then return nil,'当前列表未找到第 '..target..' 张赛事卡' end
-      local blocked = cupEntryGuard(card.center)
-      if blocked then return nil,nil,blocked end
+      if cupClaimState()=='spotlight' then return nil,nil,'cupListObscured' end
       print('杯赛第 '..target..' 张卡实际中心 '..card.center)
       return enterDailyEventCard(target,card)
     end
@@ -2597,8 +2607,7 @@ function utils.chooseCup(num,wide,configuredOnly)
         if not visible.selected then tap(100,visible.center);sleep(1);sleep(1000) end
         local center=waitCupFromRight(abs,target)
         if center then
-          local blocked=cupEntryGuard(center)
-          if blocked then return blocked end
+          if cupClaimState()=='spotlight' then return 'cupListObscured' end
           tap(100,center);return 1
         end
         -- Auto-centering may have scrolled the rightmost card offscreen. Restore
@@ -2657,8 +2666,7 @@ function utils.chooseCup(num,wide,configuredOnly)
     for _, card in ipairs(cards) do if card.selected then selected = card;break end end
     if not selected then return unavailable('无法确认已选中杯赛位置 '..num) end
     if wide then
-      local blocked=cupEntryGuard(selected.center)
-      if blocked then return blocked end
+      if cupClaimState()=='spotlight' then return 'cupListObscured' end
       tap(100,selected.center);return 1
     end
     xy = {100, selected.center}
@@ -2668,8 +2676,7 @@ function utils.chooseCup(num,wide,configuredOnly)
     sleep(1);sleep(2000)
   end
   if not utils.cupSelectedAt(xy[2]) then return unavailable('无法确认已选中杯赛位置 '..num..'，未进入赛事') end
-  local blocked=cupEntryGuard(xy[2])
-  if blocked then return blocked end
+  if cupClaimState()=='spotlight' then return 'cupListObscured' end
   if configuredOnly then tap(xy[1],xy[2]);return 1 end
   local res = {-1, -1, -1, -1}
   if utils.fileExist(cupAddr) then res = utils.findCup(cupAddr) end

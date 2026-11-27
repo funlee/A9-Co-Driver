@@ -172,7 +172,7 @@ public final class CupCarousel {
                 int width=x-firstRail;
                 if(width<16)continue;
                 int center=(firstRail+x)/2;
-                if(width>=380&&width<=665&&claimOnlyAt(frame,center)
+                if(width>=380&&width<=665&&claimButtonAt(frame,center)
                         &&whiteCaption(frame,firstRail+32)&&whiteCaption(frame,x-32))return true;
             }
             firstRail=x;
@@ -189,7 +189,7 @@ public final class CupCarousel {
     }
 
     /** Bottom yellow strip with a centered two-character label, on an already selected event. */
-    public static boolean claimOnlyAt(PixelFrame frame,int center){
+    static boolean claimButtonAt(PixelFrame frame,int center){
         if(frame.width!=720||frame.height!=1280||center<65||center>=1215)return false;
         for(int x=center-54;x<=center+54;x+=108){
             if(!claimGold(frame.pixel(719-658,x))||!claimGold(frame.pixel(719-680,x))

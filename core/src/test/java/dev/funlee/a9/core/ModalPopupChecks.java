@@ -152,6 +152,18 @@ count+=5;
         expect(action(store, clubRows) == null, "Club task rows belong to the club workflow, not a dialog");
         count += 2;
 
+        int[] scrolledClub = panel(199, 57, 1120, 667, 0x915032);
+        var visibleChapters = List.of(word("任务", 325, 300), word("任務", 793, 300));
+        for (int y : new int[]{218, 667}) {
+            fill(scrolledClub, 230, y, 660, y, 0xffffff);
+            fill(scrolledClub, 688, y, 1118, y, 0xffffff);
+        }
+        expect(action(scrolledClub, List.of()).isEmpty(), "The scrolled chapter geometry still resembles a modal");
+        expect(action(scrolledClub, visibleChapters) == null, "Two undimmed chapter cards remain a valid club page");
+        fill(scrolledClub, 688, 667, 1118, 667, 0x777777);
+        expect(action(scrolledClub, visibleChapters).isEmpty(), "Dimmed chapter borders cannot dismiss a covering dialog");
+        count += 3;
+
         var storeWords = List.of(word("充值活动", 128, 84), word("高级通行证", 139, 157),
                 word("限时钜惠", 128, 304), word("卡牌包", 116, 670),
                 word("卡牌包详情", 438, 164), word("开始", 468, 596), word("免费", 764, 596));
