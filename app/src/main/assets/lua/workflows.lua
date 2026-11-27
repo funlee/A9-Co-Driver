@@ -16,9 +16,6 @@ run.dataList = {
   end,
   ["车联"] = function()
     data["车联"] = data["车联"] + 1
-  end,
-  ["每日战利品"] = function()
-    data["杯赛"] = data["杯赛"] + 1
   end
 }
 function run.main()
@@ -48,17 +45,14 @@ function run.project()
   end
   local ret = 0
   local times = tonumber(run.data["次数"]) or 1
-  local daily=data['项目']=='每日战利品'
+  local cupTask=data['项目']=='杯赛'
   for i = 1, times do
-    if daily then
-      local reason=dailyCup.skipReason()
-      if reason~='' then return reason end
-    end
     data["心跳时间"] = os.time()
     -- Reward menus must not be mistaken for a race or expand the race panel.
     if _sessionLegacyPrepare then _sessionLegacyPrepare() end
     data["心跳时间"] = os.time()
     local soloRaceSeen=false
+    local clubRewardChecked=false
     local homeStreak=0
     utils.soloStartAt=nil;run.challengeConfirmed=false
     ::observeRace::
@@ -73,7 +67,17 @@ function run.project()
         dailyCup.confirmChallenge(screen)
         if tickCount()-utils.soloStartAt>=120000 then error('已点击开始，但未确认进入比赛，保留当前任务') end
       end
-      -- Cup tasks run the configured position without checking its title.
+      if cupTask and screen then
+        if scene=='home' or scene=='cupList' or scene=='wideCupList' or scene=='cupClaimSpotlight' then
+          run.dailyLoot=false
+        elseif screen.dailyLoot then
+          run.dailyLoot=true
+        end
+        if run.dailyLoot and not soloRaceSeen and not utils.soloStartAt and scene~='race' then
+          local reason=dailyCup.skipReason()
+          if reason~='' then return reason end
+        end
+      end
       local tutorial=data['项目']=='特殊赛事' and spCup and spCup.tutorialButton and spCup.tutorialButton(screen)
       if scene=='race' then soloRaceSeen=true;utils.soloStartAt=nil end
       local homeHandler=run.homeEntries and run.homeEntries[data['项目']]
@@ -86,17 +90,16 @@ function run.project()
         if ret~=nil then goto lbl_129 end
       elseif screen and screen.scene=='exitGame' then
         utils.backToMain()
-      elseif (scene=='cupList' or scene=='wideCupList' or scene=='cupClaimSpotlight') and
-          (data['项目']=='每日战利品' or data['项目']=='杯赛') then
+      elseif cupTask and (scene=='cupList' or scene=='wideCupList' or scene=='cupClaimSpotlight') then
         data['信息']='选择配置的赛事'
-        local chosen=utils.chooseCup(run.data['杯赛位置'] or '2',scene=='wideCupList' or screen.wide,daily or scene=='cupClaimSpotlight')
+        local chosen=utils.chooseCup(run.data['杯赛位置'] or '2',scene=='wideCupList' or screen.wide,true)
         if type(chosen)=='string' or chosen==0 then return chosen==0 and -1 or chosen end
         sleep(2500)
       elseif screen and screen.scene=='profileUnlock' and dailyCup then
         dailyCup.dismissProfile(screen)
       elseif screen and screen.scene=='clubRewards' and dailyCup then
         dailyCup.returnToSolo(screen)
-      elseif daily and scene=='dailyRewardOnly' then
+      elseif cupTask and scene=='dailyRewardOnly' then
         sleep(1);sleep(2000)
         local fresh=_soloEventUi()
         if fresh.scene=='dailyRewardOnly' and fresh.frameId~=screen.frameId then return 'dailyExpired' end
@@ -115,16 +118,15 @@ function run.project()
       elseif scene=='car' then
         ret=carHandler()
         if ret~=nil then goto lbl_129 end
-      elseif screen and screen.scene=='cars' and data['项目']=='杯赛' then
+      elseif cupTask and scene=='cars' then
         ret=cup.operation[4][2]()
         if ret~=nil then goto lbl_129 end
-      elseif daily and scene=='cars' then
-        ret=dailyCup.operation[4][2]()
-        if ret~=nil then goto lbl_129 end
-      elseif screen and screen.scene=='event' and data['项目']=='杯赛' and cup.openRaceGarage(screen) then
+      elseif cupTask and screen and screen.dailyLoot and not clubRewardChecked
+          and run.data['是否领取俱乐部奖励']=='0' and (scene=='event' or scene=='unknown') then
+        clubRewardChecked=true
+        utils.dailyPrize()
+      elseif cupTask and scene=='event' and cup.openRaceGarage(screen) then
         -- The verified button has been pressed. Read the new screen next.
-      elseif daily and scene=='event' and dailyCup.openRaceGarage(screen) then
-        -- On wide displays the older event pattern may miss the verified Race button.
       elseif tutorial then
         ret=spCup.operation[1][2](tutorial)
         if ret~=nil then goto lbl_129 end
@@ -171,7 +173,7 @@ function run.project()
     end
     ::lbl_129::
     if ret == -1 then
-      if (daily or data['项目']=='杯赛') and not data['超时状态'] then return ret end
+      if cupTask and not data['超时状态'] then return ret end
       error(data["项目"].."流程未确认完成，保留当前任务，禁止切换到下一赛事")
     elseif type(ret) == "string" then
       return ret
@@ -187,6 +189,7 @@ function run.project()
   return ret
 end
 function run.nitro()
+  run.dailyLoot=false
   utils.selectNextTaskCar=false
   utils.verifiedDailyCar=false
   data["氮气漂流"] = false

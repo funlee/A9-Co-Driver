@@ -9,7 +9,7 @@ import dev.funlee.a9.core.*;
 
 public final class LocalStore {
     static final int DEFAULT_RACE_TIMEOUT_SECONDS = 480;
-    public static final String[] MODES={"多人上","多人下","杯赛","特殊赛事","车联","每日战利品"};
+    public static final String[] MODES={"多人上","多人下","杯赛","特殊赛事","车联"};
     private static final String[] RETIRED_GLOBAL_OPTIONS={
         "coinAD","cupTicketAD","spCupTicketAD","dsTicketAD","onceAD","dsCupAD","AdTime","coinADNum",
         "coinPkg","Coupons","clearPrize","spPrize","spPos"
@@ -73,6 +73,10 @@ public final class LocalStore {
         JSONArray tasks=config.optJSONArray("projects");
         if(tasks!=null)for(int i=0;i<tasks.length();i++){
             JSONObject task=tasks.getJSONObject(i);
+            if("每日战利品".equals(task.optString("项目"))) {
+                task.put("项目","杯赛");
+                changed=true;
+            }
             changed|=removeOptions(task.optJSONObject("data"),RETIRED_PROJECT_OPTIONS);
             if("杯赛".equals(task.optString("项目"))&&task.optJSONObject("data")!=null)
                 changed|=task.getJSONObject("data").remove("每日战利品")!=null;
@@ -89,7 +93,7 @@ public final class LocalStore {
         return removeRetiredProjects(config)||changed;
     }
     public static boolean hasTaskRoute(String mode) {
-        return "每日战利品".equals(mode)||"杯赛".equals(mode)||"特殊赛事".equals(mode);
+        return "杯赛".equals(mode)||"特殊赛事".equals(mode);
     }
     public static boolean supportsAutoRoute(String mode) {return hasTaskRoute(mode);}
     private boolean migrateTaskRoute(String mode,JSONObject data)throws JSONException {

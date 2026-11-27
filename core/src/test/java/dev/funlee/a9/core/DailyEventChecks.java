@@ -25,6 +25,10 @@ final class DailyEventChecks {
             {"比赛奖励 你的用时 总金币 3200 +100 继续","rewards"},
             {"比賽奖励 你的用时00:32:881 总全币 G4,200 +165 继续","rewards"},
             {"你的用时 继续","unknown"},{"限时赛事 购买优惠 立即购买","unknown"}};
+        if(!DailyEventUi.dailyLootLobby("每日車輛戰利品 單人獎勵 比賽")
+                ||DailyEventUi.dailyLootLobby("每日车辆战利品 每日赛事 探索赛事")
+                ||DailyEventUi.dailyLootLobby("巅峰对决 单人奖励 比赛"))
+            throw new AssertionError("Daily loot detection must distinguish the selected lobby from its list and ordinary cups");
         for(String[] c:scenes)if(!DailyEventUi.classify(c[0]).equals(c[1]))throw new AssertionError(c[0]);
         if(RaceRewards.page("总全币 4,200 继续")||!RaceRewards.page("比賽奖励 你的用时00:32:881 总全币 G4,200 +165 继续"))
             throw new AssertionError("Accept the observed OCR error in the total label without weakening its boundaries");
@@ -76,11 +80,16 @@ final class DailyEventChecks {
             "screens={{scene='cards',words={}},{scene='unknown',closeX={x=1115,y=140},words={{text='购买赛季通行证',x=900,y=550}}},{scene='event'}};tap=function(x,y)assert(x==579 and y==1115);taps=taps+1 end;assert(dailyCup.settle()==0 and taps==1)",
             "screens={{scene='vehicleUnlock',closeX={x=1115,y=140},words={}}};assert(not pcall(dailyCup.settle));assert(taps==0)",
             "screens={{scene='vehicleUnlock',unlockLater={x=438,y=645},words={{text='升星',x=841,y=645}}},{scene='event'}};tap=function(x,y)assert(x==74 and y==438,'Wrong star-up action');taps=taps+1 end;assert(dailyCup.settle()==0 and taps==1)",
-            "UIconfig={cupTicketAD=''};utils.defultCfg=function(v,d)return v or d end;function keyPress()end;function toast()end;assert(dailyCup.operation[6][2]()=='noTicket')",
-            "screens={{scene='results',"+continueButton+"},{scene='cards',"+continueButton+"},{scene='conversion',words={{text='确定',x=1100,y=650}}},{scene='event'},{scene='event'}};assert(dailyCup.operation[8][2]()==0);assert(taps==3 and rewards==0)",
-            "screens={{scene='rewards',rewardCanContinue=true,"+continueButton+"},{scene='event'},{scene='event'}};assert(dailyCup.settle()==0);assert(rewards==0 and taps==1)",
-            "screens={{scene='rewards',rewardCanContinue=true,words={{text='观看广告',x=1100,y=650},{text='错失机会',x=1050,y=660}}},{scene='event'},{scene='event'}};tap=function(x,y)assert(y==1050,'ad clicked');taps=taps+1 end;assert(dailyCup.settle()==0);assert(taps==1 and rewards==0)",
-            "screens={};for i=1,12 do screens[#screens+1]={scene='rewards',rewardCanContinue=false} end;for i=1,3 do screens[#screens+1]={scene='rewards',rewardCanContinue=true,words={}} end;screens[#screens+1]={scene='rewards',rewardCanContinue=true,"+continueButton+"};screens[#screens+1]={scene='event'};screens[#screens+1]={scene='event'};assert(dailyCup.settle()==0);assert(taps==1 and rewards==0)",
+            "UIconfig={cupTicketAD=''};utils.defultCfg=function(v,d)return v or d end;function keyPress()end;function toast()end;assert(cup.operation[6][2]()=='noTicket')",
+            "screens={{scene='results',"+continueButton+"},{scene='cards',"+continueButton+"},{scene='conversion',words={{text='确定',x=1100,y=650}}},{scene='event'},{scene='event'}};assert(cup.operation[8][2]()==0);assert(taps==3 and rewards==0)",
+            "screens={{scene='rewards',rewardCanContinue=true,rewardExitButton={label='继续',x=1100,y=650}},{scene='event'}};assert(dailyCup.settle()==0);assert(rewards==0 and taps==1)",
+            "screens={{scene='rewards',rewardCanContinue=true,rewardExitButton={label='错失机会',x=1050,y=660},words={{text='观看广告',x=1100,y=650}}},{scene='event'}};tap=function(x,y)assert(y==1050,'ad clicked');taps=taps+1 end;assert(dailyCup.settle()==0);assert(taps==1 and rewards==0)",
+            "screens={};for i=1,12 do screens[#screens+1]={scene='rewards',rewardCanContinue=false} end;for i=1,3 do screens[#screens+1]={scene='rewards',rewardCanContinue=true,words={{text='错失机会',x=1050,y=660}}} end;screens[#screens+1]={scene='rewards',rewardCanContinue=true,rewardExitButton={label='继续',x=1100,y=650}};screens[#screens+1]={scene='event'};assert(dailyCup.settle()==0);assert(taps==1 and rewards==0)",
+            "local next={scene='rewards',frameId=1000,rewardCanContinue=true,rewardExitButton={label='继续',x=1100,y=650}};"+
+                "local skip={scene='rewards',frameId=1300,rewardCanContinue=true,rewardExitButton={label='错失机会',x=1050,y=660}};"+
+                "local reads=0;local frames={next,skip,skip,{scene='event'}};"+
+                "tap=function(x,y)taps=taps+1;assert(reads==taps and y==(taps==1 and 1100 or 1050),'Tap the freshly confirmed skip immediately, then ignore the same frame')end;"+
+                "assert(dailyCup.settle('杯赛',function()reads=reads+1;return frames[math.min(reads,#frames)] end)==0 and taps==2)",
             "screens={{scene='cards',"+continueButton+"},{scene='event'},{scene='unknown'},{scene='event'},{scene='event'}};assert(dailyCup.settle()==0);assert(taps==1)",
             "for _,hint in ipairs({'点击任意区域可跳过','点击 任意位置 跳过'}) do "+
                 "local opening={scene='cards',frameId=1000,words={{text=hint,x=640,y=665}}};"+
@@ -96,8 +105,8 @@ final class DailyEventChecks {
                 "{scene='cards',frameId=2200,"+continueButton+"},{scene='event'}};"+
                 "tap=function(x,y)assert(y==1100);taps=taps+1 end;assert(dailyCup.settle('特殊赛事')==0 and taps==1)",
             "screens={{scene='results',"+continueButton+"},{scene='unknown',frameId=1000},{scene='unknown',frameId=2000},{scene='unknown',frameId=3000}};"+
-                "function cmpColorEx(pattern)assert(pattern==dailyCup.operation[3][1]);return 1 end;assert(dailyCup.settle()==0 and taps==1)",
-            "screens={{scene='unknown'}};function cmpColorEx(pattern)assert(pattern==dailyCup.operation[3][1]);return 1 end;assert(not pcall(dailyCup.settle) and taps==0,'A lobby color alone is not a completed race')",
+                "function cmpColorEx(pattern)assert(pattern==cup.operation[3][1]);return 1 end;assert(dailyCup.settle()==0 and taps==1)",
+            "screens={{scene='unknown'}};function cmpColorEx(pattern)assert(pattern==cup.operation[3][1]);return 1 end;assert(not pcall(dailyCup.settle) and taps==0,'A lobby color alone is not a completed race')",
             "screens={{scene='unknown',closeX={x=1115,y=140}}};local probes=0;function cmpColorEx()probes=probes+1;return 1 end;"+
                 "local ok,reason=pcall(dailyCup.settle);assert(not ok and probes==0 and tostring(reason):find('未确认返回赛事'),'Popup background must not confirm the lobby')",
             "screens={{scene='event'}};assert(not pcall(dailyCup.settle));assert(taps==0)",
@@ -109,6 +118,7 @@ final class DailyEventChecks {
         );
         for(String script:cases)try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
             lua.load("setup",setup);lua.load("daily",Files.readString(assets.resolve("lua/daily.lua")));
+            lua.load("cup",Files.readString(assets.resolve("lua/cup.lua")));
             lua.load("case","function test()"+script+" end");lua.start("test");boolean alive=true;
             for(int i=0;i<400&&alive;i++)alive=lua.step(i*1000L);
             if(alive)throw new AssertionError("Daily flow did not terminate");

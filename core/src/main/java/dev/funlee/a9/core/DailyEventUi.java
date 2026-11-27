@@ -50,6 +50,13 @@ public final class DailyEventUi {
                 .replace('證','证').replace('現','现');
         return normalized.contains("级别")&&normalized.contains("现已解锁")&&normalized.contains("购买赛季通行证");
     }
+    private static boolean dailyLootTitle(String text) {
+        return text.replace('車','车').replace('輛','辆').replace('戰','战').contains("每日车辆战利品");
+    }
+    public static boolean dailyLootLobby(String text) {
+        String normalized=MapMatcher.normalize(text).replace('單','单').replace('獎','奖').replace('勵','励');
+        return dailyLootTitle(normalized)&&normalized.contains("单人奖励");
+    }
     public static String classify(String text) {
         String t=MapMatcher.normalize(text).replace('賽','赛').replace('兌','兑');
         if(VehicleUnlockGuard.prompt(text))return "vehicleUnlock";
@@ -65,12 +72,12 @@ public final class DailyEventUi {
         if(t.contains("红币")&&t.contains("将被兑换为红币"))return "conversion";
         if((t.contains("恭喜")&&t.contains("这些奖励"))||
                 (t.contains("名人堂")&&t.contains("继续")&&!t.contains("你的用时")&&!t.contains("比赛奖励")))return "cards";
-        if(t.contains("每日车辆战利品")&&t.contains("单人奖励")&&t.contains("比赛")&&
+        if(dailyLootLobby(t)&&t.contains("比赛")&&
                 (t.contains("最佳用时纪录")||t.contains("俱乐部奖励")))return "event";
-        if(t.contains("每日车辆战利品")&&t.contains("单人奖励")&&t.contains("俱乐部奖励")&&
+        if(dailyLootLobby(t)&&t.contains("俱乐部奖励")&&
                 !t.contains("继续")&&!t.contains("比赛")&&
                 (t.contains("俱乐部成员")||t.contains("已领取")))return "clubRewards";
-        if(t.contains("每日车辆战利品")&&t.contains("限时")&&t.contains("赛事")&&!t.contains("单人奖励"))return "loading";
+        if(dailyLootTitle(t)&&t.contains("限时")&&t.contains("赛事")&&!t.contains("单人奖励"))return "loading";
         return "unknown";
     }
     /** Cup/special result pages share the solo reward controls, but not the daily lobby title. */
@@ -116,7 +123,7 @@ public final class DailyEventUi {
     /** An expired daily card can still open its reward tabs without offering a race. */
     public static boolean rewardOnly(String text, List<?> words, PixelFrame frame) {
         String normalized=MapMatcher.normalize(text);
-        if(!normalized.contains("每日车辆战利品")||!normalized.contains("单人奖励")||
+        if(!dailyLootLobby(normalized)||
                 !normalized.contains("俱乐部奖励")||!normalized.contains("最佳用时纪录"))return false;
         for(Object value:words){
             Map<?,?> word=(Map<?,?>)value;

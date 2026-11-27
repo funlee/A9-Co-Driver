@@ -58,7 +58,7 @@ final class RewardChecks {
         for(int scenario=0;scenario<7;scenario++)workflow(assets,scenario);
         try(LuaRuntime lua=new LuaRuntime((name,l)->0,List.of())){
             lua.load("workflows",Files.readString(assets.resolve("lua/workflows.lua")));
-            lua.load("counter-check","data={['杯赛']=0,['特赛']=0,['车联']=0};function test()run.dataList['杯赛']();run.dataList['每日战利品']();run.dataList['特殊赛事']();run.dataList['车联']();assert(data['杯赛']==2 and data['特赛']==1 and data['车联']==1 and run.dataList['生涯']==nil)end");
+            lua.load("counter-check","data={['杯赛']=0,['特赛']=0,['车联']=0};function test()run.dataList['杯赛']();run.dataList['特殊赛事']();run.dataList['车联']();assert(data['杯赛']==1 and run.dataList['每日战利品']==nil and data['特赛']==1 and data['车联']==1 and run.dataList['生涯']==nil)end");
             lua.start("test");lua.step(0);
         }
         count++;

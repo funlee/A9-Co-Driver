@@ -18,15 +18,21 @@ final class DailyScreenshotCheck {
             for(String scene:List.of("loading","results","cards","conversion","event","rewards","rewards-live")){
                 Bitmap b=BitmapFactory.decodeStream(test.getContext().getAssets().open("daily-"+scene+".png"));
                 try{
-                    String text=Tasks.await(recognizer.process(InputImage.fromBitmap(b,0)),12,TimeUnit.SECONDS).getText();
+                    Text full=Tasks.await(recognizer.process(InputImage.fromBitmap(b,0)),12,TimeUnit.SECONDS);
+                    String text=full.getText();
                     if(!scene.replace("-live","").equals(DailyEventUi.classify(text)))throw new AssertionError(scene+": "+text);
+                    if(scene.equals("event")&&!DailyEventUi.dailyLootLobby(text))
+                        throw new AssertionError("Daily loot lobby not detected: "+text);
                     if(scene.startsWith("rewards")){
-                        // Earnings OCR was removed: the replay only needs the scene label and the safe ad exit.
-                        Text full=Tasks.await(recognizer.process(InputImage.fromBitmap(b,0)),12,TimeUnit.SECONDS);
-                        boolean exit=false;for(Text.TextBlock block:full.getTextBlocks())for(Text.Line line:block.getLines()){
-                            Rect bounds=line.getBoundingBox();if(bounds!=null&&DailyEventUi.rewardExit(line.getText(),bounds.centerX(),bounds.centerY()))exit=true;
-                        }
-                        if(!exit)throw new AssertionError("Missing safe ad exit");report.putString("rewards","ad offer 9600 excluded");
+                        Matrix rotation=new Matrix();rotation.postRotate(90);
+                        Bitmap side=Bitmap.createBitmap(b,0,0,b.getWidth(),b.getHeight(),rotation,false);
+                        int[] pixels=new int[side.getWidth()*side.getHeight()];
+                        side.getPixels(pixels,0,side.getWidth(),0,0,side.getWidth(),side.getHeight());
+                        PixelFrame frame=new PixelFrame(side.getWidth(),side.getHeight(),pixels);
+                        side.recycle();
+                        Map<String,Object> exit=RewardOcr.exitButton(full,frame);
+                        if(!"错失机会".equals(exit.get("label")))throw new AssertionError("Missing enabled ad exit: "+exit);
+                        report.putString("rewards","enabled 错失机会 recognized while 观看广告 was visible");
                     }
                     if(scene.equals("loading")){
                         Bitmap crop=Bitmap.createBitmap(b,405,280,446,61),scaled=Bitmap.createScaledBitmap(crop,1338,183,true);

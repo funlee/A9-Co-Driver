@@ -199,6 +199,12 @@
         "降序",
         "星级"
       ]
+    },
+    {
+      "key": "是否领取俱乐部奖励",
+      "type": "CheckBox",
+      "value": "",
+      "options": []
     }
   ],
   "特殊赛事": [
@@ -332,77 +338,6 @@
       "options": [
         "最低难度",
         "最高难度"
-      ]
-    },
-    {
-      "key": "选车筛选",
-      "type": "CheckBoxGroup",
-      "value": "",
-      "options": [
-        "已拥有",
-        "性能分",
-        "降序",
-        "星级"
-      ]
-    }
-  ],
-  "每日战利品": [
-    {
-      "key": "是否领取俱乐部奖励",
-      "type": "CheckBox",
-      "value": "",
-      "options": []
-    },
-    {
-      "key": "项目名称",
-      "type": "EditText",
-      "value": "每日战利品",
-      "options": []
-    },
-    {
-      "key": "次数",
-      "type": "EditText",
-      "value": "1",
-      "options": []
-    },
-    {
-      "key": "杯赛位置",
-      "type": "EditText",
-      "value": "2",
-      "options": []
-    },
-    {
-      "key": "路线来源",
-      "type": "TaskRoute",
-      "value": "2",
-      "options": [
-        "自动识别地图",
-        "选择已配置地图",
-        "自定义跑法代码"
-      ]
-    },
-    {
-      "key": "杯赛用车",
-      "type": "EditText",
-      "value": "1,2,3,4,5,6",
-      "options": []
-    },
-    {
-      "key": "用车模式",
-      "type": "RadioGroup",
-      "value": "0",
-      "options": [
-        "每次用一辆",
-        "每辆用一次"
-      ]
-    },
-    {
-      "key": "选车方式",
-      "type": "RadioGroup",
-      "value": "0",
-      "options": [
-        "滑动选车",
-        "点击选车"
       ]
     },
     {

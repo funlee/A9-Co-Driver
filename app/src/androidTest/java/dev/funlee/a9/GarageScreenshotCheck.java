@@ -65,7 +65,7 @@ public final class GarageScreenshotCheck extends Instrumentation {
                     LocalStore store=new LocalStore(getTargetContext());lua.set("garage",garage);
                     lua.load("utilities",store.asset("lua/utilities.lua"));
                     lua.load("grid",store.asset("lua/multiplayer_current.lua"));
-                    lua.load("replay","data={['项目']='每日战利品',['用车次数']={}};run={data={['选车筛选']='0,1,2'}};local frame=0;"+
+                    lua.load("replay","data={['项目']='杯赛',['用车次数']={}};run={dailyLoot=true,data={['选车筛选']='0,1,2'}};local frame=0;"+
                             "utils.configureGarageFilter=function()return true end;function print()end;"+
                             "function _soloGarageUi(fast)assert(not fast);frame=frame+1;return {scene='unknown',focusedGarage=true,frameId=frame,garageEmpty=true,garage=garage}end;"+
                             "function test()assert(utils.chooseCarCup({1})=='garageEmpty' and not next(data['用车次数']));done=true end");
@@ -134,7 +134,7 @@ public final class GarageScreenshotCheck extends Instrumentation {
                     lua.load("utilities",store.asset("lua/utilities.lua"));
                     lua.load("grid",store.asset("lua/multiplayer_current.lua"));
                     lua.set("garage",garage);lua.set("index",index);
-                    lua.load("replay","data={['项目']='每日战利品',['用车次数']={}};run={data={}};local frame=0;"+
+                    lua.load("replay","data={['项目']='杯赛',['用车次数']={}};run={dailyLoot=true,data={}};local frame=0;"+
                             "function _soloGarageUi(fast)frame=frame+1;return {scene='cars',frameId=frame,gridOnly=fast,garage=garage}end;"+
                             "function test()assert(utils.chooseCarCup({index})=='fuelEmpty');done=true end");
                     lua.start("test");for(int i=0;i<100&&lua.step(i*1000L);i++){}

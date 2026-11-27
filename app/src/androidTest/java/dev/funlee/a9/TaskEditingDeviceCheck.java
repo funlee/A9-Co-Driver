@@ -20,8 +20,10 @@ final class TaskEditingDeviceCheck {
     private Context isolated;
     private UiAutomation ui;
     private TaskEditingDeviceCheck(Instrumentation test){this.test=test;}
-    static void run(Instrumentation test,Bundle report,boolean garageSortOnly)throws Exception {new TaskEditingDeviceCheck(test).run(report,garageSortOnly);}
-    private void run(Bundle report,boolean garageSortOnly)throws Exception {
+    static void run(Instrumentation test,Bundle report,String mode)throws Exception {
+        new TaskEditingDeviceCheck(test).run(report,mode);
+    }
+    private void run(Bundle report,String mode)throws Exception {
         Context base=test.getTargetContext();String preferences="task-editing-check-"+UUID.randomUUID();
         isolated=new ContextWrapper(base){
             @Override public Context getApplicationContext(){return this;}
@@ -29,14 +31,20 @@ final class TaskEditingDeviceCheck {
         };
         try {
             store=new LocalStore(isolated);
-            if(garageSortOnly){
+            if(mode.equals("cup-editor")){
+                launchEditor(base);
+                checkCupRewardForm();
+                report.putString("result","PASS: one cup task type and a persistent club rewards checkbox");
+                return;
+            }
+            if(mode.equals("garage-sort-editing")){
                 launchEditor(base);
                 checkGarageSort();
                 report.putString("result","PASS: mutually exclusive garage sorting, clear, save and reopen in all six event editors");
                 return;
             }
             checkDefaults();
-            check(store.config.getInt("raceTimeout")==900,"Wrong initial race timeout");
+            check(store.config.getInt("raceTimeout")==LocalStore.DEFAULT_RACE_TIMEOUT_SECONDS,"Wrong initial race timeout");
             check(store.config.getJSONObject("global").getBoolean("autoToken")&&store.config.getJSONObject("global").getBoolean("freePkg"),"Wrong initial global task options");
             String initial=tasks().toString();reload();check(initial.equals(tasks().toString()),"Default identities did not persist");
             check(store.config.getJSONObject("global").getBoolean("autoToken")&&store.config.getJSONObject("global").getBoolean("freePkg"),"Default global task options did not persist");
@@ -78,24 +86,7 @@ final class TaskEditingDeviceCheck {
             check(node("6. 大师系列赛")!=null&&node("多人下用车")!=null,"Master editor did not open vehicle settings");
             input("多人下用车","2,4");click("保存");reload();bind();
             check(tasks().getJSONObject(MASTER).getJSONObject("data").getString("多人下用车").equals("2,4"),"Master vehicle settings did not persist");
-            String originalTask=tasks().getJSONObject(DAILY).toString();
-            clickTask("狼崽");
-            check(node("选择项目类型")==null&&node("4. 每日战利品")!=null&&node("保存")!=null,"Existing task did not open its details directly");
-            check(node("每日只执行一次")==null&&node("完成本任务后，当天后续循环自动跳过")==null,"Retired daily-once control is visible");
-            input("比赛次数","9");click("取消");check(tasks().getJSONObject(DAILY).toString().equals(originalTask),"Cancelling edit changed task");
-            clickTask("狼崽");input("比赛次数","4");input("任务名称","test战利品");click("保存");reload();bind();
-            test.runOnMainSync(()->{
-                View root=activity.getWindow().getDecorView(),title=findText(root,"test战利品");
-                check(title!=null&&findText(root,"test战利品 · 每日战利品")==null,"Custom title still includes task type");
-                View tag=findText((View)title.getParent(),"战利品");
-                check(tag!=null&&tag.getTop()+((View)tag.getParent()).getTop()>=title.getBottom(),"Type tag is not below title");
-                for(String label:List.of("世界赛","大师赛","杯赛","特赛"))check(findText(root,label)!=null,"Missing type tag "+label);
-            });
-            screenshot("custom-task-name.png");
-            JSONObject edited=tasks().getJSONObject(DAILY),original=new JSONObject(originalTask);
-            check(edited.getJSONObject("data").getString("次数").equals("4")&&edited.getString("项目").equals("每日战利品")
-                    &&edited.getString("taskId").equals(original.getString("taskId"))&&edited.getBoolean("enabled")==original.getBoolean("enabled"),"Edit lost fields/type/identity/flag on reload");
-            clickMain("新增任务");check(node("选择项目类型")!=null,"New task must choose type first");click("取消");
+            checkCupRewardForm();
             clickMain("新增任务");click("取消");check(tasks().length()==7,"Cancelling type picker added a task");
             clickMain("新增任务");click("杯赛");click("取消");check(tasks().length()==7,"Cancelling form added a task");
             clickMain("新增任务");click("杯赛");input("任务名称","新增杯赛测试");input("比赛次数","0");click("保存");
@@ -111,7 +102,7 @@ final class TaskEditingDeviceCheck {
             for(int i=0;i<7;i++)clickMain("删除");reload();bind();
             check(tasks().length()==0&&((List<?>)store.luaConfig().get("projects")).isEmpty(),"Empty queue resurrected on reload");
             screenshot("empty-queue.png");
-            clickMain("新增任务");click("每日战利品");click("保存");check(tasks().length()==1,"Cannot add to empty queue");
+            clickMain("新增任务");click("杯赛");click("保存");check(tasks().length()==1,"Cannot add to empty queue");
             tasks().getJSONObject(0).put("enabled",true).getJSONObject("data").put("次数","12");store.save();bind();
             String beforeReset=tasks().toString();
             clickMain("重置编排");
@@ -187,18 +178,57 @@ final class TaskEditingDeviceCheck {
         ui=test.getUiAutomation(UiAutomation.FLAG_DONT_SUPPRESS_ACCESSIBILITY_SERVICES);
         activity=(MainActivity)test.startActivitySync(new Intent(base,MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));bind();
     }
+    private void checkCupRewardForm()throws Exception {
+        String originalTask=tasks().getJSONObject(DAILY).toString();
+        clickTask("狼崽");
+        check(node("选择项目类型")==null&&node("4. 杯赛")!=null&&node("保存")!=null,"Existing task did not open its details directly");
+        check(node("每日只执行一次")==null&&node("完成本任务后，当天后续循环自动跳过")==null,"Retired daily-once control is visible");
+        String clubReward="领取俱乐部奖励（仅每日战利品）";
+        input("比赛次数","9");
+        scrollToControl(clubReward);
+        AccessibilityNodeInfo reward=node(clubReward),other=node("其他");
+        check(reward!=null&&reward.isChecked(),"Existing loot task lost its club reward setting");
+        android.graphics.Rect rewardBounds=new android.graphics.Rect(),otherBounds=new android.graphics.Rect();
+        check(other!=null,"Cup editor is missing the Other heading");
+        reward.getBoundsInScreen(rewardBounds);
+        other.getBoundsInScreen(otherBounds);
+        check(otherBounds.bottom<=rewardBounds.top,"Other heading must be above the club reward checkbox");
+        JSONArray cupForm=store.forms.getJSONArray("杯赛");
+        check(cupForm.getJSONObject(cupForm.length()-1).getString("key").equals("是否领取俱乐部奖励"),
+                "Club reward must be the final cup setting");
+        click("取消");check(tasks().getJSONObject(DAILY).toString().equals(originalTask),"Cancelling edit changed task");
+        clickTask("狼崽");input("比赛次数","4");input("任务名称","test战利品");scrollToControl(clubReward);click(clubReward);click("保存");reload();bind();
+        test.runOnMainSync(()->{
+            View root=activity.getWindow().getDecorView(),title=findText(root,"test战利品");
+            check(title!=null&&findText(root,"test战利品 · 杯赛")==null,"Custom title still includes task type");
+            View tag=findText((View)title.getParent(),"杯赛");
+            check(tag!=null&&tag.getTop()+((View)tag.getParent()).getTop()>=title.getBottom(),"Type tag is not below title");
+            for(String label:List.of("世界赛","大师赛","杯赛","特赛"))check(findText(root,label)!=null,"Missing type tag "+label);
+        });
+        screenshot("custom-task-name.png");
+        JSONObject edited=tasks().getJSONObject(DAILY),original=new JSONObject(originalTask);
+        check(edited.getJSONObject("data").getString("次数").equals("4")&&edited.getString("项目").equals("杯赛")
+                &&edited.getJSONObject("data").getString("是否领取俱乐部奖励").isEmpty()
+                &&edited.getString("taskId").equals(original.getString("taskId"))&&edited.getBoolean("enabled")==original.getBoolean("enabled"),"Edit lost fields/type/identity/flag on reload");
+        clickMain("新增任务");
+        check(node("选择项目类型")!=null&&node("每日战利品")==null,"New tasks must use the unified type picker");
+        click("杯赛");
+        scrollToControl(clubReward);
+        check(!node(clubReward).isChecked(),"New cup has enabled club rewards");
+        click("取消");
+    }
     private void checkGarageSort()throws Exception {
         JSONObject original=new JSONObject(store.config.toString());
         for(int index:new int[]{0,CUP,SPECIAL,DAILY,MASTER,WORLD}){
             JSONObject settings=tasks().getJSONObject(index).getJSONObject("data");
             settings.put("选车筛选","0,1,2");
-            openTaskForm(index);scrollToControl("星级");
+            openTaskForm(index);scrollToControl("性能分");
             check(node("性能分").isChecked()&&!node("星级").isChecked(),"Legacy rank sorting changed");
             click("星级");
             check(!node("性能分").isChecked()&&node("星级").isChecked(),"Stars did not replace rank");
             click("保存");reload();bind();
             check(tasks().getJSONObject(index).getJSONObject("data").getString("选车筛选").equals("0,2,3"),"Star selection lost on save");
-            openTaskForm(index);scrollToControl("星级");
+            openTaskForm(index);scrollToControl("性能分");
             check(node("星级").isChecked()&&!node("性能分").isChecked(),"Star selection lost on reopen");
             click("性能分");
             check(node("性能分").isChecked()&&!node("星级").isChecked(),"Rank did not replace stars");
@@ -274,7 +304,7 @@ final class TaskEditingDeviceCheck {
     }
     private void reload()throws Exception{store=new LocalStore(isolated);}
     private void checkDefaults()throws Exception {
-        String[] modes={"车联","杯赛","特殊赛事","每日战利品","特殊赛事","多人下","多人上"};String[] counts={"2","2","2","3","3","3","3"};Set<String> ids=new HashSet<>();
+        String[] modes={"车联","杯赛","特殊赛事","杯赛","特殊赛事","多人下","多人上"};String[] counts={"2","2","2","3","3","3","3"};Set<String> ids=new HashSet<>();
         JSONArray template=new JSONArray(store.asset("data/default-projects.json"));
         check(tasks().length()==7,"Expected seven tasks");
         for(int i=0;i<modes.length;i++) {

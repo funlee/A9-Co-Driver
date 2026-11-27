@@ -566,7 +566,7 @@ public final class CoreChecks {
     }
     private static void workflowSmoke(Path assets) throws Exception {
         String[] modules={"bootstrap","shared","utilities","workflows","multiplayer_up","multiplayer_down","cup","special","club","daily"};
-        String[] modes={"multiple1","multiple2","cup","spCup","dsCup","dailyCup"};
+        String[] modes={"multiple1","multiple2","cup","spCup","dsCup"};
         List<String> apis=List.of("getDisplaySize","getWorkPath","keepCapture","releaseCapture","tap","swipe","touchDown","touchMove","touchUp","cmpColorEx","cmpColor","findColor","findMultiColor","getPixelColor","getDisplayRotate","keyPress","print","toast","_hud","record");
         Map<String,Object> cfg=new HashMap<>();
         for(String k:List.of("clearPrize","checkAuto","freePkg","coinPkg","autoToken","Coupons","spPrize","onceAD","coinAD","cupTicketAD","spCupTicketAD","dsTicketAD","dsCupAD","starWay"))cfg.put(k,"");

@@ -1583,6 +1583,10 @@ function utils.startRace()
       else
         local button=startButton(screen)
         if button or colorReady then
+          if run and run.dailyLoot then
+            local reason=dailyCup.skipReason()
+            if reason~='' then return reason end
+          end
           if fuel=='trial' then print('使用赛事提供的免费试驾车辆') end
           -- Start action: two consecutive taps, then wait two seconds.
           for press=1,2 do
@@ -1768,7 +1772,7 @@ function utils.chooseCarCup(carList)
     utils.configureGarageFilter(filter);sleep(2000)
     if _soloGarageUi and vehicleGrid and vehicleGrid.confirmEmptyGarage() then return 'garageEmpty' end
   end
-  local dailyGrid=data['项目']=='每日战利品' and _soloGarageUi and vehicleGrid
+  local dailyGrid=run.dailyLoot and _soloGarageUi and vehicleGrid
   local useGrid=dailyGrid
   if not clickMode and not useGrid and _soloGarageUi and vehicleGrid then
     local page=_soloGarageUi(false)
@@ -1777,7 +1781,7 @@ function utils.chooseCarCup(carList)
   local origin
   if dailyGrid then utils.verifiedDailyCar=false end
   local entrySwipes=30
-  if data['项目']=='每日战利品' and filter~='' then entrySwipes=clickMode and 6 or 0 end
+  if run.dailyLoot and filter~='' then entrySwipes=clickMode and 6 or 0 end
   if useGrid then
     local reason
     origin,reason=vehicleGrid.soloOrigin(dailyGrid and entrySwipes or 0)
@@ -1939,7 +1943,7 @@ function utils.chooseCarCup(carList)
 end
 function utils.startConfiguredRace()
   local cars=utils.taskCars()
-  local verifyDaily=data['项目']=='每日战利品' and _soloGarageUi and vehicleGrid
+  local verifyDaily=run.dailyLoot and _soloGarageUi and vehicleGrid
   if (utils.selectNextTaskCar and #cars>1) or (verifyDaily and not utils.verifiedDailyCar) then
     utils.backToGarage()
     local selected=utils.chooseCarCup(cars)

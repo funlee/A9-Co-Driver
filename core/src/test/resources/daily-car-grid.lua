@@ -1,5 +1,5 @@
-data={['项目']='每日战利品',['用车次数']={}}
-run={data={['用车模式']='1',['选车方式']='0',['杯赛用车']={12,22}}}
+data={['项目']='杯赛',['用车次数']={}}
+run={dailyLoot=true,data={['用车模式']='1',['选车方式']='0',['杯赛用车']={12,22}}}
 local frame,offset,resets,chosen=0,scenario=='large' and 150 or 8,0,0
 local tapped={}
 local entrySwipes=0
@@ -15,9 +15,9 @@ if filtered then
   if scenario:find('click') then run.data['选车方式']='1' end
 end
 if filtered or scenario=='at-start' then offset=0 end
-if emptyCase=='cup' then data['项目']='杯赛';run.data['选车方式']='1' end
-if emptyCase=='special' then data['项目']='特殊赛事' end
-if emptyCase=='club' then data['项目']='车联' end
+if emptyCase=='cup' then run.dailyLoot=false;data['项目']='杯赛';run.data['选车方式']='1' end
+if emptyCase=='special' then run.dailyLoot=false;data['项目']='特殊赛事' end
+if emptyCase=='club' then run.dailyLoot=false;data['项目']='车联' end
 if emptyCase=='unfiltered' then run.data['选车筛选']='' end
 local blankReads=(emptyCase or endCase) and 0 or 2
 local bounceReads=0

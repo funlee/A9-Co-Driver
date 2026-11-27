@@ -224,7 +224,6 @@ public final class MainActivity extends Activity {
     private String modeName(String mode){return MultiplayerUi.displayMode(mode);}
     private String taskTypeTag(String mode){
         switch(mode){
-            case "每日战利品":return "战利品";
             case "杯赛":return "杯赛";
             case "特殊赛事":return "特赛";
             case "多人下":return "大师赛";
@@ -260,7 +259,7 @@ public final class MainActivity extends Activity {
             TextView title=heading(name,BODY);title.setPadding(0,0,0,0);title.setSingleLine(true);title.setEllipsize(TextUtils.TruncateAt.END);details.addView(title,new LinearLayout.LayoutParams(-1,-2));
             LinearLayout metadata=row();metadata.setGravity(Gravity.CENTER_VERTICAL);metadata.setPadding(0,dp(SPACE_SMALL),0,0);
             TextView type=badge(taskTypeTag(mode),ACCENT,SOFT);type.setTextSize(DETAIL);type.setSingleLine(true);type.setPadding(dp(SPACE_MEDIUM),dp(2),dp(SPACE_MEDIUM),dp(2));metadata.addView(type);
-            TextView summary=label(d.optString("次数","1")+" 次"+((mode.equals("杯赛")||mode.equals("每日战利品"))?" · 位置 "+d.optString("杯赛位置","2"):""),DETAIL);summary.setPadding(dp(SPACE_MEDIUM),0,0,0);summary.setMaxLines(getResources().getConfiguration().fontScale>1.15f?2:1);summary.setEllipsize(TextUtils.TruncateAt.END);metadata.addView(summary,new LinearLayout.LayoutParams(0,-2,1));
+            TextView summary=label(d.optString("次数","1")+" 次"+(mode.equals("杯赛")?" · 位置 "+d.optString("杯赛位置","2"):""),DETAIL);summary.setPadding(dp(SPACE_MEDIUM),0,0,0);summary.setMaxLines(getResources().getConfiguration().fontScale>1.15f?2:1);summary.setEllipsize(TextUtils.TruncateAt.END);metadata.addView(summary,new LinearLayout.LayoutParams(0,-2,1));
             details.addView(metadata,new LinearLayout.LayoutParams(-1,-2));line.addView(details,new LinearLayout.LayoutParams(0,-2,1));details.setOnClickListener(v->projectEditor(index));
             Switch enabled=new Switch(this);enabled.setMinHeight(dp(48));enabled.setMinWidth(dp(48));enabled.setContentDescription("启用项目 "+(i+1)+" "+name);enabled.setChecked(active);enabled.setOnCheckedChangeListener((v,on)->{try{p.put("enabled",on);store.save();render();}catch(Exception e){message(e.toString());}});line.addView(enabled);
             Button delete=compactButton("删除",()->{try{store.deleteProject(index);render();}catch(Exception e){message(e.getMessage());}});delete.setContentDescription("删除任务 "+(i+1)+" "+name);delete.setTextColor(0xffb74d49);LinearLayout.LayoutParams deleteLayout=new LinearLayout.LayoutParams(-2,-2);deleteLayout.leftMargin=dp(SPACE_MEDIUM);line.addView(delete,deleteLayout);queue.addTask(line,order,details);
@@ -295,13 +294,15 @@ public final class MainActivity extends Activity {
         if(mode.equals("多人上"))fields.addView(label("比赛时自动识别地图并执行“地图配置”中的跑法；识别失败或缺少有效跑法时左划兜底。",DETAIL));
         if(mode.equals("多人上"))fields.addView(label("优先使用当前段位配置的车辆。该段未配置或配置车全部无油时，逐级尝试较低段位的配置。序号按各段车库从左到右、每列从上到下计算，支持每次用一辆。",DETAIL));
         if(mode.equals("多人下"))fields.addView(label("按配置的车辆序号选车。每列先上后下，再从左往右累计，跨屏时核验车辆位置，支持每次用一辆。",DETAIL));
-        if(mode.equals("每日战利品"))fields.addView(label("每天 00:00–00:30 自动跳过此任务",DETAIL));
+        if(mode.equals("杯赛"))fields.addView(label("按每日赛事序号选择杯赛。识别到每日战利品时，00:00–00:30 自动跳过。",DETAIL));
         if(mode.equals("车联"))fields.addView(label("低星工具车不建议使用辅助驾驶完成比赛，车联任务只会采用左划跑法完成比赛",DETAIL));
         for(int i=0;i<spec.length();i++){
             JSONObject f=spec.getJSONObject(i);String key=f.getString("key"),type=f.getString("type");JSONArray options=f.getJSONArray("options");
             if(key.equals("称霸位置"))continue; // Rendered alongside the 称霸模式 checkbox.
             if(type.equals("CheckBox")){
-                CheckBox box=checkBox(key);
+                boolean clubReward=key.equals("是否领取俱乐部奖励");
+                if(clubReward)fields.addView(heading("其他",BODY));
+                CheckBox box=checkBox(clubReward?"领取俱乐部奖励（仅每日战利品）":key);
                 box.setChecked("0".equals(data.optString(key)));
                 fields.addView(box);views.put(key,box);
             }

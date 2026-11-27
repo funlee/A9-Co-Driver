@@ -15,14 +15,23 @@ local config = {
 
 -- The event is already recognized by OCR. Use its Race button when the
 -- legacy cup page colors no longer line up with the display.
-function cup.openRaceGarage(screen, eventName)
+function cup.openRaceGarage(screen)
   for _,word in ipairs(screen.words or {}) do
     local label=word.text:gsub('%s',''):gsub('賽','赛')
     if label=='比赛' and word.x>=900 and word.y>=560 then
-      data['信息']=(eventName or '杯赛')..'：点击比赛，进入选车'
+      data['信息']=(run.dailyLoot and '每日战利品' or '杯赛')..'：点击比赛，进入选车'
       print(data['信息'])
       tap(719-word.y,word.x)
       sleep(1);sleep(3000)
+      if run.dailyLoot then
+        local deadline=tickCount()+12000
+        while tickCount()<deadline do
+          local scene=_soloEventUi().scene
+          if scene~='event' and scene~='unknown' then return true end
+          sleep(400)
+        end
+        error('每日战利品点击比赛后未确认切页，保留当前任务')
+      end
       return true
     end
   end
@@ -77,7 +86,7 @@ cup.operation = {
     config.selectMission,
     function()
       data["信息"] = "选择指定杯赛"
-      local chosen=utils.chooseCup(utils.defultCfg(run.data["杯赛位置"], "2"))
+      local chosen=utils.chooseCup(utils.defultCfg(run.data["杯赛位置"], "2"),false,true)
       if type(chosen)=="string" then return chosen end
       if chosen == 0 then
         return -1
@@ -106,6 +115,7 @@ cup.operation = {
     function()
       data["信息"] = "开始选车"
       local chosen=utils.chooseCarCup(utils.taskCars())
+      if chosen=="garageChanged" then return nil end
       if type(chosen)=="string" then return chosen end
       sleep(2000)
     end
@@ -116,13 +126,18 @@ cup.operation = {
       data["信息"] = "即将开始游戏"
       utils.prepareTaskRoute(true)
       local sRet = utils.startConfiguredRace()
+      if sRet=="garageChanged" then return nil end
       if type(sRet)=="string" then return sRet end
       if sRet == 0 or sRet == -2 then
         return -1
       elseif sRet == -1 or sRet == 2 then
         return nil
       end
-      if utils.taskRouteAuto() then cup.readMap() end
+      if run.dailyLoot then
+        dailyCup.readMap(utils.taskRouteAuto())
+      elseif utils.taskRouteAuto() then
+        cup.readMap()
+      end
       for ci = 1, 30 do
         keepCapture()
         if cmpColorEx(config.racing, 1) == 1 or cmpColorEx(config.noTicket, 1) == 1 then
@@ -147,7 +162,7 @@ cup.operation = {
     config.racing,
     function()
       utils.prepareTaskRoute()
-      utils.newAutoDriver()
+      if utils.newAutoDriver()=='settlement' then return dailyCup.settle(data['项目'],_soloEventUi) end
       data["信息"] = "比赛中"
       repeat
         keepCapture()

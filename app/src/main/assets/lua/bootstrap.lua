@@ -152,7 +152,12 @@ local function withPopupRecovery(read)
     return result
   end
 end
-_soloEventUi=withPopupRecovery(_soloEventUi)
+if _soloEventUi then
+  local readSoloEvent=withPopupRecovery(_soloEventUi)
+  _soloEventUi=function(specialLoading,stageRail)
+    return readSoloEvent(specialLoading,stageRail,run and run.dailyLoot==true)
+  end
+end
 _soloGarageUi=withPopupRecovery(_soloGarageUi)
 _dailyEventUi=withPopupRecovery(_dailyEventUi)
 _multiplayerUi=withPopupRecovery(_multiplayerUi)
@@ -191,7 +196,7 @@ function localInit()
     _validateRoute(key,ROUTES[key]);data['多人地图']=label;data['线路']=ROUTES[key];return 1
   end
   utils.taskRouteAuto=function()
-    return (data['项目']=='杯赛' or data['项目']=='每日战利品' or data['项目']=='特殊赛事') and tostring(run.data['路线来源'] or '2')=='2'
+    return (data['项目']=='杯赛' or data['项目']=='特殊赛事') and tostring(run.data['路线来源'] or '2')=='2'
   end
   utils.prepareTaskRoute=function(reset)
     if utils.taskRouteAuto() then
@@ -235,11 +240,10 @@ function localInit()
     _driverEnd();data['路程']=0;data['多人地图']='';return settlement and 'settlement' or 1
   end
   run.list={['多人上']=multiple1.operation,['多人下']=multiple2.operation,['杯赛']=cup.operation,
-    ['特殊赛事']=spCup.operation,['车联']=dsCup.operation,['每日战利品']=dailyCup.operation}
+    ['特殊赛事']=spCup.operation,['车联']=dsCup.operation}
   run.carDetails={['杯赛']=function()return cup.operation[5][2]()end,['特殊赛事']=function()return spCup.operation[5][2]()end,
-    ['车联']=function()return dsCup.operation[4][2]()end,['每日战利品']=function()return dailyCup.operation[5][2]()end}
+    ['车联']=function()return dsCup.operation[4][2]()end}
   run.homeEntries={['杯赛']=function(screen)utils.openHomeTab(screen,'daily')end,
-    ['每日战利品']=function(screen)utils.openHomeTab(screen,'daily')end,
     ['特殊赛事']=function(screen)return spCup.operation[2][2](screen)end,
     ['车联']=function(screen)return dsCup.operation[1][2](screen)end}
   run.rebootHandle=function() if data['超时状态'] then _requestGameRestart('heartbeat') end end
@@ -351,11 +355,7 @@ function main()
         run.index=i;run.data=cfg.data;data['项目']=cfg['项目'];data['心跳时间']=os.time()
         data['信息']=string.format('项目 %d：%s',i,data['项目']);_hud(data['信息'])
         local outcome=nil
-        if data['项目']=='每日战利品' then outcome=dailyCup.skipReason() end
-        if outcome and outcome~='' then
-          data['信息']='00:00–00:30，跳过每日战利品'
-          _hud(data['信息'])
-        elseif data['项目']=='多人上' or data['项目']=='多人下' then
+        if data['项目']=='多人上' or data['项目']=='多人下' then
           -- Task boundaries return to a shared entry point; multiplayer need not interpret cup pages.
           local restoring=resume.restored and cycle==resume.cycle and i==resume.index
           local tutorial=restoring and spCup and spCup.tutorialButton(_soloEventUi())
@@ -375,7 +375,7 @@ function main()
               outcome='vehicleLocked'
             else
               if not resumingTutorial and not resumingSpecialStage then
-                local cupTask=data['项目']=='每日战利品' or data['项目']=='杯赛'
+                local cupTask=data['项目']=='杯赛'
                 if utils.backToMain(false,cupTask)~='cupClaimSpotlight' then utils.checkAuto() end
                 utils.initCar()
               end

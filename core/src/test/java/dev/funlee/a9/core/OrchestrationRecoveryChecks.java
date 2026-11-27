@@ -27,16 +27,16 @@ final class OrchestrationRecoveryChecks {
         if(DailyEventUi.classifySolo("单人奖励 最佳用时纪录 完成比赛 继续").equals("event"))throw new AssertionError("Continue overlay is not a returned lobby");
         if(!DailyEventUi.classifySolo("AUDI R8 LMP1 2000 性能分 4889 S 免费试驾 TOUCHDRIVE 0/3 跳过").equals("car"))throw new AssertionError("Special may return directly to an empty-fuel vehicle");
         if(!DailyEventUi.classifySolo("每日车辆战利品 俱乐部奖励 单人奖励 10/10 已领取 必须有足够的活跃俱乐部成员完成条件").equals("clubRewards"))throw new AssertionError("Claimed club tab has no Race button");
-        script(assets,List.of("daily"),"data={};local reads=0;local taps=0;function tap(x,y)assert(x==519 and y==1080);taps=taps+1 end;"+
+        script(assets,List.of("daily"),"data={};run={data={}};local reads=0;local taps=0;function tap(x,y)assert(x==519 and y==1080);taps=taps+1 end;"+
             "function _soloEventUi()reads=reads+1;return {scene=reads<3 and 'clubRewards' or 'event',words={{text='单人奖励',x=1080,y=200}}}end;"+
             "function test()assert(dailyCup.returnToSolo(_soloEventUi()) and taps==1,'Restore solo tab without repeated taps');assert(not dailyCup.returnToSolo({scene='missionRewards'}));done=true end");
-        script(assets,List.of("daily"),"data={};local taps=0;function tap()taps=taps+1 end;function _soloEventUi()return {scene='clubRewards',words={{text='单人奖励',x=1080,y=200}}}end;"+
+        script(assets,List.of("daily"),"data={};run={data={}};local taps=0;function tap()taps=taps+1 end;function _soloEventUi()return {scene='clubRewards',words={{text='单人奖励',x=1080,y=200}}}end;"+
             "function test()assert(not pcall(function()dailyCup.returnToSolo(_soloEventUi())end));assert(taps==3,'Unchanged tab stops after bounded retries');done=true end");
-        script(assets,List.of("daily"),"data={};function tap()error('Must not tap a label outside the tab strip')end;function _soloEventUi()return {scene='clubRewards',words={{text='单人奖励',x=1080,y=650}}}end;"+
+        script(assets,List.of("daily"),"data={};run={data={}};function tap()error('Must not tap a label outside the tab strip')end;function _soloEventUi()return {scene='clubRewards',words={{text='单人奖励',x=1080,y=650}}}end;"+
             "function test()assert(not pcall(function()dailyCup.returnToSolo(_soloEventUi())end));done=true end");
-        script(assets,List.of("workflows","daily"),"data={['项目']='每日战利品',['杯赛']=0};run.data={['次数']='1'};local restored=false;local reads=0;utils={tipsHandle=function()end};run.rebootHandle=function()end;"+
-            "function _soloEventUi()reads=reads+1;return {scene=restored and (reads==2 and 'event' or 'car') or 'clubRewards',text='每日车辆战利品',words={{text='单人奖励',x=1080,y=200}}}end;function tap()restored=true end;function keepCapture()error('Club tab must precede legacy color dispatch')end;"+
-            "run.carDetails={['每日战利品']=function()return 'fuelEmpty' end};function test()assert(run.project()=='fuelEmpty' and restored and data['杯赛']==0);done=true end");
+        script(assets,List.of("workflows","daily"),"data={['项目']='杯赛',['杯赛']=0};run.data={['次数']='1'};local restored=false;local reads=0;utils={tipsHandle=function()end};run.rebootHandle=function()end;"+
+            "function _soloEventUi()reads=reads+1;return {scene=restored and (reads==2 and 'event' or 'car') or 'clubRewards',dailyLoot=true,text='每日车辆战利品',words={{text='单人奖励',x=1080,y=200}}}end;function tap()restored=true end;function keepCapture()error('Club tab must precede legacy color dispatch')end;"+
+            "run.carDetails={['杯赛']=function()return 'fuelEmpty' end};function test()assert(run.project()=='fuelEmpty' and restored and data['杯赛']==0);done=true end");
         script(assets,List.of("workflows","daily","cup"),"data={['项目']='杯赛'};run.data={['次数']='1'};local reads,starts,confirmations,tips=0,0,0,0;"+
             "utils={tipsHandle=function()tips=tips+1 end};run.nitro=function()end;run.rebootHandle=function()end;function print()end;"+
             "function _soloEventUi()reads=reads+1;if reads<=2 then return {scene='car'} elseif reads<=4 then return {scene='unknown',words={{text='仍然挑战',x=920,y=530}}} elseif reads<=6 then return {scene='unknown'} else return {scene='race'} end end;"+
@@ -82,10 +82,10 @@ final class OrchestrationRecoveryChecks {
             "utils={prepareTaskRoute=function()end,newAutoDriver=function()return 1 end};function keepCapture()end;function cmpColorEx()return 0 end;"+
             "function _soloEventUi()reads=reads+1;return {scene=reads<3 and 'unknown' or reads<5 and 'results' or 'specialRanking',words={{text='继续',x=1100,y=650}}}end;"+
             "function tap(x,y)assert(x==69 and y==1100);taps=taps+1 end;function test()assert(spCup.operation[7][2]()==0 and taps==1);done=true end");
-        script(assets,List.of("daily"),"data={};function print()end;function tap()error('Unconfirmed car page clicked')end;"+
+        script(assets,List.of("daily"),"data={};run={data={}};function print()end;function tap()error('Unconfirmed car page clicked')end;"+
             "function _soloEventUi()return {scene='car',words={{text='开始',x=1100,y=650}}}end;"+
             "function test()assert(not pcall(function()dailyCup.settle('特殊赛事',_soloEventUi)end),'Car without result must not consume quota');done=true end");
-        script(assets,List.of("daily"),"data={};local reads=0;function print()end;function tap()error('Ranking lobby must not start another race')end;"+
+        script(assets,List.of("daily"),"data={};run={data={}};local reads=0;function print()end;function tap()error('Ranking lobby must not start another race')end;"+
             "function _soloEventUi()reads=reads+1;return {scene=reads==1 and 'results' or 'specialRanking',words={{text='开始40',x=1100,y=665}}}end;"+
             "function test()assert(dailyCup.settle('特殊赛事',_soloEventUi)==0);done=true end");
         script(assets,List.of("multiplayer_current"),"data={['项目']='多人上'};run={data={['次数']='1'}};utils={defultCfg=function(v,d)return v or d end};local reads=0;local taps=0;function _sessionProject()return 0 end;function _hud()end;function print()end;"+
@@ -145,7 +145,7 @@ final class OrchestrationRecoveryChecks {
             "function test()assert(run.project()=='fuelEmpty' and completed==0 and data['特赛']==0,'Empty skips without consuming quota');done=true end");
         script(assets,List.of("daily","cup","special","club"),"data={};utils={taskCars=function()return {1,2}end,chooseCarCup=function()return 'fuelEmpty' end,prepareTaskRoute=function()end,startConfiguredRace=function()return 'fuelEmpty' end};"+
             "function _dailyTaskStatus()return '' end;run={index=1};function test()"+
-            "for _,flow in ipairs({dailyCup,cup,spCup})do assert(flow.operation[4][2]()=='fuelEmpty');assert(flow.operation[5][2]()=='fuelEmpty')end;"+
+            "for _,flow in ipairs({cup,spCup})do assert(flow.operation[4][2]()=='fuelEmpty');assert(flow.operation[5][2]()=='fuelEmpty')end;"+
             "assert(dsCup.operation[3][2]()=='fuelEmpty' and dsCup.operation[4][2]()=='fuelEmpty');done=true end");
         script(assets,List.of("workflows"),"data={['项目']='特殊赛事',['特赛']=0};run.data={['次数']='1'};utils={tipsHandle=function()end};run.carDetails={['特殊赛事']=function()return 'fuelEmpty' end};"+
             "function _soloEventUi()return {scene='car'}end;function keepCapture()end;function cmpColorEx()return 1 end;run.list={['特殊赛事']={{'wrong lobby',function()error('Car misrouted into lobby')end}}};"+
@@ -427,7 +427,7 @@ final class OrchestrationRecoveryChecks {
             "assert(ret=='clubNoTicket','A short hazard value skips the club project instead of retrying it')",
             "assert(backs==1 and data['信息']=='车联危险值不足，已跳过','The dialog is closed and the run keeps going')",
             "done=true end"));
-        script(assets,List.of("daily"),"data={};local reads,taps=0,0;function print()end;"+
+        script(assets,List.of("daily"),"data={};run={data={}};local reads,taps=0,0;function print()end;"+
             "function tap(x,y)assert(x==109 and y==450);taps=taps+1 end;"+
             "function _soloEventUi()reads=reads+1;if reads==1 then return {scene='results'} end;"+
             "if reads<=3 then return {scene='unknown',frameId=5000,text='你的俱乐部达成了该里程碑!',words={{text='前往领奖',x=830,y=610},{text='稍后领取',x=450,y=610}}} end;return {scene='car'} end;"+
@@ -467,55 +467,51 @@ final class OrchestrationRecoveryChecks {
             "function keyPress(key)assert(key=='back' and tickCount()-last>=4000);last=tickCount();backs=backs+1 end",
             "function test()utils.backToMain();assert(backs==3 and taps==1);done=true end"));
         script(assets,List.of("workflows","daily"),String.join("\n",
-            "data={['项目']='每日战利品'};run.data={['次数']='1',['杯赛位置']='5'};local phase='cupList';local chosen=false",
+            "data={['项目']='杯赛'};run.data={['次数']='1',['杯赛位置']='5'};local phase='cupList';local chosen=false",
             "utils={tipsHandle=function()end,chooseCup=function(position,wide,configuredOnly)assert(position=='5' and not wide and configuredOnly);chosen=true;phase='event' end}",
             "run.rebootHandle=function()end;function keepCapture()error('Standard list must precede legacy colors')end",
-            "function _soloEventUi()return {scene=phase,text='每日车辆战利品'}end",
-            "run.carDetails={['每日战利品']=function()return 'fuelEmpty' end};dailyCup.openRaceGarage=function()phase='car';return true end",
+            "function _soloEventUi()return {scene=phase,dailyLoot=phase=='event',text='每日车辆战利品'}end",
+            "run.carDetails={['杯赛']=function()return 'fuelEmpty' end};cup={openRaceGarage=function()assert(run.dailyLoot);phase='car';return true end}",
             "function test()assert(run.project()=='fuelEmpty' and chosen);done=true end"));
-        for(String project:List.of("每日战利品","杯赛"))for(String outcome:List.of("cupListObscured","cupPositionUnavailable","cupPositionInvalid","cupClaimOnly","garageEmpty","noTicket","-1")){
+        for(String outcome:List.of("cupListObscured","cupPositionUnavailable","cupPositionInvalid","cupClaimOnly","garageEmpty","noTicket","-1")){
             script(assets,List.of("bootstrap"),String.join("\n",
                 "data={};local notices,finished=0,0;function localInit()end;function monitor()end;function print()end;function _hud()end",
-                "UIconfig={routeOnly='',ActiveProj={true,true},projects={{['项目']='"+project+"',data={['次数']='3',['杯赛位置']='5'}},{['项目']='多人下',data={['次数']='1'}}}}",
+                "UIconfig={routeOnly='',ActiveProj={true,true},projects={{['项目']='杯赛',data={['次数']='3',['杯赛位置']='5'}},{['项目']='多人下',data={['次数']='1'}}}}",
                 "function _queueResume()return {cycle=1,index=1,completed=0}end;function _queueEnter()return 0 end;function _sessionCycle()end;function _sessionProject()end",
                 "function _queueDone()finished=finished+1 end;function _taskNotice(message,ms)assert(message:find('本轮跳过项目 1') and ms==4000);"+
-                    (outcome.equals("garageEmpty")?"assert(message=='本轮跳过项目 1 · "+project+"\\n没有可用车辆' and not message:find('异常'),message);":"")+"notices=notices+1 end",
+                    (outcome.equals("garageEmpty")?"assert(message=='本轮跳过项目 1 · 杯赛\\n没有可用车辆' and not message:find('异常'),message);":"")+"notices=notices+1 end",
                 "utils={backToMain=function()end,checkAuto=function()end,initCar=function()end};dailyCup={skipReason=function()return '' end}",
                 "run={project=function()return "+(outcome.equals("-1")?"-1":"'"+outcome+"'")+" end};function _requirePlayerAction()error('Configuration outcomes must not halt the queue')end",
                 "currentMultiplayer={run=function()assert(notices==1 and finished==1 and UIconfig.projects[1].data['次数']=='3');done=true;sleep(999999)end}",
                 "function test()main()end"));
         }
-        for(String project:List.of("每日战利品","杯赛")){
-            script(assets,List.of("workflows","daily"),String.join("\n",
-                "data={['项目']='"+project+"',['杯赛']=0};run.data={['次数']='3'};local completed=0;utils={}",
-                "run.nitro=function()end",
-                "function keepCapture()end;function cmpColorEx()return 1 end;function _sessionLegacyCompleted()completed=completed+1 end",
-                "run.list={['"+project+"']={{'screen',function()return -1 end}}}",
-                "function test()assert(run.project()==-1 and completed==0 and data['杯赛']==0,'Failed cup must skip without consuming race quota');done=true end"));
-        }
+        script(assets,List.of("workflows","daily"),String.join("\n",
+            "data={['项目']='杯赛',['杯赛']=0};run.data={['次数']='3'};local completed=0;utils={}",
+            "run.nitro=function()end",
+            "function keepCapture()end;function cmpColorEx()return 1 end;function _sessionLegacyCompleted()completed=completed+1 end",
+            "run.list={['杯赛']={{'screen',function()return -1 end}}}",
+            "function test()assert(run.project()==-1 and completed==0 and data['杯赛']==0,'Failed cup must skip without consuming race quota');done=true end"));
         script(assets,List.of("daily","cup"),String.join("\n",
-            "data={};local taps=0;function print()end;function keepCapture()end;function cmpColorEx()return 0 end",
+            "data={};run={dailyLoot=true};local taps=0;function print()end;function keepCapture()end;function cmpColorEx()return 0 end",
             "function _soloEventUi()return {scene='cars'}end;function tap(y,x)assert(y==69 and x==1100);taps=taps+1 end",
-            "function test()assert(dailyCup.openRaceGarage({scene='event',text='巅峰对决',words={{text='比赛',x=1100,y=650}}}) and taps==1);done=true end"));
-        for(String project:List.of("每日战利品","杯赛"))for(String scene:List.of("unknown","event")){
+            "function test()assert(cup.openRaceGarage({scene='event',text='每日车辆战利品',words={{text='比赛',x=1100,y=650}}}) and taps==1);done=true end"));
+        for(boolean daily:List.of(false,true))for(String scene:List.of("unknown","event")){
             script(assets,List.of("workflows","daily","cup"),String.join("\n",
-                "data={['项目']='"+project+"',['杯赛']=0};run.data={['次数']='3',['杯赛位置']='5'};local phase='"+scene+"';local taps,selected,reads=0,0,0",
-                "local operations="+(project.equals("每日战利品")?"dailyCup":"cup")+".operation;run.list={['"+project+"']=operations}",
-                "utils={tipsHandle=function()end,dailyPrize=function()end,taskCars=function()return {1} end,chooseCarCup=function(cars)assert(phase=='cars' and cars[1]==1);selected=selected+1;phase='car' end}",
-                "run.rebootHandle=function()end;run.carDetails={['"+project+"']=function()assert(phase=='car');return 'noTicket' end}",
-                "function _soloEventUi()reads=reads+1;assert(reads<=8,'OCR blocked the cup color dispatch');return {scene=phase,text='巅峰对决 单人奖励 是佳用时录 比赛',words={}}end",
+                "data={['项目']='杯赛',['杯赛']=0};run.data={['次数']='3',['杯赛位置']='5'};local phase='"+scene+"';local taps,selected,reads=0,0,0",
+                "local operations=cup.operation;run.list={['杯赛']=operations}",
+                "utils={tipsHandle=function()end,dailyPrize=function()end,taskCars=function()return {1} end,chooseCarCup=function(cars)assert(phase=='cars' and cars[1]==1 and run.dailyLoot=="+daily+");selected=selected+1;phase='car' end}",
+                "run.rebootHandle=function()end;run.carDetails={['杯赛']=function()assert(phase=='car');return 'noTicket' end}",
+                "function _soloEventUi()reads=reads+1;assert(reads<=8,'OCR blocked the cup color dispatch');return {scene=phase,dailyLoot=(phase=='event' or phase=='unknown') and "+daily+" or nil,words={}}end",
                 "function keepCapture()end;function cmpColorEx(pattern)if phase=='"+scene+"' then return pattern==operations[3][1] and 1 or 0 end;return phase=='cars' and pattern==operations[4][1] and 1 or 0 end",
                 "function tap(y,x)assert(y==24 and x==1200 and phase=='"+scene+"');taps=taps+1;phase='cars' end",
                 "function _sessionLegacyCompleted()error('A garage entry must not consume race quota')end",
                 "function test()assert(run.project()=='noTicket' and taps==1 and selected==1 and data['杯赛']==0);done=true end"));
         }
-        for(String project:List.of("每日战利品","杯赛")){
-            script(assets,List.of("workflows","daily"),String.join("\n",
-                "data={['项目']='"+project+"',['杯赛']=0,['超时状态']=true};run.data={['次数']='1'};utils={}",
-                "function keepCapture()end;function cmpColorEx()return 1 end;run.list={['"+project+"']={{'race',function()return -1 end}}}",
-                "function _sessionLegacyCompleted()error('Timeout must not complete a race')end",
-                "function test()local ok,reason=pcall(run.project);assert(not ok and tostring(reason):find('保留当前任务') and data['杯赛']==0);done=true end"));
-        }
+        script(assets,List.of("workflows","daily"),String.join("\n",
+            "data={['项目']='杯赛',['杯赛']=0,['超时状态']=true};run.data={['次数']='1'};utils={}",
+            "function keepCapture()end;function cmpColorEx()return 1 end;run.list={['杯赛']={{'race',function()return -1 end}}}",
+            "function _sessionLegacyCompleted()error('Timeout must not complete a race')end",
+            "function test()local ok,reason=pcall(run.project);assert(not ok and tostring(reason):find('保留当前任务') and data['杯赛']==0);done=true end"));
         int fuelScenarios=0;
         for(String project:List.of("多人上","多人下"))for(String scenario:List.of("mixed","allEmpty","detailEmpty","starCard","starDetail","lockedCard","lockedDetail","trialCard","rotate","detailOcr","wrongCar","lateRewards","blockedRewards","longRewards")){
             String series=project.equals("多人上")?"世界系列赛":"大师系列赛";

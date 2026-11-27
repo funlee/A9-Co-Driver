@@ -1,32 +1,9 @@
 dailyCup = {}
 local config = {
-  main = "690|1240|FFFFFF-101010,690|1252|3B2312-101010,670|1270|3B2312-101010",
-  selectMission = "614|67|5F2200-501902,620|1236|000000-101010,678|1250|3C2313-101010",
   cupInfo = "612|80|4F00CF-201040,614|54|5F2200-501909,620|1242|000000-101010",
-  carport = "666|86|2E2E2E-101010,666|120|373737-101010,574|140|5400CF-201030",
-  carInfo = "368|150|F9EF33-101010,302|142|F9EF33-101010,434|150|F9EF33-101010",
   noTicket = "538|1120|5400FF-290909,550|960|2C190C-101010,286|856|5400FF-101010",
-  racing = "680|50|FFFFFF-101010,660|70|FFFFFF-101010",
-  ending = "72|770|5400FF-101010,40|780|FFFFFF-101010,72|800|5400FF-101010",
-  finish = "48|672|00D8FF-101010,100|326|FFFFFF-101010,678|1250|3C2313-101010",
-  commonPrize = "87|1164|FFFFFF-101010,110|1102|311406-101010,68|1051|301307-101010",
   tips = "190|808|FFFFFF-101010,190|912|12FBC3-101010"
 }
-dailyCup.carList = {}
-function dailyCup.openRaceGarage(screen)
-  if screen.scene~='event' then return false end
-  keepCapture()
-  if cmpColorEx(config.cupInfo, 1) == 1 then return false end
-  if not cup.openRaceGarage(screen, '每日战利品') then return false end
-  local deadline=tickCount()+12000
-  while tickCount()<deadline do
-    local scene=_soloEventUi().scene
-    if scene~='event' and scene~='unknown' then return true end
-    sleep(400)
-  end
-  error('每日战利品点击比赛后未确认切页，保留当前任务')
-end
-
 function dailyCup.dismissProfile(screen,readScreen)
   if screen.scene~='profileUnlock' then return false end
   readScreen=readScreen or _soloEventUi
@@ -48,7 +25,7 @@ function dailyCup.dismissProfile(screen,readScreen)
   error('档案头像弹窗未确认关闭，保留当前任务')
 end
 function dailyCup.skipReason()
-  return _dailyTaskStatus and _dailyTaskStatus(run.index) or ''
+  return _dailyTaskStatus and _dailyTaskStatus() or ''
 end
 -- Club rewards have no Race button. Restore the solo tab after claiming them,
 -- including when a previous run stopped on the already-claimed club reward page.
@@ -56,10 +33,11 @@ function dailyCup.returnToSolo(screen)
   if screen.scene~='clubRewards' then return false end
   local since=tickCount();local lastTap=-10000;local tries=0
   local claimed=false
+  local claim=run.data['是否领取俱乐部奖励']=='0'
   while tickCount()-since<15000 do
     if screen.scene=='event' or screen.scene=='dailyRewardOnly' then return true,screen end
     if screen.scene=='clubRewards' and tickCount()-lastTap>=4000 and tries<3 then
-      if not claimed then
+      if claim and not claimed then
         for _,w in ipairs(screen.words or {}) do
           if w.text:gsub('%s','')=='领取' and w.x>=200 and w.x<=610 and w.y>=420 and w.y<=625 then
             tap(719-w.y,w.x);claimed=true;lastTap=tickCount();break
@@ -131,12 +109,15 @@ end
 local function press(screen,label,delay)
   local exit=screen.rewardExitButton
   if exit and exit.label==label and exit.x>850 and exit.y>590 then
-    tap(719-math.floor(exit.y),math.floor(exit.x));sleep(delay);return true
+    tap(719-math.floor(exit.y),math.floor(exit.x))
+    if label=="错失机会" then print("结算：已点击错失机会") end
+    sleep(delay)
+    return true
   end
+  if screen.scene=='rewards' then return false end
   for _,w in ipairs(screen.words or {}) do
     local text=string.gsub(w.text,"%s","")
     if label=="继续" and text=="继绩" then text="继续" end
-    if label=="错失机会" and text=="错矢机会" then text="错失机会" end
     if text==label and w.x>750 and w.y>540 then
       tap(719-math.floor(w.y),math.floor(w.x));sleep(delay);return true
     end
@@ -157,19 +138,29 @@ function dailyCup.settle(label,readScreen)
   if _racePanel then _racePanel(false) end
   data["信息"]=label.."结算中"
   local special=label=='特殊赛事'
+  local daily=label=='每日战利品' or (label=='杯赛' and run and run.dailyLoot)
   local started=tickCount();local rewardSince=nil;local seen=false;local eventFrames=0;local eventSince=nil;local lastEvent=nil
   local returnedScene,returnedFrame
-  local pressedFrame=nil;local pressedScene=nil;local pressTries=0
+  local pressedFrame,pressedScene,pressedButton
+  local pressTries=0
   local skipFrame,skipAt
   local skipTries=0
   local function advance(screen,button)
     local frame=screen.frameId
-    if frame and pressedFrame and (frame-pressedFrame<3000 or
-        (screen.scene==pressedScene and frame-pressedFrame<8000)) then return true end
-    if screen.scene~=pressedScene then pressTries=0 end
+    local sameButton=screen.scene==pressedScene and button==pressedButton
+    -- The ad offer replaces Continue on the same rewards page.
+    local newSkip=screen.scene=='rewards' and button=='错失机会' and not sameButton
+    if frame and pressedFrame then
+      local elapsed=frame-pressedFrame
+      if elapsed<=0 or (not newSkip and (elapsed<3000 or (screen.scene==pressedScene and elapsed<8000))) then
+        return true
+      end
+    end
+    if not sameButton then pressTries=0 end
     if pressTries>=3 then error(label..'结算按钮点击后未切页，保留当前任务') end
     if not press(screen,button,special and 350 or 800) then return false end
-    pressedFrame=frame;pressedScene=screen.scene;pressTries=pressTries+1
+    pressedFrame,pressedScene,pressedButton=frame,screen.scene,button
+    pressTries=pressTries+1
     if screen.scene=='cards' then skipFrame,skipAt,skipTries=nil,nil,0 end
     return true
   end
@@ -180,7 +171,8 @@ function dailyCup.settle(label,readScreen)
       keepCapture()
       if cmpColorEx(config.cupInfo,1)==1 then scene='event' end
     end
-    if scene=="event" or scene=="car" or (special and scene=='specialRanking') then
+    if scene=="event" or scene=="car" or (special and scene=='specialRanking')
+        or (daily and scene=='dailyRewardOnly') then
       if special and scene~=returnedScene then eventFrames=0;eventSince=nil end
       if not screen.frameId or screen.frameId~=returnedFrame then eventFrames=eventFrames+1 end
       returnedScene=scene;returnedFrame=screen.frameId
@@ -202,13 +194,13 @@ function dailyCup.settle(label,readScreen)
       seen=true;advance(screen,"继续")
     elseif scene=="rewards" then
       seen=true;rewardSince=rewardSince or tickCount()
-      -- 本局收益不再 OCR：结算按钮可用即点击，缩短奖励页停留。
-      if screen.rewardCanContinue then
-        if not advance(screen,"错失机会") then advance(screen,"继续") end
+      local exit=screen.rewardExitButton
+      if screen.rewardCanContinue and exit and (exit.label=='错失机会' or exit.label=='继续') then
+        advance(screen,exit.label)
       elseif tickCount()-rewardSince>=60000 then error(label.."收益结算超时") end
     elseif scene=="cards" or scene=="missionRewards" then
       seen=true
-      local hint=label=='杯赛' and scene=='cards' and packSkipHint(screen)
+      local hint=label=='杯赛' and not daily and scene=='cards' and packSkipHint(screen)
       if hint then
         local frame=screen.frameId
         if frame and (not pressedFrame or frame>pressedFrame) and skipTries<2
@@ -251,146 +243,4 @@ function dailyCup.settle(label,readScreen)
   error(label.."未确认返回赛事，已停止")
 end
 
-dailyCup.operation = {
-  {
-    config.main,
-    function()
-      data["信息"] = "进入杯赛界面"
-      for i = 1, 20 do
-        keepCapture()
-        if cmpColorEx(config.selectMission, 1) == 1 then
-          for j = 1, 10 do
-            tap(14, 500)
-            sleep(200)
-          end
-          break
-        else
-          tap(14, 500)
-          sleep(500)
-        end
-        releaseCapture()
-        sleep(1000)
-      end
-      sleep(2000)
-    end
-  },
-  {
-    config.selectMission,
-    function()
-      data["信息"] = "选择指定杯赛"
-      local chosen=utils.chooseCup(run.data['杯赛位置'] or '2',false,true)
-      if type(chosen)=='string' then return chosen end
-      if chosen==0 then return -1 end
-      if chosen==1 then data['信息']='已进入配置的赛事位置' end
-      sleep(3000)
-    end
-  },
-  {
-    config.cupInfo,
-    function()
-      data["信息"] = "即将进入车库"
-      if tostring(run.data["是否领取俱乐部奖励"] or '')=='0' then
-        utils.dailyPrize()
-      elseif _taskNotice then
-        _taskNotice('未开启领取俱乐部奖励，跳过奖励检测',2500)
-      end
-      tap(24, 1200)
-      sleep(3000)
-      for cc = 1, 30 do
-        keepCapture()
-        if cmpColorEx(config.carport, 1) == 1 or cmpColorEx(config.carInfo, 1) == 1 then
-          break
-        end
-        sleep(300)
-      end
-    end
-  },
-  {
-    config.carport,
-    function()
-      data["信息"] = "开始选车"
-      local chosen=utils.chooseCarCup(utils.taskCars())
-      if chosen=="garageChanged" then return nil end
-      if type(chosen)=="string" then return chosen end
-      sleep(2000)
-    end
-  },
-  {
-    config.carInfo,
-    function()
-      local reason=dailyCup.skipReason()
-      if reason~='' then return reason end
-      data["信息"] = "即将开始游戏"
-      utils.prepareTaskRoute(true)
-      local sRet = utils.startConfiguredRace()
-      if sRet=="garageChanged" then return nil end
-      if type(sRet)=="string" then return sRet end
-      if sRet == 0 or sRet == -2 then
-        return -1
-      elseif sRet == -1 or sRet == 2 then
-        return nil
-      end
-      dailyCup.readMap(utils.taskRouteAuto())
-      for ci = 1, 30 do
-        keepCapture()
-        if cmpColorEx(config.racing, 1) == 1 or cmpColorEx(config.noTicket, 1) == 1 then
-          break
-        end
-        sleep(500)
-      end
-    end
-  },
-  {
-    config.noTicket,
-    function()
-      if _racePanel then _racePanel(false) end
-      data["信息"] = "杯赛门票检查"
-      keyPress("back")
-      toast("没票")
-      sleep(2000)
-      return "noTicket"
-    end
-  },
-  {
-    config.racing,
-    function()
-      utils.prepareTaskRoute()
-      if utils.newAutoDriver()=='settlement' then return dailyCup.settle('每日战利品',_soloEventUi) end
-      data["信息"] = "比赛中"
-      repeat
-        keepCapture()
-        if cmpColorEx(config.racing, 1) == 1 then
-          tap(236, 1100)
-          sleep(650)
-        end
-        if data["超时状态"] then
-          return -1
-        end
-      until cmpColorEx(config.ending, 1) == 1
-    end
-  },
-  {
-    config.ending,
-    function()
-      return dailyCup.settle()
-    end
-  },
-  {
-    config.commonPrize,
-    function()
-      tap(50, 1220)
-      sleep(2000)
-    end
-  },
-  {
-    config.tips,
-    function()
-      data["信息"] = "关闭杯赛提示框"
-      tap(160, 194)
-      sleep(1000)
-      tap(200, 700)
-      sleep(2000)
-    end
-  }
-}
 return dailyCup

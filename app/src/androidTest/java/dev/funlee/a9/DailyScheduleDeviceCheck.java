@@ -31,19 +31,30 @@ final class DailyScheduleDeviceCheck {
                     ||!retained.toString().equals(retainedBefore)||fixture.getJSONArray("projects").length()!=2
                     ||first.removeRetiredProjects(fixture))throw new AssertionError("Retired task migration changed queue or active tasks");
             if(first.forms.has("生涯")||java.util.Arrays.asList(LocalStore.MODES).contains("生涯"))throw new AssertionError("Retired mode remains configurable");
-            JSONObject daily=first.config.getJSONArray("projects").getJSONObject(0);
-            daily.put("taskId",key);daily.getJSONObject("data").put("每日只执行一次","0").put("杯赛漂流","0").put("杯赛两圈赛制","0").put("次数","5");
-            JSONObject cup=first.config.getJSONArray("projects").getJSONObject(2);
+            JSONObject daily=first.config.getJSONArray("projects").getJSONObject(3);
+            daily.put("项目","每日战利品").put("taskId",key).put("enabled",false);
+            daily.getJSONObject("data").put("每日只执行一次","0").put("杯赛漂流","0").put("杯赛两圈赛制","0")
+                    .put("次数","5").put("杯赛位置","8").put("杯赛用车","2,1").put("路线来源","1").put("跑法代码","0,21");
+            JSONObject expectedDaily=new JSONObject(daily.toString()).put("项目","杯赛");
+            for(String field:java.util.List.of("每日只执行一次","杯赛漂流","杯赛两圈赛制"))expectedDaily.getJSONObject("data").remove(field);
+            JSONObject cup=first.config.getJSONArray("projects").getJSONObject(1);
             cup.getJSONObject("data").put("每日战利品","0").put("杯赛漂流","0").put("杯赛两圈赛制","0");JSONObject expectedCup=new JSONObject(cup.toString());expectedCup.getJSONObject("data").remove("每日战利品");expectedCup.getJSONObject("data").remove("杯赛漂流");expectedCup.getJSONObject("data").remove("杯赛两圈赛制");String cupBefore=expectedCup.toString();first.save();
             history.edit().putString(key,LocalDate.now().toString()).commit();
             LocalStore recreated=new LocalStore(context);
-            JSONObject migrated=recreated.config.getJSONArray("projects").getJSONObject(0);
-            if(migrated.getJSONObject("data").has("每日只执行一次")||!migrated.getJSONObject("data").getString("次数").equals("5"))
-                throw new AssertionError("Old daily-once setting was not removed independently");
-            checkRemovedDailyOptions(migrated);
-            if(!cupBefore.equals(recreated.config.getJSONArray("projects").getJSONObject(2).toString()))throw new AssertionError("Cup cleanup changed retained settings");
-            JSONArray cupForm=recreated.forms.getJSONArray("杯赛");
-            for(int i=0;i<cupForm.length();i++)if("每日战利品".equals(cupForm.getJSONObject(i).getString("key")))throw new AssertionError("Cup still exposes daily loot option");
+            JSONObject migrated=recreated.config.getJSONArray("projects").getJSONObject(3);
+            if(!LocalStore.javaValue(expectedDaily).equals(LocalStore.javaValue(migrated)))
+                throw new AssertionError("Merged task lost its identity, enabled state, order, or settings");
+            if(!cupBefore.equals(recreated.config.getJSONArray("projects").getJSONObject(1).toString()))throw new AssertionError("Cup cleanup changed retained settings");
+            if(recreated.forms.has("每日战利品")||java.util.Arrays.asList(LocalStore.MODES).contains("每日战利品"))
+                throw new AssertionError("Daily loot remains a separate task type");
+            JSONArray cupForm=recreated.forms.getJSONArray("杯赛");boolean hasClubReward=false;
+            for(int i=0;i<cupForm.length();i++){
+                JSONObject field=cupForm.getJSONObject(i);
+                if("每日战利品".equals(field.getString("key")))throw new AssertionError("Cup exposes the retired daily loot field");
+                if("是否领取俱乐部奖励".equals(field.getString("key")))hasClubReward="CheckBox".equals(field.getString("type"));
+            }
+            if(!hasClubReward||!recreated.defaults("杯赛").getString("是否领取俱乐部奖励").isEmpty())
+                throw new AssertionError("Cup club reward checkbox must be available and off by default");
             JSONObject savedConfig=recreated.config;
             recreated.config=new JSONObject().put("projects",new JSONArray().put(new JSONObject(cup.toString())));
             if(!recreated.migrateConfig()||recreated.config.getJSONArray("projects").getJSONObject(0).getJSONObject("data").has("每日战利品"))throw new AssertionError("Cup resume retains daily loot option");
@@ -51,17 +62,11 @@ final class DailyScheduleDeviceCheck {
             String reason=recreated.dailyTaskPolicy().skipReason();
             if(!reason.isEmpty()&&!reason.equals("dailyQuietHours"))throw new AssertionError("Old completion still blocks task");
             recreated.config=new JSONObject().put("projects",new JSONArray().put(new JSONObject(daily.toString())));
-            if(!recreated.migrateConfig()||recreated.config.getJSONArray("projects").getJSONObject(0).getJSONObject("data").has("每日只执行一次"))
-                throw new AssertionError("Saved session retains retired daily-once setting");
-            checkRemovedDailyOptions(recreated.config.getJSONArray("projects").getJSONObject(0));
-            if(!first.config.getJSONArray("projects").getJSONObject(0).getString("taskId")
-                    .equals(recreated.config.getJSONArray("projects").getJSONObject(0).getString("taskId")))
-                throw new AssertionError("Task identity changed on recreation");
-            JSONArray form=recreated.forms.getJSONArray("每日战利品");boolean found=false;
-            for(int i=0;i<form.length();i++)if(java.util.List.of("每日只执行一次","杯赛漂流","杯赛两圈赛制").contains(form.getJSONObject(i).getString("key")))found=true;
-            if(found)throw new AssertionError("Retired daily field still available");
+            if(!recreated.migrateConfig()||!LocalStore.javaValue(expectedDaily).equals(
+                    LocalStore.javaValue(recreated.config.getJSONArray("projects").getJSONObject(0)))||recreated.migrateConfig())
+                throw new AssertionError("Saved session did not migrate idempotently to a cup");
             checkAllDrivingOptions(context);
-            report.putString("result","PASS: daily-once/drift/two-lap settings removed from config and resume snapshot; cup driving options removed; old history cannot block daily task; task identity/count preserved; retired fields removed; isolated preferences; no game input");
+            report.putString("result","PASS: daily loot merged into cup in saved preferences and session snapshots; task fields and club reward preference preserved; cup checkbox available and off by default; no game input");
         } finally {base.deleteSharedPreferences(preferences+"-local");base.deleteSharedPreferences(preferences+"-daily-task-history");}
     }
     private static void checkAllDrivingOptions(Context context)throws Exception {
@@ -82,9 +87,5 @@ final class DailyScheduleDeviceCheck {
         reloaded.config=snapshot;
         if(!reloaded.migrateConfig()||!LocalStore.javaValue(expected).equals(LocalStore.javaValue(reloaded.config.getJSONArray("projects"))))throw new AssertionError("Saved session retains retired driving modes");
         if(reloaded.migrateConfig())throw new AssertionError("Driving migration must be idempotent");
-    }
-    private static void checkRemovedDailyOptions(JSONObject task)throws Exception {
-        JSONObject data=task.getJSONObject("data");
-        if(data.has("杯赛漂流")||data.has("杯赛两圈赛制"))throw new AssertionError("Retired daily driving options survived migration");
     }
 }

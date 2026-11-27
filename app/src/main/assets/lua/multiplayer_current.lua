@@ -86,7 +86,7 @@ local function confirmCar(screen,card,index,position,readFull)
   local garage=screen.garage
   local anchor={offset=position.offset,cards=garage.cards}
   local lastSlot,lastLeft,lastOffset,lastFrame
-  local daily=readFull and data['项目']=='每日战利品'
+  local daily=readFull and run.dailyLoot==true
   local deadline=daily and tickCount()+8000
   local reads=0
   local lastScene='unknown'
@@ -341,7 +341,7 @@ end
 
 function vehicleGrid.soloCar(origin,index)
   return locateCar(origin,index,{offset=0},
-    function()return _soloGarageUi(true)end,function()return _soloGarageUi(false,data['项目']=='每日战利品')end)
+    function()return _soloGarageUi(true)end,function()return _soloGarageUi(false,run.dailyLoot==true)end)
 end
 
 function currentMultiplayer.run(resumingTutorial)

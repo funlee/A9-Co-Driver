@@ -143,14 +143,6 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
         this.context=context;this.store=store;this.capture=capture;this.touch=touch;
         root=new File(context.getFilesDir(),"runtime");root.mkdirs();
     }
-    private JSONObject dailyTask(int index) throws JSONException {
-        JSONObject task=store.config.getJSONArray("projects").getJSONObject(index-1);
-        return "每日战利品".equals(task.optString("项目"))?task:null;
-    }
-    private String dailySkipReason(int index) throws JSONException {
-        JSONObject task=dailyTask(index);
-        return task==null?"":store.dailyTaskPolicy().skipReason();
-    }
     public String workPath(){return root.getAbsolutePath();}
     private int n(Lua l,int i) {return (int)l.toInteger(i);}
     private double ratio(Lua l,int i) {return l.isNoneOrNil(i)?1:l.toNumber(i);}
@@ -616,8 +608,8 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
     }
 
     private Map<String,Object> dailyEventUi()throws Exception { return dailyEventUi(false); }
-    private Map<String,Object> dailyEventUi(boolean solo)throws Exception { return dailyEventUi(solo,false); }
-    private Map<String,Object> dailyEventUi(boolean solo,boolean specialLoading)throws Exception {
+    private Map<String,Object> dailyEventUi(boolean solo)throws Exception { return dailyEventUi(solo,false,false); }
+    private Map<String,Object> dailyEventUi(boolean solo,boolean specialLoading,boolean dailyLoot)throws Exception {
         capture();
         if(solo&&CupCarousel.claimSpotlight(frame))
             return Map.of("scene","cupClaimSpotlight","wide",wideViewport(),"frameId",capture.frameId(),"words",List.of());
@@ -656,10 +648,13 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
             boolean settlement=scene.equals("missionRewards")||scene.equals("results")||scene.equals("rewards")||scene.equals("cards")||scene.equals("conversion")||ResultRank.personalReward(full.getText())||(scene.equals("unknown")&&SessionState.resultOverlay);
             if(settlement!=SessionState.resultOverlay){
                 prepareOverlay(settlement,false);
-                return dailyEventUi(solo,specialLoading);
+                return dailyEventUi(solo,specialLoading,dailyLoot);
             }
             if(scene.equals("unknown"))android.util.Log.d("A9DailyOcr",full.getText());
             out.put("scene",scene);
+            if(solo&&(scene.equals("event")||scene.equals("clubRewards")||scene.equals("dailyRewardOnly")||scene.equals("unknown"))
+                    &&DailyEventUi.dailyLootLobby(full.getText()))
+                out.put("dailyLoot",true);
             if(scene.equals("home")){
                 Map<String,Integer> explore=MainMenuUi.dailyExplore(full.getText(),frame);
                 if(!explore.isEmpty())out.put("dailyExplore",explore);
@@ -682,7 +677,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 out.put("fuel",fuel);
                 out.put("starUpPending",!trial&&VehicleUnlockGuard.pendingDetail(full.getText()));
                 String detailScore=MultiplayerGarage.soloDetailScore(words);
-                if(SessionState.stats.dailyLoot()&&detailScore.isEmpty())
+                if(dailyLoot&&detailScore.isEmpty())
                     detailScore=MultiplayerGarage.soloScore(text(557,830,625,1040,3));
                 out.put("soloScore",detailScore);
                 out.put("soloName",MultiplayerGarage.soloDetailName(words));
@@ -720,22 +715,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 MapMatcher.Match match=store.matcher.match(title);
                 if(match.unique())out.put("route",match.candidates.get(0).internal);
             }
-            if(scene.equals("rewards")){
-                Map<String,Object> exit=RewardOcr.exitButton(full,frame);
-                if(exit.isEmpty()&&(!legacyPrepared||!legacyRaceSeen))
-                    exit=RewardOcr.focusedExitButton(recognizer,upright,frame);
-                out.put("rewardPage",true);out.put("rewardCanContinue",!exit.isEmpty());out.put("rewardExitButton",exit);
-            }
-            if(scene.equals("rewards")&&legacyPrepared&&legacyRaceSeen){
-                out.putAll(rewardRead(upright,full));
-                // Solo rewards can offer an ad multiplier; only the lower exit is safe to advance.
-                for(Object word:words){Map<?,?> w=(Map<?,?>)word;
-                    if(DailyEventUi.rewardExit((String)w.get("text"),(Integer)w.get("x"),(Integer)w.get("y"))){
-                        int x=(Integer)w.get("x"),y=(Integer)w.get("y");
-                        if(RaceRewards.enabledExit(frame,x,y))out.put("rewardCanContinue",true);
-                    }
-                }
-            }
+            if(scene.equals("rewards"))out.putAll(rewardRead(upright,full));
             if(!("daily-"+scene).equals(lastUiScene)){
                 lastUiScene="daily-"+scene;SessionState.log((solo?"单人赛事":"每日战利品")+"界面："+scene);
                 snapshot(new File(root,"daily-"+scene+".png").getAbsolutePath(),0,0,719,1279);
@@ -865,7 +845,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 case "_recoveryUi":return result(l,recoveryUi());
                 case "_dailyEventUi":return result(l,dailyEventUi());
                 case "_soloEventUi":{
-                    Map<String,Object> ui=dailyEventUi(true,l.toBoolean(1));
+                    Map<String,Object> ui=dailyEventUi(true,l.toBoolean(1),l.toBoolean(3));
                     if(!l.toBoolean(2)||!"unknown".equals(ui.get("scene")))return result(l,ui);
                     Map<String,Object> rail=SpecialEventList.stageRail(frame);
                     if(rail.isEmpty())return result(l,ui);
@@ -894,8 +874,9 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 case "_soloDetailScore":return result(l,MultiplayerGarage.soloScore(text(565,880,600,1038,4)));
                 case "_soloGarageUi":{
                     if(!l.toBoolean(1)){
-                        Map<String,Object> ui=dailyEventUi(true);
-                        if(l.toBoolean(2)){
+                        boolean dailyLoot=l.toBoolean(2);
+                        Map<String,Object> ui=dailyEventUi(true,false,dailyLoot);
+                        if(dailyLoot){
                             ui=new LinkedHashMap<>(ui);
                             ui.putIfAbsent("frameId",capture.frameId());
                             boolean obscured=popupPanel()!=null || ui.containsKey("closeX") ||
@@ -1005,7 +986,7 @@ public final class AndroidHost implements LuaRuntime.Host,AutoCloseable {
                 case "_rewardUi":return result(l,rewardUi(l.toBoolean(1)));
                 case "_routeDisplay":return result(l,store.matcher.displayName(s(l,1)));
                 case "_sessionCycle":SessionState.stats.cycle(n(l,1));return 0;
-                case "_dailyTaskStatus":return result(l,dailySkipReason(n(l,1)));
+                case "_dailyTaskStatus":return result(l,store.dailyTaskPolicy().skipReason());
                 case "_usedCarEntries":return result(l,checkpoint.usedCarEntries());
                 case "_selectCarEntry":checkpoint.selectCarEntry(n(l,1),l.toBoolean(2));return 0;
                 case "_queueResume":{
