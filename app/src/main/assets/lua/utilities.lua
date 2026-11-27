@@ -2337,7 +2337,7 @@ function utils.chooseCup(num,wide,configuredOnly)
       page = type(_soloEventUi) == 'function' and _soloEventUi() or nil
       pageText = page and tostring(page.text or '') or ''
       if pageText:find('战利品', 1, true) == nil and pageText:find('活动规则', 1, true) == nil then
-        return unavailable('关闭促销层后已不在赛事列表页')
+        return nil, '关闭促销层后已不在赛事列表页'
       end
     end
     -- 分流只看函数存不存在，不看这一次读到的结果：真机上 _soloEventUi 偶尔读超时返回
@@ -2347,7 +2347,7 @@ function utils.chooseCup(num,wide,configuredOnly)
     if not anchored and pageScene ~= '' and pageScene ~= 'cupList' and pageScene ~= 'wideCupList'
         and pageScene ~= 'unknown' then
       -- 不在列表页时拖拽会把页面搅乱，直接交给上层重新进入。
-      return unavailable('当前不在赛事列表页（'..pageScene..'）')
+      return nil, '当前不在赛事列表页（'..pageScene..'）'
     end
     if not anchored then
       -- 新版「探索赛事」列表：卡片是彩色票券，CupCarousel 只认得出一部分，点卡片
@@ -2451,7 +2451,8 @@ function utils.chooseCup(num,wide,configuredOnly)
       -- 截断不能按字节切：中文一个字 3 字节，切在半路上会得到非法 UTF-8，
       -- 回传给 Java 的 NewStringUTF 时直接把进程打挂（java_vm_ext.cc:616）。
       print('已按第 '..target..' 个赛事位置点击进入赛事，界面 '..tostring(sc)..' 标题 '..utf8.left(title, 40))
-      return 1
+      if sc=='cupList' or sc=='wideCupList' then return nil, '点击进入后仍在赛事列表页' end
+      return 'entered'
     end
     for step = 2, target do
       local moved = false
@@ -2532,9 +2533,8 @@ function utils.chooseCup(num,wide,configuredOnly)
     if num > 1 or not firstCard then
       local center, why = stepToCup(num)
       if not center then return unavailable(why) end
+      if center == 'entered' then return 1 end
       xy = {100, center}
-      -- 新版列表在 stepToCup 里已经点进赛事，无需再点一次入口。
-      if not firstCard then return 1 end
     end
   else
     -- 负数位置为旧配置兼容路径（新配置仅支持正数）。尽力滑到右端：

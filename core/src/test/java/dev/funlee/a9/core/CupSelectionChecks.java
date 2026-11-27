@@ -117,6 +117,10 @@ final class CupSelectionChecks {
             "for _,c in ipairs(_cupCards())do if c.selected then return 0,16,c.center end end end return -1,-1,-1 end;"+
             "utils.findCup=function(...)finds=finds+1;keepCapture();if cached and (not stale or selected==2) then return {16,120+180*(selected-1),350,212} end;return {-1,-1,-1,-1} end;";
         List<String> cases=List.of(
+            "selected=1;local entered=false;utf8.left=function(s)return s end;"+
+                "function _soloEventUi()return {scene=entered and 'event' or 'cupList'}end;"+
+                "function tap(x,y)assert(not entered,'checked list coordinates on event detail');if x==119 then entered=true end end;"+
+                "assert(utils.chooseCup('5')==1 and entered,'detail with previously visible first card was skipped')",
             "assert(utils.chooseCup('3')==1);assert(selected==3,'stale identity overrides configured third cup');assert(removed==1 and #snapshots==1 and snapshots[1]==3);assert(finds==0,'new task searched old cache')",
             "utils.chooseCup('3');utils.chooseCup('3');assert(removed==1 and #snapshots==1 and selected==3,'same task lost its selected event')",
             "utils.chooseCup('3');utils.chooseCup('4');assert(removed==2 and #snapshots==2 and snapshots[2]==4 and selected==4,'position change reused wrong cached event')",
